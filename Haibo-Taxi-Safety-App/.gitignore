@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+*.apk
+*.aab
+*.ipa
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+__pycache__/

@@ -1,0 +1,191 @@
+import { Router, Response } from "express";
+import { db } from "../db";
+import {
+  deliveries, deliveryTracking, packages, packageStatusHistory,
+  courierHubs, groupRides, groupRideParticipants, rideChat,
+} from "../../shared/schema";
+import { eq, desc, sql, count, and } from "drizzle-orm";
+import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
+import { parsePagination, paginationResponse, generateTrackingNumber, generateConfirmationCode } from "../utils/helpers";
+
+const router = Router();
+
+// ============ DELIVERIES (Haibo Hub) ============
+
+// GET /api/deliveries - List user's deliveries
+router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+
+    const results = await db.select().from(deliveries)
+      .where(eq(deliveries.senderId, req.user!.userId))
+      .orderBy(desc(deliveries.createdAt))
+      .limit(limit).offset(offset);
+
+    const [totalResult] = await db.select({ count: count() })
+      .from(deliveries)
+      .where(eq(deliveries.senderId, req.user!.userId));
+
+    res.json({
+      data: results,
+      pagination: paginationResponse(totalResult.count, { page, limit, offset }),
+    });
+  } catch (error: any) {
+    console.error("Get deliveries error:", error);
+    res.status(500).json({ error: "Failed to fetch deliveries" });
+  }
+});
+
+// POST /api/deliveries - Create a delivery
+router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      taxiPlateNumber, description, pickupRank, dropoffRank,
+      amount, driverPhone, insuranceIncluded, insuranceAmount,
+    } = req.body;
+
+    if (!taxiPlateNumber || !description || !pickupRank || !dropoffRank || !amount) {
+      res.status(400).json({ error: "Taxi plate, description, pickup/dropoff ranks, and amount are required" });
+      return;
+    }
+
+    const confirmationCode = generateConfirmationCode();
+
+    const [delivery] = await db.insert(deliveries).values({
+      senderId: req.user!.userId,
+      taxiPlateNumber,
+      description,
+      pickupRank,
+      dropoffRank,
+      amount,
+      driverPhone: driverPhone || null,
+      confirmationCode,
+      insuranceIncluded: insuranceIncluded || false,
+      insuranceAmount: insuranceAmount || 0,
+      status: "pending",
+      paymentStatus: "pending",
+    }).returning();
+
+    res.status(201).json({ ...delivery, confirmationCode });
+  } catch (error: any) {
+    console.error("Create delivery error:", error);
+    res.status(500).json({ error: "Failed to create delivery" });
+  }
+});
+
+// GET /api/deliveries/:id - Get delivery details
+router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await db.select().from(deliveries).where(eq(deliveries.id, req.params.id)).limit(1);
+    if (result.length === 0) {
+      res.status(404).json({ error: "Delivery not found" });
+      return;
+    }
+
+    const tracking = await db.select().from(deliveryTracking)
+      .where(eq(deliveryTracking.deliveryId, req.params.id))
+      .orderBy(desc(deliveryTracking.timestamp));
+
+    res.json({ ...result[0], tracking });
+  } catch (error: any) {
+    console.error("Get delivery error:", error);
+    res.status(500).json({ error: "Failed to fetch delivery" });
+  }
+});
+
+// PUT /api/deliveries/:id/status - Update delivery status
+router.put("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { status } = req.body;
+    const updateData: any = { status };
+
+    if (status === "accepted") updateData.acceptedAt = new Date();
+    if (status === "delivered") updateData.deliveredAt = new Date();
+
+    const [updated] = await db.update(deliveries)
+      .set(updateData)
+      .where(eq(deliveries.id, req.params.id))
+      .returning();
+
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Update delivery status error:", error);
+    res.status(500).json({ error: "Failed to update delivery status" });
+  }
+});
+
+// ============ PACKAGES ============
+
+// POST /api/packages - Create a package
+router.post("/packages", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      senderName, senderPhone, senderAddress,
+      receiverName, receiverPhone, receiverAddress,
+      contents, weight, dimensions, declaredValue,
+      fare, pickupHubId, dropoffHubId,
+    } = req.body;
+
+    const trackingNumber = generateTrackingNumber();
+
+    const [pkg] = await db.insert(packages).values({
+      trackingNumber,
+      senderName,
+      senderPhone,
+      senderAddress,
+      receiverName,
+      receiverPhone,
+      receiverAddress,
+      contents,
+      weight: weight || null,
+      dimensions: dimensions || null,
+      declaredValue: declaredValue || null,
+      fare: fare || 25,
+      pickupHubId: pickupHubId || null,
+      dropoffHubId: dropoffHubId || null,
+      deviceId: req.user!.userId,
+      status: "pending",
+    }).returning();
+
+    res.status(201).json({ ...pkg, trackingNumber });
+  } catch (error: any) {
+    console.error("Create package error:", error);
+    res.status(500).json({ error: "Failed to create package" });
+  }
+});
+
+// GET /api/packages/track/:trackingNumber - Track a package
+router.get("/packages/track/:trackingNumber", async (req, res: Response) => {
+  try {
+    const result = await db.select().from(packages)
+      .where(eq(packages.trackingNumber, req.params.trackingNumber))
+      .limit(1);
+
+    if (result.length === 0) {
+      res.status(404).json({ error: "Package not found" });
+      return;
+    }
+
+    const history = await db.select().from(packageStatusHistory)
+      .where(eq(packageStatusHistory.packageId, result[0].id))
+      .orderBy(desc(packageStatusHistory.createdAt));
+
+    res.json({ ...result[0], statusHistory: history });
+  } catch (error: any) {
+    console.error("Track package error:", error);
+    res.status(500).json({ error: "Failed to track package" });
+  }
+});
+
+// GET /api/courier-hubs - List courier hubs
+router.get("/courier-hubs", async (req, res: Response) => {
+  try {
+    const hubs = await db.select().from(courierHubs).where(eq(courierHubs.isActive, true));
+    res.json({ data: hubs });
+  } catch (error: any) {
+    console.error("Get courier hubs error:", error);
+    res.status(500).json({ error: "Failed to fetch courier hubs" });
+  }
+});
+
+export default router;

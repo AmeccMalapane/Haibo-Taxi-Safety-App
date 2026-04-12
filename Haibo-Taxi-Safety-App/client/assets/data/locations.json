@@ -1,0 +1,1004 @@
+{
+  "routes_table": [
+    {
+      "route_id": 1,
+      "route_number": "PTA-MAM-001",
+      "starting_point": "Mamelodi",
+      "starting_point_coordinates": {
+        "latitude": -25.7167,
+        "longitude": 28.3167,
+        "geocoding_source": "OpenStreetMap",
+        "geocoding_accuracy": 0.8,
+        "last_geocoded": "2024-07-07T10:00:00Z"
+      },
+      "destination": "Pretoria",
+      "destination_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:05:00Z"
+      },
+      "estimated_travel_time": "35 minutes",
+      "distance_km": 25.5,
+      "is_active": true,
+      "verification_status": "user_reported",
+      "needs_review": false,
+      "tags": ["commuter", "gauteng", "short-distance"],
+      "created_at": "2024-01-15T08:30:00Z",
+      "updated_at": "2024-07-07T09:30:00Z",
+      "last_validated": "2024-07-07T10:00:00Z"
+    },
+    {
+      "route_id": 2,
+      "route_number": "PTA-BRK-001",
+      "starting_point": "Pretoria",
+      "starting_point_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:05:00Z"
+      },
+      "destination": "Bronkhorstspruit",
+      "destination_coordinates": {
+        "latitude": -25.8103,
+        "longitude": 28.7425,
+        "geocoding_source": "OpenStreetMap",
+        "geocoding_accuracy": 0.75,
+        "last_geocoded": "2024-07-07T10:10:00Z"
+      },
+      "estimated_travel_time": "47 minutes",
+      "distance_km": 68.2,
+      "is_active": true,
+      "verification_status": "user_reported",
+      "needs_review": false,
+      "tags": ["gauteng", "regional"],
+      "created_at": "2024-01-15T08:35:00Z",
+      "updated_at": "2024-07-07T09:35:00Z",
+      "last_validated": "2024-07-07T10:00:00Z"
+    },
+    {
+      "route_id": 3,
+      "route_number": "GER-PTA-001",
+      "starting_point": "Germiston Taxi Rank - ER090",
+      "starting_point_coordinates": {
+        "latitude": -26.2176,
+        "longitude": 28.1679,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.92,
+        "last_geocoded": "2024-07-07T10:15:00Z"
+      },
+      "destination": "Pretoria",
+      "destination_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:20:00Z"
+      },
+      "estimated_travel_time": "51 minutes",
+      "distance_km": 169.24,
+      "is_active": true,
+      "verification_status": "partial",
+      "needs_review": false,
+      "tags": ["gauteng", "inter-city", "long-distance"],
+      "created_at": "2024-01-20T09:00:00Z",
+      "updated_at": "2024-07-07T09:40:00Z",
+      "last_validated": "2024-07-07T10:00:00Z"
+    },
+    {
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "starting_point": "Burgersfort",
+      "starting_point_coordinates": {
+        "latitude": -24.6256,
+        "longitude": 29.9733,
+        "geocoding_source": "OpenStreetMap",
+        "geocoding_accuracy": 0.85,
+        "last_geocoded": "2024-07-07T10:25:00Z"
+      },
+      "destination": "Pretoria",
+      "destination_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:30:00Z"
+      },
+      "estimated_travel_time": "4 hours 1 minute",
+      "distance_km": 468.97,
+      "is_active": true,
+      "verification_status": "official",
+      "needs_review": false,
+      "tags": ["limpopo", "gauteng", "long-distance", "inter-provincial"],
+      "created_at": "2024-02-10T10:00:00Z",
+      "updated_at": "2024-07-07T09:45:00Z",
+      "last_validated": "2024-07-07T10:00:00Z"
+    },
+    {
+      "route_id": 5,
+      "route_number": "DBN-PTA-001",
+      "starting_point": "Durban Station",
+      "starting_point_coordinates": {
+        "latitude": -29.8587,
+        "longitude": 31.0218,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.96,
+        "last_geocoded": "2024-07-07T10:35:00Z"
+      },
+      "destination": "Pretoria",
+      "destination_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:40:00Z"
+      },
+      "estimated_travel_time": "6 hours 43 minutes",
+      "distance_km": 133.0,
+      "is_active": true,
+      "verification_status": "official",
+      "needs_review": false,
+      "tags": ["kzn", "gauteng", "long-distance", "inter-provincial", "coach"],
+      "created_at": "2024-02-15T11:00:00Z",
+      "updated_at": "2024-07-07T09:50:00Z",
+      "last_validated": "2024-07-07T10:00:00Z"
+    }
+  ],
+
+  "associations_table": [
+    {
+      "association_id": 1,
+      "name": "ATA",
+      "full_name": "Apel Taxi Association",
+      "contact_info": {
+        "phone": "+27-15-293-1234",
+        "email": "admin@apeltaxi.co.za",
+        "address": "Apel Taxi Rank, Main Road, Apel, Limpopo",
+        "website": "https://apeltaxi.co.za"
+      },
+      "address_coordinates": {
+        "latitude": -24.5864,
+        "longitude": 29.3467,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.9,
+        "last_geocoded": "2024-07-07T11:00:00Z"
+      },
+      "verification_status": "verified_official",
+      "operating_areas": ["Apel", "Atok", "Limpopo Region"],
+      "registration_number": "TAXI-REG-LP-2020-001",
+      "needs_review": false,
+      "tags": ["limpopo", "long-distance", "registered", "rural-routes"],
+      "created_at": "2024-01-15T08:00:00Z",
+      "updated_at": "2024-06-20T14:30:00Z",
+      "total_routes": 8,
+      "safety_rating": 4.2
+    },
+    {
+      "association_id": 2,
+      "name": "DRUTA",
+      "full_name": "Driekop Rustenburg Taxi Association",
+      "contact_info": {
+        "phone": "+27-83-987-6543",
+        "email": "info@druta.org.za",
+        "address": "Burgersfort Local Taxi Rank, Burgersfort, Limpopo",
+        "website": null
+      },
+      "address_coordinates": {
+        "latitude": -24.6256,
+        "longitude": 29.9733,
+        "geocoding_source": "OpenStreetMap",
+        "geocoding_accuracy": 0.85,
+        "last_geocoded": "2024-07-07T11:05:00Z"
+      },
+      "verification_status": "pending_verification",
+      "operating_areas": ["Burgersfort", "Driekop", "Steelpoort", "Lydenburg"],
+      "registration_number": "TAXI-REG-LP-2019-045",
+      "needs_review": false,
+      "tags": ["limpopo", "mpumalanga", "mining-route", "industrial"],
+      "created_at": "2023-11-10T09:15:00Z",
+      "updated_at": "2024-07-01T16:45:00Z",
+      "total_routes": 12,
+      "safety_rating": 3.8
+    },
+    {
+      "association_id": 3,
+      "name": "ELLTA",
+      "full_name": "Eastern Limpopo Long Distance Taxi Association",
+      "contact_info": {
+        "phone": "+27-13-231-4567",
+        "email": "operations@ellta.co.za",
+        "address": "Burgersfort Long Distance Rank, Limpopo",
+        "website": "http://ellta.co.za"
+      },
+      "address_coordinates": {
+        "latitude": -24.6256,
+        "longitude": 29.9733,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.88,
+        "last_geocoded": "2024-07-07T11:10:00Z"
+      },
+      "verification_status": "verified_official",
+      "operating_areas": ["Burgersfort", "Praktiseer", "Tubatse"],
+      "registration_number": "TAXI-REG-LP-2018-112",
+      "needs_review": false,
+      "tags": ["limpopo", "long-distance", "formal", "scheduled"],
+      "created_at": "2023-09-05T10:30:00Z",
+      "updated_at": "2024-06-25T11:20:00Z",
+      "total_routes": 15,
+      "safety_rating": 4.1
+    },
+    {
+      "association_id": 4,
+      "name": "Soweto United Taxi Association",
+      "full_name": "Soweto United Taxi Association",
+      "contact_info": {
+        "phone": "+27-11-930-1234",
+        "email": "contact@sowetotaxi.org.za",
+        "address": "Baragwanath Taxi Rank, Soweto, Johannesburg",
+        "website": "https://sowetotaxi.org.za"
+      },
+      "address_coordinates": {
+        "latitude": -26.2486,
+        "longitude": 27.8544,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T11:15:00Z"
+      },
+      "verification_status": "verified_official",
+      "operating_areas": ["Soweto", "Johannesburg", "Gauteng West"],
+      "registration_number": "TAXI-REG-GP-2021-056",
+      "needs_review": false,
+      "tags": ["gauteng", "soweto", "urban", "high-frequency"],
+      "created_at": "2024-01-10T07:45:00Z",
+      "updated_at": "2024-07-05T09:15:00Z",
+      "total_routes": 22,
+      "safety_rating": 4.3
+    },
+    {
+      "association_id": 5,
+      "name": "Pretoria Metro Taxi Association",
+      "full_name": "Pretoria Metropolitan Taxi Association",
+      "contact_info": {
+        "phone": "+27-12-345-6789",
+        "email": "info@pretoriataxi.co.za",
+        "address": "Bosman Station Taxi Rank, Pretoria",
+        "website": "https://pretoriataxi.co.za"
+      },
+      "address_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.94,
+        "last_geocoded": "2024-07-07T11:20:00Z"
+      },
+      "verification_status": "verified_official",
+      "operating_areas": ["Pretoria", "Tshwane", "Centurion", "Midrand"],
+      "registration_number": "TAXI-REG-GP-2019-078",
+      "needs_review": false,
+      "tags": ["gauteng", "pretoria", "metro", "commuter"],
+      "created_at": "2023-08-20T08:00:00Z",
+      "updated_at": "2024-06-30T15:45:00Z",
+      "total_routes": 18,
+      "safety_rating": 4.0
+    }
+  ],
+
+  "association_route_mapping": [
+    {
+      "mapping_id": 1,
+      "association_id": 1,
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "operating_permission": "Full",
+      "permission_valid_until": "2025-12-31",
+      "vehicles_allocated": 8,
+      "created_at": "2024-02-20T10:00:00Z",
+      "updated_at": "2024-06-15T11:30:00Z"
+    },
+    {
+      "mapping_id": 2,
+      "association_id": 2,
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "operating_permission": "Shared",
+      "permission_valid_until": "2024-12-31",
+      "vehicles_allocated": 6,
+      "created_at": "2024-02-10T14:20:00Z",
+      "updated_at": "2024-07-05T09:15:00Z"
+    },
+    {
+      "mapping_id": 3,
+      "association_id": 3,
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "operating_permission": "Full",
+      "permission_valid_until": "2025-06-30",
+      "vehicles_allocated": 10,
+      "created_at": "2024-03-05T09:45:00Z",
+      "updated_at": "2024-06-28T13:20:00Z"
+    },
+    {
+      "mapping_id": 4,
+      "association_id": 4,
+      "route_id": 1,
+      "route_number": "PTA-MAM-001",
+      "operating_permission": "Full",
+      "permission_valid_until": "2025-09-30",
+      "vehicles_allocated": 15,
+      "created_at": "2024-01-20T08:30:00Z",
+      "updated_at": "2024-06-10T14:00:00Z"
+    },
+    {
+      "mapping_id": 5,
+      "association_id": 5,
+      "route_id": 2,
+      "route_number": "PTA-BRK-001",
+      "operating_permission": "Full",
+      "permission_valid_until": "2025-08-31",
+      "vehicles_allocated": 12,
+      "created_at": "2024-01-25T10:15:00Z",
+      "updated_at": "2024-06-05T16:30:00Z"
+    }
+  ],
+
+  "fares_table": [
+    {
+      "price_id": 1,
+      "route_id": 1,
+      "amount": 25.00,
+      "currency": "ZAR",
+      "verification_source": "user_contributed",
+      "verification_status": "verified",
+      "validation_checks_passed": ["positive_value", "reasonable_range", "multiple_reports"],
+      "validation_checks_failed": [],
+      "reported_by_user_id": "user_12345",
+      "reports_count": 8,
+      "average_user_rating": 4.5,
+      "peak_hour_surcharge": 5.00,
+      "last_updated": "2024-07-07T09:30:00Z",
+      "is_current": true,
+      "valid_from": "2024-06-01",
+      "valid_until": null,
+      "notes": "Standard fare from Mamelodi to Pretoria CBD",
+      "created_at": "2024-06-15T08:20:00Z",
+      "updated_at": "2024-07-07T09:30:00Z"
+    },
+    {
+      "price_id": 2,
+      "route_id": 2,
+      "amount": 60.00,
+      "currency": "ZAR",
+      "verification_source": "official_source",
+      "verification_status": "verified",
+      "validation_checks_passed": ["positive_value", "reasonable_range", "official_source", "multiple_reports"],
+      "validation_checks_failed": [],
+      "reported_by_user_id": null,
+      "reports_count": 15,
+      "average_user_rating": 4.7,
+      "peak_hour_surcharge": 10.00,
+      "last_updated": "2024-07-07T09:35:00Z",
+      "is_current": true,
+      "valid_from": "2024-01-01",
+      "valid_until": "2024-12-31",
+      "notes": "Official regulated fare from Pretoria to Bronkhorstspruit",
+      "created_at": "2024-01-05T10:00:00Z",
+      "updated_at": "2024-07-07T09:35:00Z"
+    },
+    {
+      "price_id": 3,
+      "route_id": 3,
+      "amount": 60.00,
+      "currency": "ZAR",
+      "verification_source": "user_contributed",
+      "verification_status": "pending_validation",
+      "validation_checks_passed": ["positive_value", "reasonable_range"],
+      "validation_checks_failed": ["official_source"],
+      "reported_by_user_id": "user_23456",
+      "reports_count": 3,
+      "average_user_rating": 4.2,
+      "peak_hour_surcharge": 15.00,
+      "last_updated": "2024-07-07T09:40:00Z",
+      "is_current": true,
+      "valid_from": "2024-05-01",
+      "valid_until": null,
+      "notes": "Reported by multiple users, awaiting official confirmation",
+      "created_at": "2024-05-10T11:30:00Z",
+      "updated_at": "2024-07-07T09:40:00Z"
+    },
+    {
+      "price_id": 4,
+      "route_id": 4,
+      "amount": 300.00,
+      "currency": "ZAR",
+      "verification_source": "official_source",
+      "verification_status": "verified",
+      "validation_checks_passed": ["positive_value", "reasonable_range", "official_source", "multiple_reports"],
+      "validation_checks_failed": [],
+      "reported_by_user_id": null,
+      "reports_count": 22,
+      "average_user_rating": 4.3,
+      "peak_hour_surcharge": 50.00,
+      "last_updated": "2024-07-07T09:45:00Z",
+      "is_current": true,
+      "valid_from": "2024-03-01",
+      "valid_until": "2025-02-28",
+      "notes": "Long-distance fare approved by Limpopo Transport Authority",
+      "created_at": "2024-03-01T09:00:00Z",
+      "updated_at": "2024-07-07T09:45:00Z"
+    },
+    {
+      "price_id": 5,
+      "route_id": 5,
+      "amount": 400.00,
+      "currency": "ZAR",
+      "verification_source": "official_source",
+      "verification_status": "verified",
+      "validation_checks_passed": ["positive_value", "reasonable_range", "official_source"],
+      "validation_checks_failed": [],
+      "reported_by_user_id": null,
+      "reports_count": 18,
+      "average_user_rating": 4.1,
+      "peak_hour_surcharge": 75.00,
+      "last_updated": "2024-07-07T09:50:00Z",
+      "is_current": true,
+      "valid_from": "2024-04-01",
+      "valid_until": "2025-03-31",
+      "notes": "Inter-provincial coach service with amenities",
+      "created_at": "2024-04-05T10:15:00Z",
+      "updated_at": "2024-07-07T09:50:00Z"
+    }
+  ],
+
+  "taxi_ranks_table": [
+    {
+      "rank_id": 1,
+      "name": "Mamelodi Taxi Rank",
+      "location": "Mamelodi, Pretoria, Gauteng",
+      "gps_coordinates": {
+        "latitude": -25.7167,
+        "longitude": 28.3167,
+        "geocoding_source": "OpenStreetMap",
+        "geocoding_accuracy": 0.8,
+        "last_geocoded": "2024-07-07T10:00:00Z"
+      },
+      "type": "Informal",
+      "cluster_name": null,
+      "facility_type": "Taxi Rank",
+      "status": "Active",
+      "facility_features": ["basic_shelter", "informal_vendors", "public_toilets"],
+      "safety_features": ["crowded", "limited_lighting", "informal_security"],
+      "associations_operating": ["Soweto United Taxi Association"],
+      "description": "Main taxi rank serving Mamelodi township with high passenger volume",
+      "needs_review": false,
+      "tags": ["gauteng", "informal", "pretoria", "township", "high-volume"],
+      "created_at": "2024-01-10T08:00:00Z",
+      "updated_at": "2024-07-07T10:00:00Z",
+      "last_safety_inspection": "2024-03-15T00:00:00Z"
+    },
+    {
+      "rank_id": 2,
+      "name": "Baragwanath Taxi Rank",
+      "location": "Chris Hani Road, Soweto, Johannesburg",
+      "gps_coordinates": {
+        "latitude": -26.2486,
+        "longitude": 27.8544,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.95,
+        "last_geocoded": "2024-07-07T10:30:00Z"
+      },
+      "type": "Formal",
+      "cluster_name": null,
+      "facility_type": "Transport Facility",
+      "status": "Completed 2007",
+      "facility_features": ["formal_shelter", "trading_stalls", "toilets", "security_office", "first_aid", "information_desk"],
+      "safety_features": ["cctv", "security_personnel", "good_lighting", "emergency_exits", "fire_extinguishers"],
+      "associations_operating": ["Soweto United Taxi Association", "Johannesburg Metropolitan Taxi Association"],
+      "description": "Formal taxi rank with trader market and multi-functional facilities. Major transport hub for Soweto.",
+      "needs_review": false,
+      "tags": ["formal", "gauteng", "johannesburg", "multi-functional", "soweto", "transport-hub"],
+      "created_at": "2024-01-10T08:05:00Z",
+      "updated_at": "2024-07-07T10:30:00Z",
+      "last_safety_inspection": "2024-05-20T00:00:00Z"
+    },
+    {
+      "rank_id": 3,
+      "name": "Burgersfort Long Distance Taxi Rank",
+      "location": "Erf 440, Burgersfort, Limpopo",
+      "gps_coordinates": {
+        "latitude": -24.6256,
+        "longitude": 29.9733,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.9,
+        "last_geocoded": "2024-07-07T10:45:00Z"
+      },
+      "type": "Formal",
+      "cluster_name": null,
+      "facility_type": "Long Distance Taxi Rank",
+      "status": "Active",
+      "facility_features": ["covered_waiting_area", "ticket_office", "toilets", "vendor_stalls", "parking"],
+      "safety_features": ["security_personnel", "adequate_lighting", "designated_queues"],
+      "associations_operating": ["DRUTA", "ELLTA", "BULLDTA"],
+      "description": "Formal long-distance taxi rank serving mining communities and Pretoria/Johannesburg routes",
+      "needs_review": false,
+      "tags": ["limpopo", "formal", "long-distance", "mining-community", "inter-provincial"],
+      "created_at": "2024-01-12T09:15:00Z",
+      "updated_at": "2024-07-07T10:45:00Z",
+      "last_safety_inspection": "2024-04-10T00:00:00Z"
+    },
+    {
+      "rank_id": 4,
+      "name": "Bosman Station Taxi Rank",
+      "location": "Bosman Street, Pretoria CBD, Gauteng",
+      "gps_coordinates": {
+        "latitude": -25.7479,
+        "longitude": 28.2293,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.94,
+        "last_geocoded": "2024-07-07T11:00:00Z"
+      },
+      "type": "Formal",
+      "cluster_name": "City Cluster",
+      "facility_type": "Multi-Modal Transport Interchange",
+      "status": "Active",
+      "facility_features": ["covered_platforms", "ticket_offices", "toilets", "information_boards", "vendor_area", "bus_connections"],
+      "safety_features": ["cctv", "police_presence", "good_lighting", "emergency_call_points", "security_patrols"],
+      "associations_operating": ["Pretoria Metro Taxi Association", "Gauteng Long Distance Association"],
+      "description": "Major transport interchange in Pretoria CBD connecting taxis, buses, and pedestrian routes",
+      "needs_review": false,
+      "tags": ["gauteng", "pretoria", "formal", "transport-interchange", "cbd", "multi-modal"],
+      "created_at": "2024-01-12T09:20:00Z",
+      "updated_at": "2024-07-07T11:00:00Z",
+      "last_safety_inspection": "2024-06-05T00:00:00Z"
+    },
+    {
+      "rank_id": 5,
+      "name": "Durban Central Market Taxi Rank",
+      "location": "Durban Central, KwaZulu-Natal",
+      "gps_coordinates": {
+        "latitude": -29.8587,
+        "longitude": 31.0218,
+        "geocoding_source": "Google Maps API",
+        "geocoding_accuracy": 0.96,
+        "last_geocoded": "2024-07-07T11:15:00Z"
+      },
+      "type": "Formal",
+      "cluster_name": null,
+      "facility_type": "Market Taxi Rank",
+      "status": "Active",
+      "facility_features": ["covered_platforms", "market_stalls", "toilets", "food_vendors", "information_desk"],
+      "safety_features": ["security_personnel", "adequate_lighting", "crowd_control", "cctv_partial"],
+      "associations_operating": ["Durban Metro Taxi Association", "KZN Long Distance Association"],
+      "description": "Major taxi rank adjacent to Durban market, serving local and regional routes",
+      "needs_review": false,
+      "tags": ["kzn", "durban", "formal", "market-adjacent", "regional-hub"],
+      "created_at": "2024-01-15T08:45:00Z",
+      "updated_at": "2024-07-07T11:15:00Z",
+      "last_safety_inspection": "2024-05-15T00:00:00Z"
+    }
+  ],
+
+  "safety_reports_table": [
+    {
+      "report_id": "SR-2024-001",
+      "category": "vehicle_safety",
+      "subcategory": "overloading",
+      "severity": "medium",
+      "location": "Baragwanath Taxi Rank, Soweto",
+      "location_coordinates": {
+        "latitude": -26.2486,
+        "longitude": 27.8544,
+        "accuracy_meters": 50
+      },
+      "description": "Taxi departing to Pretoria was significantly overloaded with passengers standing in aisle",
+      "route_id": 1,
+      "route_number": "PTA-MAM-001",
+      "taxi_registration": "CA 123-456",
+      "association_id": 4,
+      "reported_by_user_id": "user_67890",
+      "status": "under_investigation",
+      "action_taken": "Reported to association safety officer",
+      "reporter_contact_allowed": true,
+      "evidence_files": ["photo_overload_001.jpg"],
+      "anonymous_report": false,
+      "created_at": "2024-07-06T14:30:00Z",
+      "updated_at": "2024-07-07T09:00:00Z",
+      "resolved_at": null,
+      "resolution_notes": "Association safety officer notified, investigation pending"
+    },
+    {
+      "report_id": "SR-2024-002",
+      "category": "infrastructure",
+      "subcategory": "poor_lighting",
+      "severity": "low",
+      "location": "Mamelodi Taxi Rank",
+      "location_coordinates": {
+        "latitude": -25.7167,
+        "longitude": 28.3167,
+        "accuracy_meters": 100
+      },
+      "description": "Several lights not working in evening, making rank unsafe after dark",
+      "route_id": null,
+      "route_number": null,
+      "taxi_registration": null,
+      "association_id": null,
+      "reported_by_user_id": "user_54321",
+      "status": "acknowledged",
+      "action_taken": "Report logged with municipality",
+      "reporter_contact_allowed": false,
+      "evidence_files": [],
+      "anonymous_report": true,
+      "created_at": "2024-07-05T19:45:00Z",
+      "updated_at": "2024-07-05T19:45:00Z",
+      "resolved_at": null,
+      "resolution_notes": "Awaiting municipal response"
+    },
+    {
+      "report_id": "SR-2024-003",
+      "category": "driver_behavior",
+      "subcategory": "reckless_driving",
+      "severity": "high",
+      "location": "N1 Highway near Midrand",
+      "location_coordinates": {
+        "latitude": -25.9833,
+        "longitude": 28.1167,
+        "accuracy_meters": 500
+      },
+      "description": "Taxi driver speeding and weaving between lanes on N1 northbound",
+      "route_id": 3,
+      "route_number": "GER-PTA-001",
+      "taxi_registration": "GP 789-ABC",
+      "association_id": 5,
+      "reported_by_user_id": "user_98765",
+      "status": "resolved",
+      "action_taken": "Reported to association and traffic department",
+      "reporter_contact_allowed": true,
+      "evidence_files": ["video_driving_001.mp4"],
+      "anonymous_report": false,
+      "created_at": "2024-07-04T08:15:00Z",
+      "updated_at": "2024-07-06T10:30:00Z",
+      "resolved_at": "2024-07-06T10:30:00Z",
+      "resolution_notes": "Driver suspended pending retraining. Association implemented stricter monitoring."
+    },
+    {
+      "report_id": "SR-2024-004",
+      "category": "harassment",
+      "subcategory": "verbal_abuse",
+      "severity": "medium",
+      "location": "Burgersfort Long Distance Taxi Rank",
+      "location_coordinates": {
+        "latitude": -24.6256,
+        "longitude": 29.9733,
+        "accuracy_meters": 30
+      },
+      "description": "Taxi conductor verbally abusive to passengers questioning fare increase",
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "taxi_registration": null,
+      "association_id": 2,
+      "reported_by_user_id": "user_11223",
+      "status": "investigating",
+      "action_taken": "Reported to association management",
+      "reporter_contact_allowed": false,
+      "evidence_files": ["audio_harassment_001.m4a"],
+      "anonymous_report": true,
+      "created_at": "2024-07-03T11:20:00Z",
+      "updated_at": "2024-07-05T14:45:00Z",
+      "resolved_at": null,
+      "resolution_notes": "Association conducting internal investigation"
+    },
+    {
+      "report_id": "SR-2024-005",
+      "category": "vehicle_condition",
+      "subcategory": "mechanical_issues",
+      "severity": "high",
+      "location": "R101 near Bela-Bela",
+      "location_coordinates": {
+        "latitude": -24.8833,
+        "longitude": 28.2833,
+        "accuracy_meters": 1000
+      },
+      "description": "Taxi emitting excessive smoke and making loud knocking noises",
+      "route_id": 4,
+      "route_number": "BFT-PTA-001",
+      "taxi_registration": "LMP 456-DEF",
+      "association_id": 3,
+      "reported_by_user_id": "user_33445",
+      "status": "resolved",
+      "action_taken": "Vehicle grounded for inspection",
+      "reporter_contact_allowed": true,
+      "evidence_files": ["photo_smoke_001.jpg", "video_engine_001.mp4"],
+      "anonymous_report": false,
+      "created_at": "2024-07-02T13:10:00Z",
+      "updated_at": "2024-07-04T16:20:00Z",
+      "resolved_at": "2024-07-04T16:20:00Z",
+      "resolution_notes": "Vehicle failed roadworthy test. Removed from service until repairs completed."
+    }
+  ],
+
+  "user_contributions_table": [
+    {
+      "contribution_id": "UC-2024-001",
+      "user_id": "user_12345",
+      "contribution_type": "fare_update",
+      "data": {
+        "route_id": 1,
+        "previous_amount": 22.00,
+        "new_amount": 25.00,
+        "currency": "ZAR",
+        "notes": "Fare increased starting July 2024"
+      },
+      "validation_status": "approved",
+      "validation_rules_applied": ["check_reasonable_increase", "check_multiple_reports", "verify_user_reputation"],
+      "validation_score": 85,
+      "moderator_reviewed": true,
+      "moderator_id": "mod_001",
+      "review_notes": "Multiple users reported similar increase, appears legitimate",
+      "impact_score": 3,
+      "created_at": "2024-07-01T08:15:00Z",
+      "updated_at": "2024-07-03T14:20:00Z",
+      "expires_at": "2025-07-01T08:15:00Z"
+    },
+    {
+      "contribution_id": "UC-2024-002",
+      "user_id": "user_99999",
+      "contribution_type": "safety_report",
+      "data": {
+        "category": "driver_behavior",
+        "description": "Driver using phone while driving on N1 highway",
+        "taxi_registration": "GP 789-ABC"
+      },
+      "validation_status": "pending",
+      "validation_rules_applied": ["check_user_history", "verify_location"],
+      "validation_score": 60,
+      "moderator_reviewed": false,
+      "moderator_id": null,
+      "review_notes": null,
+      "impact_score": 2,
+      "created_at": "2024-07-06T16:45:00Z",
+      "updated_at": "2024-07-06T16:45:00Z",
+      "expires_at": "2025-07-06T16:45:00Z"
+    },
+    {
+      "contribution_id": "UC-2024-003",
+      "user_id": "user_23456",
+      "contribution_type": "route_addition",
+      "data": {
+        "starting_point": "Germiston Taxi Rank - ER090",
+        "destination": "Pretoria",
+        "estimated_time": "51 minutes",
+        "estimated_fare": 60.00
+      },
+      "validation_status": "approved",
+      "validation_rules_applied": ["verify_location_exists", "check_duplicate_route", "validate_fare_range"],
+      "validation_score": 78,
+      "moderator_reviewed": true,
+      "moderator_id": "mod_002",
+      "review_notes": "Route confirmed with existing schedules. Fare within expected range.",
+      "impact_score": 4,
+      "created_at": "2024-05-10T11:30:00Z",
+      "updated_at": "2024-05-12T09:15:00Z",
+      "expires_at": "2025-05-10T11:30:00Z"
+    },
+    {
+      "contribution_id": "UC-2024-004",
+      "user_id": "user_87654",
+      "contribution_type": "rank_condition_update",
+      "data": {
+        "rank_id": 1,
+        "condition": "poor",
+        "issues": ["broken benches", "dirty toilets", "no lighting at night"]
+      },
+      "validation_status": "approved",
+      "validation_rules_applied": ["verify_user_location", "check_multiple_reports"],
+      "validation_score": 82,
+      "moderator_reviewed": true,
+      "moderator_id": "mod_001",
+      "review_notes": "Multiple similar reports confirm conditions. Forwarded to municipal maintenance.",
+      "impact_score": 3,
+      "created_at": "2024-06-20T15:30:00Z",
+      "updated_at": "2024-06-22T11:45:00Z",
+      "expires_at": "2025-06-20T15:30:00Z"
+    },
+    {
+      "contribution_id": "UC-2024-005",
+      "user_id": "user_54321",
+      "contribution_type": "association_info_update",
+      "data": {
+        "association_id": 2,
+        "updated_contact": "+27-83-987-6543",
+        "updated_email": "info@druta.org.za"
+      },
+      "validation_status": "rejected",
+      "validation_rules_applied": ["verify_official_sources", "check_contact_format"],
+      "validation_score": 45,
+      "moderator_reviewed": true,
+      "moderator_id": "mod_003",
+      "review_notes": "Unable to verify contact information through official channels. Phone number format incorrect.",
+      "impact_score": 1,
+      "created_at": "2024-07-01T10:20:00Z",
+      "updated_at": "2024-07-02T08:45:00Z",
+      "expires_at": "2025-07-01T10:20:00Z"
+    }
+  ],
+
+  "validation_rules": {
+    "fare_validation": [
+      {
+        "rule_id": "FARE-001",
+        "name": "positive_value",
+        "description": "Fare amount must be greater than zero",
+        "severity": "critical",
+        "error_message": "Fare amount must be positive",
+        "implementation": "amount > 0"
+      },
+      {
+        "rule_id": "FARE-002",
+        "name": "reasonable_range",
+        "description": "Fare must be within reasonable bounds for distance",
+        "severity": "warning",
+        "error_message": "Fare appears unusually high/low for route distance",
+        "implementation": "amount >= (distance_km * 0.5) AND amount <= (distance_km * 5)"
+      },
+      {
+        "rule_id": "FARE-003",
+        "name": "percentage_increase_limit",
+        "description": "Fare increase cannot exceed 20% without verification",
+        "severity": "warning",
+        "error_message": "Fare increase exceeds normal limits",
+        "implementation": "new_amount <= (previous_amount * 1.2)"
+      },
+      {
+        "rule_id": "FARE-004",
+        "name": "multiple_reports_consistency",
+        "description": "Multiple user reports should show fare consistency",
+        "severity": "info",
+        "error_message": "Fare reports vary significantly",
+        "implementation": "stddev(reported_amounts) < (average_amount * 0.15)"
+      }
+    ],
+    "safety_report_validation": [
+      {
+        "rule_id": "SAFETY-001",
+        "name": "location_verification",
+        "description": "Report location must be within operational area",
+        "severity": "warning",
+        "error_message": "Report location appears outside route area",
+        "implementation": "distance(location, route_path) < 5km"
+      },
+      {
+        "rule_id": "SAFETY-002",
+        "name": "user_reputation_check",
+        "description": "Check user's previous report accuracy",
+        "severity": "info",
+        "error_message": "User has low accuracy rating",
+        "implementation": "user_accuracy_score > 0.7"
+      },
+      {
+        "rule_id": "SAFETY-003",
+        "name": "evidence_validation",
+        "description": "Check for supporting evidence in high-severity reports",
+        "severity": "warning",
+        "error_message": "High severity report lacks supporting evidence",
+        "implementation": "severity != 'high' OR evidence_files_count > 0"
+      },
+      {
+        "rule_id": "SAFETY-004",
+        "name": "duplicate_report_check",
+        "description": "Check for similar recent reports",
+        "severity": "info",
+        "error_message": "Similar report already submitted",
+        "implementation": "similar_reports_count < 3"
+      }
+    ],
+    "route_validation": [
+      {
+        "rule_id": "ROUTE-001",
+        "name": "duplicate_route_check",
+        "description": "Check for existing similar routes",
+        "severity": "warning",
+        "error_message": "Similar route already exists",
+        "implementation": "distance(starting_point, existing_start) > 1km OR distance(destination, existing_dest) > 1km"
+      },
+      {
+        "rule_id": "ROUTE-002",
+        "name": "geographic_feasibility",
+        "description": "Route must be geographically feasible",
+        "severity": "critical",
+        "error_message": "Route appears geographically impossible",
+        "implementation": "distance_km / estimated_hours < 200"
+      },
+      {
+        "rule_id": "ROUTE-003",
+        "name": "time_distance_ratio",
+        "description": "Travel time must be reasonable for distance",
+        "severity": "warning",
+        "error_message": "Travel time unrealistic for distance",
+        "implementation": "estimated_hours >= (distance_km / 100) AND estimated_hours <= (distance_km / 20)"
+      }
+    ],
+    "general_validation": [
+      {
+        "rule_id": "GEN-001",
+        "name": "timestamp_recency",
+        "description": "Data must be recent (within 2 years)",
+        "severity": "warning",
+        "error_message": "Data appears outdated",
+        "implementation": "timestamp > NOW() - INTERVAL '2 years'"
+      },
+      {
+        "rule_id": "GEN-002",
+        "name": "required_fields_check",
+        "description": "All required fields must be populated",
+        "severity": "critical",
+        "error_message": "Required field missing",
+        "implementation": "required_fields IS NOT NULL"
+      },
+      {
+        "rule_id": "GEN-003",
+        "name": "format_validation",
+        "description": "Field values must match expected format",
+        "severity": "warning",
+        "error_message": "Field format incorrect",
+        "implementation": "FIELD REGEXP 'expected_pattern'"
+      }
+    ]
+  },
+
+  "geocoding_config": {
+    "primary_provider": "Google Maps API",
+    "fallback_provider": "OpenStreetMap",
+    "api_keys": {
+      "google_maps": "encrypted_key_abc123",
+      "openstreetmap": null
+    },
+    "cache_duration_days": 30,
+    "accuracy_threshold": 0.7,
+    "batch_size": 100,
+    "rate_limit_per_minute": 50,
+    "retry_attempts": 3,
+    "geocoding_coverage_target": 0.85,
+    "last_sync": "2024-07-07T12:00:00Z",
+    "next_scheduled_sync": "2024-08-07T00:00:00Z",
+    "address_standardization_rules": {
+      "province_mapping": {
+        "GP": "Gauteng",
+        "KZN": "KwaZulu-Natal",
+        "LP": "Limpopo",
+        "MP": "Mpumalanga"
+      },
+      "location_aliases": {
+        "JHB": "Johannesburg",
+        "PTA": "Pretoria",
+        "DBN": "Durban"
+      }
+    }
+  },
+
+  "metadata": {
+    "source_document": "Fetakgomo-Tubatse Local Municipality Integrated Transport Plan 2020-2023",
+    "extraction_date": "2024-07-07",
+    "total_routes_extracted": 140,
+    "total_routes_loaded": 5,
+    "total_ranks_extracted": 100,
+    "total_ranks_loaded": 5,
+    "total_associations_extracted": 15,
+    "total_associations_loaded": 5,
+    "total_safety_reports": 42,
+    "total_safety_reports_loaded": 5,
+    "total_user_contributions": 156,
+    "total_user_contributions_loaded": 5,
+    "schema_version": "2.0",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-07-07T12:00:00Z",
+    "data_quality_score": 78,
+    "verification_coverage": "45%",
+    "geocoding_coverage": "100%",
+    "user_engagement_score": 4.2,
+    "active_users_count": 156,
+    "data_freshness_index": 0.85,
+    "next_data_refresh": "2024-10-01T00:00:00Z",
+    "system_status": "operational"
+  }
+}

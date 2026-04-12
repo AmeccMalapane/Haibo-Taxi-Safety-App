@@ -1,0 +1,128 @@
+import { Router, Response } from "express";
+import { db } from "../db";
+import { notifications, users } from "../../shared/schema";
+import { eq, desc, and } from "drizzle-orm";
+import { authMiddleware, AuthRequest } from "../middleware/auth";
+import { notifyUser, sendSOSAlert } from "../services/notifications";
+
+const router = Router();
+
+// POST /api/notifications/register-token — Save FCM token for push notifications
+router.post("/register-token", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      res.status(400).json({ error: "FCM token is required" });
+      return;
+    }
+
+    await db.update(users)
+      .set({ fcmToken })
+      .where(eq(users.id, req.user!.userId));
+
+    res.json({ message: "Push notification token registered" });
+  } catch (error: any) {
+    console.error("Register token error:", error);
+    res.status(500).json({ error: "Failed to register token" });
+  }
+});
+
+// GET /api/notifications — Get user's notifications
+router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const results = await db.select().from(notifications)
+      .where(eq(notifications.userId, req.user!.userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
+
+    const unreadCount = results.filter((n) => !n.isRead).length;
+
+    res.json({ data: results, unreadCount });
+  } catch (error: any) {
+    console.error("Get notifications error:", error);
+    res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// PUT /api/notifications/:id/read — Mark notification as read
+router.put("/:id/read", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await db.update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.id, req.params.id),
+          eq(notifications.userId, req.user!.userId)
+        )
+      );
+
+    res.json({ message: "Notification marked as read" });
+  } catch (error: any) {
+    console.error("Mark read error:", error);
+    res.status(500).json({ error: "Failed to update notification" });
+  }
+});
+
+// PUT /api/notifications/read-all — Mark all notifications as read
+router.put("/read-all", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await db.update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.userId, req.user!.userId),
+          eq(notifications.isRead, false)
+        )
+      );
+
+    res.json({ message: "All notifications marked as read" });
+  } catch (error: any) {
+    console.error("Mark all read error:", error);
+    res.status(500).json({ error: "Failed to update notifications" });
+  }
+});
+
+// POST /api/notifications/sos — Trigger SOS alert (also sends push + real-time)
+router.post("/sos", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { latitude, longitude, message } = req.body;
+
+    if (!latitude || !longitude) {
+      res.status(400).json({ error: "Location is required for SOS" });
+      return;
+    }
+
+    await sendSOSAlert(req.user!.userId, latitude, longitude, message);
+
+    res.json({ message: "SOS alert sent", timestamp: new Date().toISOString() });
+  } catch (error: any) {
+    console.error("SOS alert error:", error);
+    res.status(500).json({ error: "Failed to send SOS alert" });
+  }
+});
+
+// POST /api/notifications/test — Send a test notification (development only)
+router.post("/test", authMiddleware, async (req: AuthRequest, res: Response) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(403).json({ error: "Test notifications not available in production" });
+    return;
+  }
+
+  try {
+    const sent = await notifyUser({
+      userId: req.user!.userId,
+      type: "system",
+      title: "Test Notification",
+      body: "If you see this, push notifications are working!",
+      data: { test: true },
+    });
+
+    res.json({ message: "Test notification sent", pushDelivered: sent });
+  } catch (error: any) {
+    console.error("Test notification error:", error);
+    res.status(500).json({ error: "Failed to send test notification" });
+  }
+});
+
+export default router;

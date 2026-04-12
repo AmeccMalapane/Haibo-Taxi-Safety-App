@@ -1,0 +1,429 @@
+[
+  {
+    "name": "National Emergency Line (From Mobile)",
+    "phone": "112",
+    "category": "National Emergency Services",
+    "description": "Primary emergency number from any mobile phone. Connects to network provider's emergency center.",
+    "id": 1
+  },
+  {
+    "name": "Police Emergency",
+    "phone": "10111",
+    "category": "National Emergency Services",
+    "description": "South African Police Service (SAPS) emergency line.",
+    "id": 2
+  },
+  {
+    "name": "Ambulance & Fire Brigade",
+    "phone": "10177",
+    "category": "National Emergency Services",
+    "description": "Emergency medical and fire services.",
+    "id": 3
+  },
+  {
+    "name": "ER24",
+    "phone": "084 124",
+    "category": "Medical Emergency Services",
+    "description": "Nationwide private emergency medical service.",
+    "id": 4
+  },
+  {
+    "name": "Netcare 911",
+    "phone": "082 911",
+    "category": "Medical Emergency Services",
+    "description": "Nationwide private emergency medical service.",
+    "id": 5
+  },
+  {
+    "name": "Life Healthcare Emergency Line",
+    "phone": "0860 532 532",
+    "category": "Medical Emergency Services",
+    "description": "Private hospital group emergency line.",
+    "id": 6
+  },
+  {
+    "name": "Poison Information Helpline (Western Cape & National)",
+    "phone": "0861 555 777",
+    "category": "Medical Emergency Services",
+    "description": "Handles poisoning emergencies.",
+    "id": 7
+  },
+  {
+    "name": "Mountain Rescue - KZN",
+    "phone": "031 307 7744",
+    "category": "Medical Emergency Services",
+    "description": "",
+    "id": 8
+  },
+  {
+    "name": "Mountain Rescue - Western Cape",
+    "phone": "021 948 9900",
+    "category": "Medical Emergency Services",
+    "description": "",
+    "id": 9
+  },
+  {
+    "name": "National Sea Rescue Institute (NSRI)",
+    "phone": "087 094 9774",
+    "category": "Medical Emergency Services",
+    "description": "",
+    "id": 10
+  },
+  {
+    "name": "Crime Stop (Anonymous)",
+    "phone": "08600 10111",
+    "category": "Crime Reporting Safety",
+    "description": "Report crime anonymously to SAPS.",
+    "id": 11
+  },
+  {
+    "name": "Anti-Corruption Helpline",
+    "phone": "0800 701 701",
+    "category": "Crime Reporting Safety",
+    "description": "",
+    "id": 12
+  },
+  {
+    "name": "GBV Command Centre",
+    "phone": "0800 428 428",
+    "category": "Crime Reporting Safety",
+    "description": "Gender-Based Violence support. Can also SMS 'HELP' to 31531.",
+    "id": 13
+  },
+  {
+    "name": "TEARS Foundation",
+    "phone": "010 590 5920",
+    "category": "Crime Reporting Safety",
+    "description": "",
+    "id": 14
+  },
+  {
+    "name": "Stop Human Trafficking Helpline",
+    "phone": "0800 222 777",
+    "category": "Crime Reporting Safety",
+    "description": "",
+    "id": 15
+  },
+  {
+    "name": "Police Service Complaints Centre",
+    "phone": "0800 333 177",
+    "category": "Crime Reporting Safety",
+    "description": "",
+    "id": 16
+  },
+  {
+    "name": "Suicide Crisis Line / SADAG",
+    "phone": "0800 567 567",
+    "category": "Mental Health Support",
+    "description": "Also listed as Mental Health Information Line.",
+    "id": 17
+  },
+  {
+    "name": "Lifeline South Africa",
+    "phone": "0861 322 322",
+    "category": "Mental Health Support",
+    "description": "National crisis line for emotional support.",
+    "id": 18
+  },
+  {
+    "name": "South African Depression & Anxiety Group (SADAG)",
+    "phone": "0800 456 789",
+    "category": "Mental Health Support",
+    "description": "",
+    "id": 19
+  },
+  {
+    "name": "Childline South Africa",
+    "phone": "0800 055 555",
+    "category": "Family Child Support",
+    "description": "Also listed as 116 in Western Cape.",
+    "id": 20
+  },
+  {
+    "name": "Child Emergency Line",
+    "phone": "0800 123 321",
+    "category": "Family Child Support",
+    "description": "",
+    "id": 21
+  },
+  {
+    "name": "Child Welfare South Africa",
+    "phone": "0861 424 453",
+    "category": "Family Child Support",
+    "description": "",
+    "id": 22
+  },
+  {
+    "name": "Alcoholics Anonymous (AA)",
+    "phone": "0861 435 722",
+    "category": "Substance Abuse Support",
+    "description": "",
+    "id": 23
+  },
+  {
+    "name": "Narcotics Anonymous (NA)",
+    "phone": "083 900 6962",
+    "category": "Substance Abuse Support",
+    "description": "Also listed as 0861 00 6962 in some sources.",
+    "id": 24
+  },
+  {
+    "name": "AA Roadside Assistance",
+    "phone": "0861 000 234",
+    "category": "Road Traffic Assistance",
+    "description": "",
+    "id": 25
+  },
+  {
+    "name": "National Traffic Call Centre (RTMC)",
+    "phone": "0861 400 800",
+    "category": "Road Traffic Assistance",
+    "description": "Report bad drivers and traffic issues.",
+    "id": 26
+  },
+  {
+    "name": "Department of Water Affairs",
+    "phone": "0800 200 200",
+    "category": "Utility Services Emergencies",
+    "description": "",
+    "id": 27
+  },
+  {
+    "name": "Eskom",
+    "phone": "086 003 7566",
+    "category": "Utility Services Emergencies",
+    "description": "",
+    "id": 28
+  },
+  {
+    "name": "Sasol Gas Leaks",
+    "phone": "0800 212 260",
+    "category": "Utility Services Emergencies",
+    "description": "",
+    "id": 29
+  },
+  {
+    "name": "SPCA National",
+    "phone": "011 907 3590",
+    "category": "Animal Emergencies Welfare",
+    "description": "",
+    "id": 30
+  },
+  {
+    "name": "Snake Rescue Hotline",
+    "phone": "072 809 5806",
+    "category": "Animal Emergencies Welfare",
+    "description": "",
+    "id": 31
+  },
+  {
+    "name": "Disaster Risk Management Centre",
+    "phone": "080 911 4357",
+    "category": "Disaster Relief",
+    "description": "Western Cape. (080 911 HELP)",
+    "id": 32
+  },
+  {
+    "name": "Gift of the Givers",
+    "phone": "0800 786 911",
+    "category": "Disaster Relief",
+    "description": "Major disaster relief organization.",
+    "id": 33
+  },
+  {
+    "name": "City Emergency (from landline)",
+    "phone": "107",
+    "category": "Western Cape",
+    "description": "Primary city emergency number.",
+    "id": 34
+  },
+  {
+    "name": "Fire & Rescue Headquarters",
+    "phone": "021 480 7700",
+    "category": "Western Cape",
+    "description": "",
+    "id": 35
+  },
+  {
+    "name": "Sea Rescue",
+    "phone": "021 449 3500",
+    "category": "Western Cape",
+    "description": "",
+    "id": 36
+  },
+  {
+    "name": "Fire Department",
+    "phone": "028 425 1690",
+    "category": "Western Cape",
+    "description": "",
+    "id": 37
+  },
+  {
+    "name": "City of Johannesburg Emergency",
+    "phone": "0860 56 28 74",
+    "category": "Gauteng Local Services",
+    "description": "",
+    "id": 38
+  },
+  {
+    "name": "Local Police Station",
+    "phone": "011 449 9110",
+    "category": "Gauteng Local Services",
+    "description": "",
+    "id": 39
+  },
+  {
+    "name": "Local Police Station",
+    "phone": "011 722 4200",
+    "category": "Gauteng Local Services",
+    "description": "",
+    "id": 40
+  },
+  {
+    "name": "Local Police Station",
+    "phone": "011 699 1333",
+    "category": "Gauteng Local Services",
+    "description": "",
+    "id": 41
+  },
+  {
+    "name": "Local Fire Station",
+    "phone": "011 375 5911",
+    "category": "Gauteng Local Services",
+    "description": "",
+    "id": 42
+  },
+  {
+    "name": "Bureau of Missing Persons (Western Cape)",
+    "phone": "021 918 3512",
+    "category": "Other Essential Contacts",
+    "description": "",
+    "id": 43
+  },
+  {
+    "name": "National COVID-19 Hotline",
+    "phone": "0800 029 999",
+    "category": "Other Essential Contacts",
+    "description": "",
+    "id": 44
+  },
+  {
+    "name": "National AIDS Helpline",
+    "phone": "0800 012 322",
+    "category": "Other Essential Contacts",
+    "description": "",
+    "id": 45
+  },
+  {
+    "name": "Presidential Hotline",
+    "phone": "17737",
+    "category": "Other Essential Contacts",
+    "description": "",
+    "id": 46
+  },
+  {
+    "name": "Childline South Africa",
+    "phone": "08000 55 555",
+    "category": "Mental Health Support",
+    "description": "24-hour helpline for children and teens[citation:2].",
+    "id": 47
+  },
+  {
+    "name": "Lifeline / National Crisis Line",
+    "phone": "0861 322 322",
+    "category": "Mental Health Support",
+    "description": "24-hour emotional support and crisis intervention[citation:2][citation:3].",
+    "id": 48
+  },
+  {
+    "name": "Suicide Crisis Helpline",
+    "phone": "0800 567 567",
+    "category": "Mental Health Support",
+    "description": "24-hour toll-free emergency helpline[citation:2].",
+    "id": 49
+  },
+  {
+    "name": "Department of Social Development Substance Abuse Helpline",
+    "phone": "0800 12 13 14",
+    "category": "Substance Abuse Support",
+    "description": "24-hour national helpline. Can also SMS 32312[citation:2].",
+    "id": 50
+  },
+  {
+    "name": "Gender Based Violence Command Centre (DSD)",
+    "phone": "0800 428 428",
+    "category": "Gender Based Violence Support",
+    "description": "Toll-free national helpline. Also available via Skype (@helpmegbv) and SMS to 31531[citation:2][citation:5].",
+    "id": 51
+  },
+  {
+    "name": "Stop Gender Violence Helpline",
+    "phone": "0800 150 150",
+    "category": "Gender Based Violence Support",
+    "description": "Confidential helpline[citation:3].",
+    "id": 52
+  },
+  {
+    "name": "Ambulance Emergency",
+    "phone": "10177",
+    "category": "General Emergency Services",
+    "description": "State ambulance and fire brigade emergency number[citation:3].",
+    "id": 53
+  },
+  {
+    "name": "Crime Stop",
+    "phone": "08600 10111",
+    "category": "General Emergency Services",
+    "description": "Report crime anonymously to SAPS[citation:1][citation:3].",
+    "id": 54
+  },
+  {
+    "name": "Poison Information Helpline",
+    "phone": "0861 555 777",
+    "category": "General Emergency Services",
+    "description": "National poison emergency advice[citation:1].",
+    "id": 55
+  },
+  {
+    "name": "Eskom (Electricity)",
+    "phone": "08600 37566",
+    "category": "General Emergency Services",
+    "description": "National Eskom ShareCall number for electricity issues[citation:1].",
+    "id": 56
+  },
+  {
+    "name": "KZN Department of Social Development",
+    "phone": "033 264 5400",
+    "category": "Departmental Contacts",
+    "description": "",
+    "id": 57
+  },
+  {
+    "name": "KZN Department of Health Helpline",
+    "phone": "033 395 2009",
+    "category": "Departmental Contacts",
+    "description": "",
+    "id": 58
+  },
+  {
+    "name": "Provincial KZN EMS",
+    "phone": "10177",
+    "category": "South Coast Services",
+    "description": "",
+    "id": 59
+  },
+  {
+    "name": "Fire & Rescue Control (Ugu District)",
+    "phone": "039 682 5555",
+    "category": "South Coast Services",
+    "description": "",
+    "id": 60
+  },
+  {
+    "name": "Poison Information (KZN)",
+    "phone": "0800 333 444",
+    "category": "South Coast Services",
+    "description": "",
+    "id": 61
+  }
+]

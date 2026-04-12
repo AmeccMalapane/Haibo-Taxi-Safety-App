@@ -1,0 +1,2378 @@
+[
+  {
+    "name": "Denneboom Station Main Taxi Rank",
+    "latitude": -25.7089,
+    "longitude": 28.2583,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route 1"
+  },
+  {
+    "name": "Mamelodi Denneboom Taxi Rank",
+    "latitude": -25.7167,
+    "longitude": 28.3167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 1"
+  },
+  {
+    "name": "Akasia (Northern Pretoria)",
+    "latitude": -25.6667,
+    "longitude": 28.1833,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 6"
+  },
+  {
+    "name": "Bronkhorspruit Main Taxi Rank",
+    "latitude": -25.8092,
+    "longitude": 28.7422,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 8"
+  },
+  {
+    "name": "Majakhatta Taxi Rank, Bloemfontein",
+    "latitude": -29.0852,
+    "longitude": 26.1596,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Starting point for routes 12, 15-19"
+  },
+  {
+    "name": "Johannesburg",
+    "latitude": -26.2041,
+    "longitude": 28.0473,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 12"
+  },
+  {
+    "name": "Mafwa West, Johannesburg South",
+    "latitude": -26.2667,
+    "longitude": 27.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 13"
+  },
+  {
+    "name": "Station Street Taxi Rank, Kroonstad",
+    "latitude": -27.65,
+    "longitude": 27.2333,
+    "type": "rank",
+    "city": "",
+    "province": "North West",
+    "address": "Destination for route 16"
+  },
+  {
+    "name": "Aliwal North",
+    "latitude": -30.7,
+    "longitude": 26.7167,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route 17"
+  },
+  {
+    "name": "King Williamstown",
+    "latitude": -32.8833,
+    "longitude": 27.4,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route 18"
+  },
+  {
+    "name": "Mafikeng",
+    "latitude": -25.8589,
+    "longitude": 25.6406,
+    "type": "rank",
+    "city": "",
+    "province": "North West",
+    "address": "Destination for route 19"
+  },
+  {
+    "name": "Roebble Complex, Botshabelo",
+    "latitude": -29.2333,
+    "longitude": 26.7167,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for route 21"
+  },
+  {
+    "name": "Reddersburg",
+    "latitude": -29.65,
+    "longitude": 26.1667,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for route 22"
+  },
+  {
+    "name": "Van Riebeeck Taxi Rank, Thaba Nchu",
+    "latitude": -29.2,
+    "longitude": 26.8333,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for route 23"
+  },
+  {
+    "name": "Darvin Street Taxi Rank, Bultfontein",
+    "latitude": -28.3,
+    "longitude": 26.15,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for route 25"
+  },
+  {
+    "name": "Marabastad Main Taxi Rank, Pretoria",
+    "latitude": -25.7447,
+    "longitude": 28.1806,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route GPTSH(BPLLDTA)030"
+  },
+  {
+    "name": "Jane Furse Taxi Rank, Jane Furse",
+    "latitude": -24.8833,
+    "longitude": 29.8167,
+    "type": "rank",
+    "city": "",
+    "province": "Mpumalanga",
+    "address": "Destination for route GPTSH(BPLLDTA)030"
+  },
+  {
+    "name": "Carletonville Main Taxi Rank, Carletonville",
+    "latitude": -26.3667,
+    "longitude": 27.4,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes GPWRDM(CALLDTA)0"
+  },
+  {
+    "name": "Butterworth Main Taxi Rank, Butterworth",
+    "latitude": -32.3333,
+    "longitude": 28.15,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route GPWRDM(CALLDTA)0"
+  },
+  {
+    "name": "Lusikisiki Taxi Rank, Lusikisiki",
+    "latitude": -31.3667,
+    "longitude": 29.5667,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route GPWRDM(CALLDTA)0"
+  },
+  {
+    "name": "Maseru Bridge Taxi Rank, Ladybrand",
+    "latitude": -29.2,
+    "longitude": 27.45,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for route GPWRDM(CALLDTA)0"
+  },
+  {
+    "name": "Umtata Main Taxi Rank, Mthatha",
+    "latitude": -31.5889,
+    "longitude": 28.7842,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route GPWRDM(CALLDTA)0"
+  },
+  {
+    "name": "Birchleigh Taxi Rank, Birchleigh",
+    "latitude": -26.0833,
+    "longitude": 28.2167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes GPEMM(MATA)1601-1603"
+  },
+  {
+    "name": "Norkem Park Shopping Centre Temporary Allocated Taxi Rank, Norkem Park",
+    "latitude": -26.0833,
+    "longitude": 28.1667,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route GPEMM(MATA)1603"
+  },
+  {
+    "name": "Kempton Park Temporary Allocated Taxi Rank, Kempton Park",
+    "latitude": -26.1,
+    "longitude": 28.2333,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMM(MATA)1603"
+  },
+  {
+    "name": "Kaalfontein Railway Station Temporary Allocated Taxi Rank, Kaalfontein",
+    "latitude": -26.0333,
+    "longitude": 28.2,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMM(MATA)1606"
+  },
+  {
+    "name": "Esselen Park Temporary Allocated Taxi Rank, Esselen Park",
+    "latitude": -26.1,
+    "longitude": 28.2167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMM(MATA)1607"
+  },
+  {
+    "name": "Benoni Station Taxi Rank, Benoni",
+    "latitude": -26.1833,
+    "longitude": 28.3167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMMOCTS1803"
+  },
+  {
+    "name": "Daveyton Main Taxi Rank, Daveyton",
+    "latitude": -26.1333,
+    "longitude": 28.4167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMMOCTS1804"
+  },
+  {
+    "name": "Bapsfontein Corner M44 and R50 Next to BP Garage, Bapsfontein",
+    "latitude": -26.0333,
+    "longitude": 28.3667,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route GPEMMOCTS1805"
+  },
+  {
+    "name": "Witbank Main Taxi Rank, Witbank",
+    "latitude": -25.8667,
+    "longitude": 29.2333,
+    "type": "rank",
+    "city": "",
+    "province": "Mpumalanga",
+    "address": "Destination for route GPEMMOCTS1807"
+  },
+  {
+    "name": "Bochum, Blouberg Rural",
+    "latitude": -23.2833,
+    "longitude": 29.1333,
+    "type": "rank",
+    "city": "",
+    "province": "Limpopo",
+    "address": "Destination for route GPEMM(MATA)1608"
+  },
+  {
+    "name": "Sandton Taxi Rank",
+    "latitude": -26.107,
+    "longitude": 28.0567,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route 80"
+  },
+  {
+    "name": "Woodmead Shopping Centre, R55 and van Reenen Street",
+    "latitude": -26.0333,
+    "longitude": 28.1,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes 81, 111"
+  },
+  {
+    "name": "Midrand Main Taxi Rank",
+    "latitude": -25.9833,
+    "longitude": 28.1333,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes 82, 88-90, 110"
+  },
+  {
+    "name": "Alexandra Main Taxi Rank @ 15th Avenue",
+    "latitude": -26.1167,
+    "longitude": 28.0833,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes 84, 86"
+  },
+  {
+    "name": "Dunswart North Junction",
+    "latitude": -26.1333,
+    "longitude": 28.3,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 84"
+  },
+  {
+    "name": "Thohoyandou, Thohayandou",
+    "latitude": -22.95,
+    "longitude": 30.4833,
+    "type": "rank",
+    "city": "",
+    "province": "Limpopo",
+    "address": "Destination for routes 85, 87, 89"
+  },
+  {
+    "name": "Randburg Taxi Rank",
+    "latitude": -26.1,
+    "longitude": 28.0,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 111"
+  },
+  {
+    "name": "Diepsloot Main Taxi Rank",
+    "latitude": -25.9333,
+    "longitude": 28.0167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for routes 113-114"
+  },
+  {
+    "name": "Diepsloot West, Roodepoort",
+    "latitude": -26.1333,
+    "longitude": 27.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route 115"
+  },
+  {
+    "name": "Ficksburg Bridge Taxi Rank, Ficksburg",
+    "latitude": -28.8833,
+    "longitude": 27.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Free State",
+    "address": "Destination for routes 116-118"
+  },
+  {
+    "name": "Diepkloof Beer Hall, Fourways",
+    "latitude": -25.9833,
+    "longitude": 28.1167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route 1 (Baragwanath)"
+  },
+  {
+    "name": "New Canada Station Taxi Rank",
+    "latitude": -26.1667,
+    "longitude": 27.9167,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for route 2"
+  },
+  {
+    "name": "Baragwanath Main Taxi Rank, Johannesburg",
+    "latitude": -26.2667,
+    "longitude": 27.9333,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Starting point for routes 3-7"
+  },
+  {
+    "name": "Meadowlands, Jikeleza",
+    "latitude": -26.2333,
+    "longitude": 27.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Gauteng",
+    "address": "Destination for route 6"
+  },
+  {
+    "name": "Saldanha",
+    "latitude": -33.0167,
+    "longitude": 17.95,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes N21-N24, U56"
+  },
+  {
+    "name": "Port Elizabeth, South Africa",
+    "latitude": -33.9608,
+    "longitude": 25.6022,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes N24, O79, W84, W61, W95"
+  },
+  {
+    "name": "Vredenburg",
+    "latitude": -32.9,
+    "longitude": 17.9833,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes O79-O80, U34, U69, X47, X92-X93, Y36-Y37"
+  },
+  {
+    "name": "Willowvale, South Africa",
+    "latitude": -32.2667,
+    "longitude": 28.5167,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes U34, Y72, Y70, L63, R16, AB21, AB22"
+  },
+  {
+    "name": "Kentani, South Africa",
+    "latitude": -32.6833,
+    "longitude": 28.3333,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route U56"
+  },
+  {
+    "name": "Port Nolloth, South Africa",
+    "latitude": -29.25,
+    "longitude": 16.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Northern Cape",
+    "address": "Destination for route U69"
+  },
+  {
+    "name": "Lady Frere, South Africa",
+    "latitude": -31.7167,
+    "longitude": 27.2333,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes X47, U35, X93, W78, X95, Y36, Y37, Y43, Y44, X95, R2, T77, T87, Q82, J86, K1, M98, T93, X15, J85, Q87, U10, U35, U52, X48, U39, U8, J50, O75, P41, P96, U36, U37, U38, U40, U5, U6, U7, X97, Z31, Z33, N1, N2, U4, U9, W84, X54, W61, W95, Y8, AA93, AA94, AA95, AA96, AA46, AA47, AA48, AA49, AA50, U24, U25, U26, U27, U28, U29, U32, AA54, AA55, M16, N26, Q29, Q48, W53, W88, 850, G32, H12, N57, T22, T52, V37, W67, W89, Y29, Y30, Y72, Y70, V41, L62, L63, Q3, R13, R14, R15, R16, L61, L67"
+  },
+  {
+    "name": "Vryburg, South Africa",
+    "latitude": -26.95,
+    "longitude": 24.7333,
+    "type": "rank",
+    "city": "",
+    "province": "North West",
+    "address": "Destination for routes AB22, AB33, X28"
+  },
+  {
+    "name": "Chatsworth Silvertown, South Africa",
+    "latitude": -29.9167,
+    "longitude": 30.9,
+    "type": "rank",
+    "city": "",
+    "province": "KwaZulu-Natal",
+    "address": "Starting point for routes AB23-AB33, AB36"
+  },
+  {
+    "name": "Sterkspruit, South Africa",
+    "latitude": -30.5333,
+    "longitude": 27.3667,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes AB24-AB25, W74, X90, T77, T87, Q82, J86, K1, M98, T93, X15, J85, Q87, U10, U35, U52, X48, U39, U8, J50, O75, P41, P96, U36, U37, U38, U40, U5, U6, U7, X97, Z31, Z33, N1, N2, U4, U9, W84, X54, W61, W95, Y8, AA93, AA94, AA95, AA96, AA46, AA47, AA48, AA49, AA50, U24, U25, U26, U27, U28, U29, U32, AA54, AA55, M16, N26, Q29, Q48, W53, W88, 850, G32, H12, N57, T22, T52, V37, W67, W89, Y29, Y30, Y72, Y70, V41, L62, L63, Q3, R13, R14, R15, R16, L61, L67"
+  },
+  {
+    "name": "Musina, South Africa",
+    "latitude": -22.3333,
+    "longitude": 30.0333,
+    "type": "rank",
+    "city": "",
+    "province": "Limpopo",
+    "address": "Destination for routes AB28, X91"
+  },
+  {
+    "name": "Komatipoort, South Africa",
+    "latitude": -25.4333,
+    "longitude": 31.95,
+    "type": "rank",
+    "city": "",
+    "province": "Mpumalanga",
+    "address": "Destination for routes AB29, X92"
+  },
+  {
+    "name": "Mount Fletcher, South Africa",
+    "latitude": -30.6833,
+    "longitude": 28.5,
+    "type": "rank",
+    "city": "",
+    "province": "KwaZulu-Natal",
+    "address": "Destination for routes AB30, W76, V37, V41, Q3, Z33"
+  },
+  {
+    "name": "Elliot, South Africa",
+    "latitude": -31.3333,
+    "longitude": 27.85,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes AB31, W77, Q82"
+  },
+  {
+    "name": "Malmesbury, South Africa",
+    "latitude": -33.45,
+    "longitude": 18.7333,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes W73-W78, X27-X28, X88-X93, Y1, Y36-Y37, X95, Y43-Y44"
+  },
+  {
+    "name": "Durban, South Africa",
+    "latitude": -29.8587,
+    "longitude": 31.0218,
+    "type": "rank",
+    "city": "",
+    "province": "KwaZulu-Natal",
+    "address": "Destination for route Y1"
+  },
+  {
+    "name": "Alexander Bay, South Africa",
+    "latitude": -28.5667,
+    "longitude": 16.5333,
+    "type": "rank",
+    "city": "",
+    "province": "Northern Cape",
+    "address": "Destination for route Y37"
+  },
+  {
+    "name": "Springbok, South Africa",
+    "latitude": -29.6667,
+    "longitude": 17.8833,
+    "type": "rank",
+    "city": "",
+    "province": "Northern Cape",
+    "address": "Destination for route Y44"
+  },
+  {
+    "name": "Ceres, South Africa",
+    "latitude": -33.3667,
+    "longitude": 19.3167,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes R2, T77, T87, T93"
+  },
+  {
+    "name": "Kagga Kamma, Koue Bokkeveld",
+    "latitude": -33.1667,
+    "longitude": 19.4667,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Destination for route R2"
+  },
+  {
+    "name": "Wolseley, South Africa",
+    "latitude": -33.4167,
+    "longitude": 19.2,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes Q82, Q87"
+  },
+  {
+    "name": "Zastron, South Africa",
+    "latitude": -30.3,
+    "longitude": 27.0833,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes T93, X15"
+  },
+  {
+    "name": "Mossel Bay-Kwanonqaba-Mayixhale St",
+    "latitude": -34.1833,
+    "longitude": 22.1333,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes U10, U35, U52, X48, U39, U8, J50, O75, P41, P96, U36, U37, U38, U40, U5, U6, U7, X97, Z31, Z33, N1, N2, U4, U9, W84, X54"
+  },
+  {
+    "name": "Engcobo",
+    "latitude": -31.6833,
+    "longitude": 28.0,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes X48, U39, U8"
+  },
+  {
+    "name": "Queenstown",
+    "latitude": -31.9,
+    "longitude": 26.8833,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route J50"
+  },
+  {
+    "name": "Cala",
+    "latitude": -31.5167,
+    "longitude": 27.7,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes U36, U5, L67"
+  },
+  {
+    "name": "Noupoort",
+    "latitude": -31.1833,
+    "longitude": 24.95,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes U40, U9"
+  },
+  {
+    "name": "East London",
+    "latitude": -33.0167,
+    "longitude": 27.9167,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route Z31"
+  },
+  {
+    "name": "Oudtshoorn",
+    "latitude": -33.6,
+    "longitude": 22.2,
+    "type": "rank",
+    "city": "Oudtshoorn",
+    "province": "Western Cape",
+    "address": "Starting point for routes W61, W95, Y8"
+  },
+  {
+    "name": "Upington",
+    "latitude": -28.4,
+    "longitude": 21.2667,
+    "type": "rank",
+    "city": "",
+    "province": "Northern Cape",
+    "address": "Destination for route Y8"
+  },
+  {
+    "name": "Ashton-Zolani",
+    "latitude": -33.8333,
+    "longitude": 20.0667,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes AA93-AA96"
+  },
+  {
+    "name": "Mdantsane",
+    "latitude": -32.95,
+    "longitude": 27.7667,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route AA95"
+  },
+  {
+    "name": "Bredasdorp-Ou Meule Street",
+    "latitude": -34.5333,
+    "longitude": 20.0333,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes AA46-AA50"
+  },
+  {
+    "name": "Tsomo",
+    "latitude": -32.0333,
+    "longitude": 27.8333,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes AA46-AA50"
+  },
+  {
+    "name": "Kleinmond",
+    "latitude": -34.3333,
+    "longitude": 19.0167,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes U24-U29, U32"
+  },
+  {
+    "name": "Mqanduli",
+    "latitude": -31.8167,
+    "longitude": 28.7667,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes U24, M16, Q29, Q48, H12"
+  },
+  {
+    "name": "Matatiele",
+    "latitude": -30.3333,
+    "longitude": 28.8,
+    "type": "rank",
+    "city": "",
+    "province": "KwaZulu-Natal",
+    "address": "Destination for routes U25, U27, 850, G32, W67"
+  },
+  {
+    "name": "Qumbu",
+    "latitude": -31.1667,
+    "longitude": 28.8833,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route U28, T22"
+  },
+  {
+    "name": "Hermanus",
+    "latitude": -34.4167,
+    "longitude": 19.2333,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes AA54-AA55, M16, W53"
+  },
+  {
+    "name": "Cofimvaba",
+    "latitude": -32.0,
+    "longitude": 27.5833,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route AA55"
+  },
+  {
+    "name": "Gansbaai-Main Road",
+    "latitude": -34.5833,
+    "longitude": 19.35,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes N26, W88"
+  },
+  {
+    "name": "Stanford-Dreyer Street",
+    "latitude": -34.4333,
+    "longitude": 19.45,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for route Q29"
+  },
+  {
+    "name": "Elliotdale",
+    "latitude": -31.9667,
+    "longitude": 28.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes W53, W88, T52"
+  },
+  {
+    "name": "Grabouw",
+    "latitude": -34.15,
+    "longitude": 19.0167,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes 850, G32, H12, N57, T22, T52, W67, W89, Y29, Y30"
+  },
+  {
+    "name": "Ngqeleni",
+    "latitude": -31.6667,
+    "longitude": 29.0333,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for route Y29"
+  },
+  {
+    "name": "Bizana",
+    "latitude": -30.85,
+    "longitude": 29.85,
+    "type": "rank",
+    "city": "",
+    "province": "KwaZulu-Natal",
+    "address": "Destination for route Y30"
+  },
+  {
+    "name": "Caledon",
+    "latitude": -34.2333,
+    "longitude": 19.4167,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes Y72, Y70"
+  },
+  {
+    "name": "Villiersdorp",
+    "latitude": -33.9833,
+    "longitude": 19.2833,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for route V41"
+  },
+  {
+    "name": "Klapmuts",
+    "latitude": -33.8,
+    "longitude": 18.8667,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes L62-L63, L61, L67"
+  },
+  {
+    "name": "Franschhoek",
+    "latitude": -33.9167,
+    "longitude": 19.1167,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for routes Q3, R13-R16"
+  },
+  {
+    "name": "Dutywa",
+    "latitude": -32.1833,
+    "longitude": 28.3167,
+    "type": "rank",
+    "city": "",
+    "province": "Eastern Cape",
+    "address": "Destination for routes R14, L61"
+  },
+  {
+    "name": "Botriver-Main Road",
+    "latitude": -34.2333,
+    "longitude": 19.2,
+    "type": "rank",
+    "city": "",
+    "province": "Western Cape",
+    "address": "Starting point for route V37"
+  },
+  {
+    "name": "Bree Street Taxi Rank",
+    "latitude": -26.2013,
+    "longitude": 28.035591,
+    "type": "rank",
+    "city": "Johannesburg",
+    "province": "Gauteng",
+    "address": "Bree Street"
+  },
+  {
+    "name": "Noord Taxi Rank",
+    "latitude": -26.199472,
+    "longitude": 28.048461,
+    "type": "rank",
+    "city": "Johannesburg",
+    "province": "Gauteng",
+    "address": "Noord Street"
+  },
+  {
+    "name": "Wanderers Taxi Rank",
+    "latitude": -26.197139,
+    "longitude": 28.044556,
+    "type": "rank",
+    "city": "Johannesburg",
+    "province": "Gauteng",
+    "address": "Wanderers Street"
+  },
+  {
+    "name": "Faraday Taxi Rank",
+    "latitude": -26.212333,
+    "longitude": 28.045903,
+    "type": "rank",
+    "city": "Johannesburg",
+    "province": "Gauteng",
+    "address": "Faraday Street"
+  },
+  {
+    "name": "Marabastad Taxi Rank",
+    "latitude": -25.739677,
+    "longitude": 28.182774,
+    "type": "rank",
+    "city": "Pretoria",
+    "province": "Gauteng",
+    "address": "Marabastad"
+  },
+  {
+    "name": "Bosman Station Taxi Rank",
+    "latitude": -25.755913,
+    "longitude": 28.184213,
+    "type": "rank",
+    "city": "Pretoria",
+    "province": "Gauteng",
+    "address": "Jeff Masemola Street"
+  },
+  {
+    "name": "Baragwanath Taxi Rank",
+    "latitude": -26.259061,
+    "longitude": 27.939906,
+    "type": "rank",
+    "city": "Soweto",
+    "province": "Gauteng",
+    "address": "Chris Hani Road"
+  },
+  {
+    "name": "Germiston Taxi Rank",
+    "latitude": -26.210384,
+    "longitude": 28.166662,
+    "type": "rank",
+    "city": "Germiston",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Tembisa Main Taxi Rank",
+    "latitude": -26.004601,
+    "longitude": 28.2213,
+    "type": "rank",
+    "city": "Tembisa",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Krugersdorp Taxi Rank",
+    "latitude": -26.096322,
+    "longitude": 27.807696,
+    "type": "rank",
+    "city": "Krugersdorp",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Vereeniging Taxi Rank",
+    "latitude": -26.673611,
+    "longitude": 27.931944,
+    "type": "rank",
+    "city": "Vereeniging",
+    "province": "Gauteng",
+    "address": "3L Union St"
+  },
+  {
+    "name": "Vanderbijlpark Taxi Rank",
+    "latitude": -26.71171,
+    "longitude": 27.83795,
+    "type": "rank",
+    "city": "Vanderbijlpark",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Boksburg Taxi Rank",
+    "latitude": -26.23148,
+    "longitude": 28.24083,
+    "type": "rank",
+    "city": "Boksburg",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Centurion Taxi Rank",
+    "latitude": -25.850187,
+    "longitude": 28.181375,
+    "type": "rank",
+    "city": "Centurion",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Roodepoort Taxi Rank",
+    "latitude": -26.1625,
+    "longitude": 27.8736,
+    "type": "rank",
+    "city": "Roodepoort",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Springs Taxi Rank",
+    "latitude": -26.254557,
+    "longitude": 28.437621,
+    "type": "rank",
+    "city": "Springs",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Alberton Taxi Rank",
+    "latitude": -26.26425,
+    "longitude": 28.12239,
+    "type": "rank",
+    "city": "Alberton",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Midrand Taxi Rank",
+    "latitude": -25.997694,
+    "longitude": 28.128056,
+    "type": "rank",
+    "city": "Midrand",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Carletonville Taxi Rank",
+    "latitude": -26.358055,
+    "longitude": 27.398056,
+    "type": "rank",
+    "city": "Carletonville",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Randfontein Taxi Rank",
+    "latitude": -26.1844,
+    "longitude": 27.70203,
+    "type": "rank",
+    "city": "Randfontein",
+    "province": "Gauteng",
+    "address": ""
+  },
+  {
+    "name": "Durban Central Market Taxi Rank",
+    "latitude": -29.839728,
+    "longitude": 31.024,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Durban Workshop Taxi Rank",
+    "latitude": -29.855,
+    "longitude": 31.02,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "KwaMashu Taxi Rank",
+    "latitude": -29.75,
+    "longitude": 30.98,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Pietermaritzburg Taxi Rank",
+    "latitude": -29.6,
+    "longitude": 30.38,
+    "type": "rank",
+    "city": "Pietermaritzburg",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Newlands Taxi Rank",
+    "latitude": -29.76,
+    "longitude": 30.96,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Port Shepstone Taxi Rank Durban",
+    "latitude": -30.74,
+    "longitude": 30.45,
+    "type": "rank",
+    "city": "Port Shepstone",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Lamontville Taxi Rank",
+    "latitude": -29.9,
+    "longitude": 30.95,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Malvern Taxi Rank Durban",
+    "latitude": -29.87,
+    "longitude": 30.93,
+    "type": "rank",
+    "city": "Durban",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Ladysmith Taxi Rank",
+    "latitude": -28.56145,
+    "longitude": 29.783172,
+    "type": "rank",
+    "city": "Ladysmith",
+    "province": "KwaZulu-Natal",
+    "address": "17 Queen St"
+  },
+  {
+    "name": "Pinetown Taxi Rank",
+    "latitude": -29.81352,
+    "longitude": 30.85,
+    "type": "rank",
+    "city": "Pinetown",
+    "province": "KwaZulu-Natal",
+    "address": "9 Hill St"
+  },
+  {
+    "name": "Newcastle Taxi Rank",
+    "latitude": -27.751454,
+    "longitude": 29.93003,
+    "type": "rank",
+    "city": "Newcastle",
+    "province": "KwaZulu-Natal",
+    "address": "Terminus St"
+  },
+  {
+    "name": "Umlazi Mega City Taxi Rank",
+    "latitude": -29.973,
+    "longitude": 30.903,
+    "type": "rank",
+    "city": "Umlazi",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Ezimbuzini Taxi Rank",
+    "latitude": -29.97,
+    "longitude": 30.9,
+    "type": "rank",
+    "city": "Umlazi",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Inanda Taxi Rank",
+    "latitude": -29.72,
+    "longitude": 30.92,
+    "type": "rank",
+    "city": "Inanda",
+    "province": "KwaZulu-Natal",
+    "address": ""
+  },
+  {
+    "name": "Cape Town Station Deck Taxi Rank",
+    "latitude": -33.9249,
+    "longitude": 18.4241,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": "Station Deck, Adderley Street"
+  },
+  {
+    "name": "Mowbray Taxi Rank",
+    "latitude": -33.947,
+    "longitude": 18.47,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Athlone Taxi Rank",
+    "latitude": -33.95,
+    "longitude": 18.5,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Gatesville Taxi Rank",
+    "latitude": -33.96,
+    "longitude": 18.51,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Bonteheuwel Taxi Rank",
+    "latitude": -33.93,
+    "longitude": 18.55,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Century City Taxi Rank",
+    "latitude": -33.89,
+    "longitude": 18.51,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Joe Slovo Taxi Rank",
+    "latitude": -33.88,
+    "longitude": 18.52,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Delft Taxi Rank",
+    "latitude": -33.97,
+    "longitude": 18.65,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Dunoon Taxi Rank",
+    "latitude": -33.83,
+    "longitude": 18.5,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Hanover Park Taxi Rank",
+    "latitude": -33.98,
+    "longitude": 18.53,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Kensington Taxi Rank",
+    "latitude": -33.91,
+    "longitude": 18.48,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Langa Taxi Rank",
+    "latitude": -33.93,
+    "longitude": 18.53,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Manenberg Taxi Rank",
+    "latitude": -33.97,
+    "longitude": 18.54,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Nyanga Taxi Rank",
+    "latitude": -33.98,
+    "longitude": 18.56,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Mitchell\u2019s Plain Taxi Rank",
+    "latitude": -34.04,
+    "longitude": 18.6,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Sea Point Taxi Rank",
+    "latitude": -33.91,
+    "longitude": 18.38,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Camps Bay Taxi Rank",
+    "latitude": -33.95,
+    "longitude": 18.38,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Waterfront Taxi Rank",
+    "latitude": -33.9,
+    "longitude": 18.42,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Wynberg Taxi Rank",
+    "latitude": -34.0,
+    "longitude": 18.46,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Bellville Public Transport Interchange",
+    "latitude": -33.9,
+    "longitude": 18.63,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Kuwait Taxi Rank",
+    "latitude": -33.91,
+    "longitude": 18.64,
+    "type": "rank",
+    "city": "Cape Town",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Stellenbosch Taxi Rank",
+    "latitude": -33.932961,
+    "longitude": 18.859042,
+    "type": "rank",
+    "city": "Stellenbosch",
+    "province": "Western Cape",
+    "address": "Bird St, Stellenbosch Central"
+  },
+  {
+    "name": "Paarl Taxi Rank",
+    "latitude": -33.73,
+    "longitude": 18.96,
+    "type": "rank",
+    "city": "Paarl",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Mbekweni Taxi Rank",
+    "latitude": -33.7,
+    "longitude": 18.98,
+    "type": "rank",
+    "city": "Paarl",
+    "province": "Western Cape",
+    "address": "Mohajane Street"
+  },
+  {
+    "name": "George Taxi Rank",
+    "latitude": -33.96,
+    "longitude": 22.46,
+    "type": "rank",
+    "city": "George",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Knysna Taxi Rank",
+    "latitude": -34.03,
+    "longitude": 23.04,
+    "type": "rank",
+    "city": "Knysna",
+    "province": "Western Cape",
+    "address": "Nelson St"
+  },
+  {
+    "name": "Mossel Bay Taxi Rank",
+    "latitude": -34.18,
+    "longitude": 22.14,
+    "type": "rank",
+    "city": "Mossel Bay",
+    "province": "Western Cape",
+    "address": ""
+  },
+  {
+    "name": "Terminus Main Taxi Rank PE",
+    "latitude": -33.958,
+    "longitude": 25.616,
+    "type": "rank",
+    "city": "Gqeberha",
+    "province": "Eastern Cape",
+    "address": "Gqeberha Central, Gqeberha, 6001, South Africa"
+  },
+  {
+    "name": "Crossroad Taxi Rank",
+    "latitude": -33.7987,
+    "longitude": 25.5859,
+    "type": "rank",
+    "city": "Gqeberha",
+    "province": "Eastern Cape",
+    "address": "Motherwell, Gqeberha"
+  },
+  {
+    "name": "Esigingqini Taxi Rank",
+    "latitude": -33.007,
+    "longitude": 27.896,
+    "type": "rank",
+    "city": "East London",
+    "province": "Eastern Cape",
+    "address": "Milner Estate Lennox Estate & Pan, East London, 5201, South Africa"
+  },
+  {
+    "name": "Komani Taxi Rank",
+    "latitude": -31.9018,
+    "longitude": 26.8715,
+    "type": "rank",
+    "city": "Queenstown",
+    "province": "Eastern Cape",
+    "address": "Nonesi Mall, Victoria Rd, Komani, 5320, South Africa"
+  },
+  {
+    "name": "Grahamstown Taxi Rank",
+    "latitude": -33.3094,
+    "longitude": 26.5284,
+    "type": "rank",
+    "city": "Grahamstown",
+    "province": "Eastern Cape",
+    "address": "Makhanda, South Africa"
+  },
+  {
+    "name": "King Williams Town Taxi Rank",
+    "latitude": -32.8755,
+    "longitude": 27.3872,
+    "type": "rank",
+    "city": "King William's Town",
+    "province": "Eastern Cape",
+    "address": "Unit 10, 19 Smith St, Qonce, 5601, South Africa"
+  },
+  {
+    "name": "Polokwane Taxi Rank",
+    "latitude": -23.904133,
+    "longitude": 29.448333,
+    "type": "rank",
+    "city": "Polokwane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Itsoseng bus/taxi rank",
+    "latitude": -23.906792,
+    "longitude": 29.441897,
+    "type": "rank",
+    "city": "Polokwane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "City Centre Taxi Rank",
+    "latitude": -23.901128,
+    "longitude": 29.446019,
+    "type": "rank",
+    "city": "Polokwane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Ga-Mashashane Taxi Rank",
+    "latitude": -23.95,
+    "longitude": 29.133,
+    "type": "rank",
+    "city": "Ga-Mashashane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Thohoyandou Taxi Rank",
+    "latitude": -22.997448,
+    "longitude": 30.459527,
+    "type": "rank",
+    "city": "Thohoyandou",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Venda Plaza Taxi Rank",
+    "latitude": -22.977183,
+    "longitude": 30.46068,
+    "type": "rank",
+    "city": "Thohoyandou",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Tzaneen Taxi Rank",
+    "latitude": -23.829962,
+    "longitude": 30.160793,
+    "type": "rank",
+    "city": "Tzaneen",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Maake Plaza Taxi Rank",
+    "latitude": -23.8333,
+    "longitude": 30.1667,
+    "type": "rank",
+    "city": "Tzaneen",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Mokopane Taxi Rank",
+    "latitude": -24.180867,
+    "longitude": 29.0139,
+    "type": "rank",
+    "city": "Mokopane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Shoprite Taxi Rank Mokopane",
+    "latitude": -24.19436,
+    "longitude": 29.00974,
+    "type": "rank",
+    "city": "Mokopane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Musina Taxi Rank",
+    "latitude": -22.34881,
+    "longitude": 30.04074,
+    "type": "rank",
+    "city": "Musina",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Lephalale Taxi Rank",
+    "latitude": -23.666466,
+    "longitude": 27.744829,
+    "type": "rank",
+    "city": "Lephalale",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Lephalale Mall Taxi Rank",
+    "latitude": -23.681354,
+    "longitude": 27.728155,
+    "type": "rank",
+    "city": "Lephalale",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Indian Centre Taxi Rank",
+    "latitude": -23.904,
+    "longitude": 29.456,
+    "type": "rank",
+    "city": "Polokwane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Seshego Taxi Association",
+    "latitude": -23.8667,
+    "longitude": 29.4,
+    "type": "rank",
+    "city": "Polokwane",
+    "province": "Limpopo",
+    "address": ""
+  },
+  {
+    "name": "Nelspruit Taxi Rank",
+    "latitude": -25.466217,
+    "longitude": 30.979218,
+    "type": "rank",
+    "city": "Nelspruit/Mbombela",
+    "province": "Mpumalanga",
+    "address": "Mbombela 312-JT, Mbombela, South Africa"
+  },
+  {
+    "name": "Witbank Long Distance Taxi Rank",
+    "latitude": -25.876515,
+    "longitude": 29.209427,
+    "type": "rank",
+    "city": "Witbank/Emalahleni",
+    "province": "Mpumalanga",
+    "address": "Main St, eMalahleni, 1035, South Africa"
+  },
+  {
+    "name": "Secunda Taxi Rank",
+    "latitude": -26.512661,
+    "longitude": 29.206798,
+    "type": "rank",
+    "city": "Secunda",
+    "province": "Mpumalanga",
+    "address": "Secunda, 2302, South Africa"
+  },
+  {
+    "name": "Standerton Taxi Rank",
+    "latitude": -26.949382,
+    "longitude": 29.234519,
+    "type": "rank",
+    "city": "Standerton",
+    "province": "Mpumalanga",
+    "address": "Burger Street, Standerton"
+  },
+  {
+    "name": "Ermelo long distance taxi rank",
+    "latitude": -26.518308,
+    "longitude": 29.985818,
+    "type": "rank",
+    "city": "Ermelo",
+    "province": "Mpumalanga",
+    "address": "25 Oosthuise St, Ermelo, 2351, South Africa"
+  },
+  {
+    "name": "KaNyamazane Centre Taxi Rank",
+    "latitude": -25.464574,
+    "longitude": 31.179629,
+    "type": "rank",
+    "city": "KaNyamazane",
+    "province": "Mpumalanga",
+    "address": "Chris Hani St, Kanyamazane-A, Kanyamazane"
+  },
+  {
+    "name": "Pienaar Taxi Rank",
+    "latitude": -25.414722,
+    "longitude": 31.170278,
+    "type": "rank",
+    "city": "Pienaar",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Barberton Taxi Rank",
+    "latitude": -25.762383,
+    "longitude": 31.049886,
+    "type": "rank",
+    "city": "Barberton",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Iraq Taxi Rank",
+    "latitude": -25.765,
+    "longitude": 29.452,
+    "type": "rank",
+    "city": "Middelburg",
+    "province": "Mpumalanga",
+    "address": "12A Bhimy Damane St, Middelburg, 1055, South Africa"
+  },
+  {
+    "name": "Komatipoort Taxi Rank",
+    "latitude": -25.4332,
+    "longitude": 31.9548,
+    "type": "rank",
+    "city": "Komatipoort",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Hazyview Taxi Rank",
+    "latitude": -25.043056,
+    "longitude": 31.131944,
+    "type": "rank",
+    "city": "Hazyview",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Malelane Taxi Rank",
+    "latitude": -25.497165,
+    "longitude": 31.506403,
+    "type": "rank",
+    "city": "Malelane",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Bushbuckridge Mall Taxi Rank",
+    "latitude": -24.836821,
+    "longitude": 31.070272,
+    "type": "rank",
+    "city": "Bushbuckridge",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Acornhoek Taxi Rank",
+    "latitude": -24.605656,
+    "longitude": 31.087492,
+    "type": "rank",
+    "city": "Acornhoek",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Thulamahashe Taxi Rank",
+    "latitude": -24.724158,
+    "longitude": 31.209702,
+    "type": "rank",
+    "city": "Thulamahashe",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "KwaMhlanga Taxi Rank",
+    "latitude": -25.434413,
+    "longitude": 28.705273,
+    "type": "rank",
+    "city": "KwaMhlanga",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Embalenhle Taxi Rank",
+    "latitude": -26.5445,
+    "longitude": 29.078188,
+    "type": "rank",
+    "city": "Embalenhle",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Piet Retief Taxi Rank",
+    "latitude": -27.00706,
+    "longitude": 30.81323,
+    "type": "rank",
+    "city": "Piet Retief",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Lydenburg Taxi Rank",
+    "latitude": -25.096,
+    "longitude": 30.4439,
+    "type": "rank",
+    "city": "Lydenburg",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "White River Taxi Rank",
+    "latitude": -25.33,
+    "longitude": 31.021972,
+    "type": "rank",
+    "city": "White River",
+    "province": "Mpumalanga",
+    "address": "William Lynn Street, Mbombela Ward 30, White River, Mbombela, Ehlanzeni"
+  },
+  {
+    "name": "Delmas Taxi Rank",
+    "latitude": -26.1466,
+    "longitude": 28.68322,
+    "type": "rank",
+    "city": "Delmas",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Sabie Taxi Rank",
+    "latitude": -25.095218,
+    "longitude": 30.786713,
+    "type": "rank",
+    "city": "Sabie",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Graskop Taxi Rank",
+    "latitude": -24.932766,
+    "longitude": 30.844152,
+    "type": "rank",
+    "city": "Graskop",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Belfast Taxi Rank",
+    "latitude": -25.682317,
+    "longitude": 30.034834,
+    "type": "rank",
+    "city": "Belfast",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Hendrina Taxi Rank",
+    "latitude": -26.159897,
+    "longitude": 29.72523,
+    "type": "rank",
+    "city": "Hendrina",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Kriel Taxi Rank",
+    "latitude": -26.255106,
+    "longitude": 29.263398,
+    "type": "rank",
+    "city": "Kriel",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Bethal Taxi Rank",
+    "latitude": -26.45794,
+    "longitude": 29.46553,
+    "type": "rank",
+    "city": "Bethal",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Carolina Taxi Rank",
+    "latitude": -26.06927,
+    "longitude": 30.11489,
+    "type": "rank",
+    "city": "Carolina",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Volksrust Taxi Rank",
+    "latitude": -27.362026,
+    "longitude": 29.887305,
+    "type": "rank",
+    "city": "Volksrust",
+    "province": "Mpumalanga",
+    "address": "35 Louis Trichardt St, Volksrust, 2470, South Africa"
+  },
+  {
+    "name": "Balfour Taxi Rank",
+    "latitude": -26.66331,
+    "longitude": 28.59016,
+    "type": "rank",
+    "city": "Balfour",
+    "province": "Mpumalanga",
+    "address": ""
+  },
+  {
+    "name": "Rustenburg Taxi Rank",
+    "latitude": -25.663,
+    "longitude": 27.234,
+    "type": "rank",
+    "city": "Rustenburg",
+    "province": "North West",
+    "address": "Rustenburg North, Rustenburg, 2999, South Africa"
+  },
+  {
+    "name": "Potchefstroom Taxi Rank",
+    "latitude": -26.714,
+    "longitude": 27.098,
+    "type": "rank",
+    "city": "Potchefstroom",
+    "province": "North West",
+    "address": "Potch Town CBD Taxi Rank, Potchefstroom, 2531, South Africa"
+  },
+  {
+    "name": "Long Distance Taxi Rank",
+    "latitude": -26.863,
+    "longitude": 26.659,
+    "type": "rank",
+    "city": "Klerksdorp",
+    "province": "North West",
+    "address": "Bishop Desmond Tutu St, Klerksdorp Central, Klerksdorp, 2570, South Africa"
+  },
+  {
+    "name": "Pretoria Taxi Rank",
+    "latitude": -25.636,
+    "longitude": 27.781,
+    "type": "rank",
+    "city": "Brits",
+    "province": "North West",
+    "address": "3 Spoorweg St, Brits, 0250, South Africa"
+  },
+  {
+    "name": "Jouberton Taxi Rank",
+    "latitude": -26.882917,
+    "longitude": 26.596056,
+    "type": "rank",
+    "city": "Jouberton",
+    "province": "North West",
+    "address": "Next to Tower Mall"
+  },
+  {
+    "name": "Lichtenburg Taxi Rank",
+    "latitude": -26.152,
+    "longitude": 26.15968,
+    "type": "rank",
+    "city": "Lichtenburg",
+    "province": "North West",
+    "address": ""
+  },
+  {
+    "name": "Bloemfontein Central Taxi Rank",
+    "latitude": -29.119794,
+    "longitude": 26.224636,
+    "type": "rank",
+    "city": "Bloemfontein",
+    "province": "Free State",
+    "address": "Harvey Street"
+  },
+  {
+    "name": "Welkom Taxi Rank",
+    "latitude": -27.979153,
+    "longitude": 26.774438,
+    "type": "rank",
+    "city": "Welkom",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Kroonstad Taxi Rank",
+    "latitude": -27.660762,
+    "longitude": 27.233938,
+    "type": "rank",
+    "city": "Kroonstad",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Bethlehem Taxi Rank",
+    "latitude": -28.2333,
+    "longitude": 28.3,
+    "type": "rank",
+    "city": "Bethlehem",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Sasolburg CBD Taxi Rank",
+    "latitude": -26.8006,
+    "longitude": 27.833185,
+    "type": "rank",
+    "city": "Sasolburg",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "QwaQwa Taxi Rank",
+    "latitude": -28.534326,
+    "longitude": 28.801477,
+    "type": "rank",
+    "city": "QwaQwa",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Majakathata Long Distance Taxi Rank",
+    "latitude": -27.967,
+    "longitude": 26.783,
+    "type": "rank",
+    "city": "Welkom",
+    "province": "Free State",
+    "address": "Thabong Ext 1"
+  },
+  {
+    "name": "Botshabelo Taxi Rank",
+    "latitude": -29.26737,
+    "longitude": 26.72595,
+    "type": "rank",
+    "city": "Botshabelo",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Meloding Taxi Rank",
+    "latitude": -28.10391,
+    "longitude": 26.86593,
+    "type": "rank",
+    "city": "Virginia",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Harrismith Taxi Rank",
+    "latitude": -28.275,
+    "longitude": 29.104169,
+    "type": "rank",
+    "city": "Harrismith",
+    "province": "Free State",
+    "address": "2 Bester St"
+  },
+  {
+    "name": "Cnr Kort and Kruis Street Taxi Rank",
+    "latitude": -26.9033,
+    "longitude": 27.4573,
+    "type": "rank",
+    "city": "Parys",
+    "province": "Free State",
+    "address": "Cnr Kort and Kruis Street"
+  },
+  {
+    "name": "Phuthaditjhaba Taxi Station",
+    "latitude": -28.52423,
+    "longitude": 28.81582,
+    "type": "rank",
+    "city": "Phuthaditjhaba",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Allanridge Taxi Rank",
+    "latitude": -27.7569,
+    "longitude": 26.6433,
+    "type": "rank",
+    "city": "Allanridge",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Bothaville Taxi Rank",
+    "latitude": -27.3889,
+    "longitude": 26.6186,
+    "type": "rank",
+    "city": "Bothaville",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Brandfort Taxi Rank",
+    "latitude": -28.7,
+    "longitude": 26.4667,
+    "type": "rank",
+    "city": "Brandfort",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Bultfontein Taxi Rank",
+    "latitude": -28.2833,
+    "longitude": 26.15,
+    "type": "rank",
+    "city": "Bultfontein",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Clocolan Taxi Rank",
+    "latitude": -28.9167,
+    "longitude": 27.5667,
+    "type": "rank",
+    "city": "Clocolan",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Deneysville Taxi Rank",
+    "latitude": -26.8833,
+    "longitude": 28.1,
+    "type": "rank",
+    "city": "Deneysville",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Edenville Taxi Rank",
+    "latitude": -27.55,
+    "longitude": 27.6833,
+    "type": "rank",
+    "city": "Edenville",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Excelsior Taxi Rank",
+    "latitude": -28.9333,
+    "longitude": 27.0667,
+    "type": "rank",
+    "city": "Excelsior",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Fauresmith Taxi Rank",
+    "latitude": -29.75,
+    "longitude": 25.3167,
+    "type": "rank",
+    "city": "Fauresmith",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Ficksburg Taxi Rank",
+    "latitude": -28.8667,
+    "longitude": 27.8833,
+    "type": "rank",
+    "city": "Ficksburg",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Frankfort Taxi Rank",
+    "latitude": -27.2833,
+    "longitude": 28.5,
+    "type": "rank",
+    "city": "Frankfort",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Heilbron Taxi Rank",
+    "latitude": -27.2833,
+    "longitude": 27.9667,
+    "type": "rank",
+    "city": "Heilbron",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Hennenman Taxi Rank",
+    "latitude": -27.9667,
+    "longitude": 27.0333,
+    "type": "rank",
+    "city": "Hennenman",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Hertzogville Taxi Rank",
+    "latitude": -28.0,
+    "longitude": 25.4167,
+    "type": "rank",
+    "city": "Hertzogville",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Hobhouse Taxi Rank",
+    "latitude": -29.5333,
+    "longitude": 27.1333,
+    "type": "rank",
+    "city": "Hobhouse",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Hoopstad Taxi Rank",
+    "latitude": -27.6333,
+    "longitude": 25.9167,
+    "type": "rank",
+    "city": "Hoopstad",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Jacobsdal Taxi Rank",
+    "latitude": -29.1167,
+    "longitude": 24.7667,
+    "type": "rank",
+    "city": "Jacobsdal",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Jagersfontein Taxi Rank",
+    "latitude": -29.7667,
+    "longitude": 25.4167,
+    "type": "rank",
+    "city": "Jagersfontein",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Koppies Taxi Rank",
+    "latitude": -27.2333,
+    "longitude": 27.5667,
+    "type": "rank",
+    "city": "Koppies",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Lindley Taxi Rank",
+    "latitude": -27.8667,
+    "longitude": 27.9167,
+    "type": "rank",
+    "city": "Lindley",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Marquard Taxi Rank",
+    "latitude": -28.6667,
+    "longitude": 27.4333,
+    "type": "rank",
+    "city": "Marquard",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Memel Taxi Rank",
+    "latitude": -27.6833,
+    "longitude": 29.5667,
+    "type": "rank",
+    "city": "Memel",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Odendaalsrus Taxi Rank",
+    "latitude": -27.8667,
+    "longitude": 26.6833,
+    "type": "rank",
+    "city": "Odendaalsrus",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Oranjeville Taxi Rank",
+    "latitude": -26.9833,
+    "longitude": 28.2,
+    "type": "rank",
+    "city": "Oranjeville",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Petrusburg Taxi Rank",
+    "latitude": -29.1167,
+    "longitude": 25.4167,
+    "type": "rank",
+    "city": "Petrusburg",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Petrus Steyn Taxi Rank",
+    "latitude": -27.6333,
+    "longitude": 28.1333,
+    "type": "rank",
+    "city": "Petrus Steyn",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Philippolis Taxi Rank",
+    "latitude": -30.2667,
+    "longitude": 25.2667,
+    "type": "rank",
+    "city": "Philippolis",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Reitz Taxi Rank",
+    "latitude": -27.8,
+    "longitude": 28.4333,
+    "type": "rank",
+    "city": "Reitz",
+    "province": "Free State",
+    "address": ""
+  },
+  {
+    "name": "Kimberley Taxi Rank",
+    "latitude": -28.7408,
+    "longitude": 24.761894,
+    "type": "rank",
+    "city": "Kimberley",
+    "province": "Northern Cape",
+    "address": ""
+  },
+  {
+    "name": "Kuruman Taxi Rank",
+    "latitude": -27.455944,
+    "longitude": 23.433736,
+    "type": "rank",
+    "city": "Kuruman",
+    "province": "Northern Cape",
+    "address": "Tsenin Road"
+  },
+  {
+    "name": "De Aar Taxi Stop",
+    "latitude": -30.6548,
+    "longitude": 24.0111,
+    "type": "stop",
+    "city": "De Aar",
+    "province": "Northern Cape",
+    "address": "Quest Filling Station, 20 Voortrekker Street"
+  },
+  {
+    "name": "Kathu Taxi Rank",
+    "latitude": -27.697284,
+    "longitude": 23.046832,
+    "type": "rank",
+    "city": "Kathu",
+    "province": "Northern Cape",
+    "address": "Corner of Rietbok Street & Ben Alberts Street"
+  },
+  {
+    "name": "Colesberg Taxi Rank",
+    "latitude": -30.72,
+    "longitude": 25.0972,
+    "type": "rank",
+    "city": "Colesberg",
+    "province": "Northern Cape",
+    "address": ""
+  },
+  {
+    "name": "Galeshewe Taxi Rank",
+    "latitude": -28.725667,
+    "longitude": 24.742083,
+    "type": "rank",
+    "city": "Kimberley",
+    "province": "Northern Cape",
+    "address": ""
+  },
+  {
+    "name": "Pofadder Taxi Stop",
+    "latitude": -29.1283,
+    "longitude": 19.39492,
+    "type": "stop",
+    "city": "Pofadder",
+    "province": "Northern Cape",
+    "address": ""
+  },
+  {
+    "name": "Alexander Bay Taxi Stop",
+    "latitude": -28.5833,
+    "longitude": 16.4833,
+    "type": "stop",
+    "city": "Alexander Bay",
+    "province": "Northern Cape",
+    "address": ""
+  }
+]

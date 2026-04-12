@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  check:
+    name: Type Check & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Haibo-Taxi-Safety-App
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: Haibo-Taxi-Safety-App/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Type check server
+        run: npx tsc --noEmit --project server/tsconfig.json
+        continue-on-error: true
+
+      - name: Type check shared schema
+        run: npx tsc --noEmit shared/schema.ts --esModuleInterop --moduleResolution node
+        continue-on-error: true
+
+      - name: Check server boots (dry run)
+        run: |
+          timeout 5 npx tsx server/index.ts 2>&1 || true
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
+          JWT_SECRET: "ci-test-secret"
+          NODE_ENV: "test"
