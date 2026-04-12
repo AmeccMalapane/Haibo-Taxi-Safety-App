@@ -18,6 +18,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { HaiboPayQR } from "@/components/HaiboPayQR";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { startDriverTracking, stopDriverTracking, isTrackingActive } from "@/lib/tracking";
+import { useDriverTracking } from "@/hooks/useDriverTracking";
 
 export default function DriverDashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -26,6 +27,7 @@ export default function DriverDashboardScreen() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [todayTrips, setTodayTrips] = useState(0);
+  const { startTracking: startSocketTracking, stopTracking: stopSocketTracking, isTracking: socketTracking, lastLocation } = useDriverTracking();
 
   useEffect(() => {
     loadDriverData();
@@ -53,12 +55,15 @@ export default function DriverDashboardScreen() {
       const started = await startDriverTracking();
       if (started) {
         setTrackingEnabled(true);
-        Alert.alert("Tracking Active", "Your location is being shared every 60 seconds for route mapping.");
+        // Also start Socket.IO GPS broadcasting (60s intervals)
+        startSocketTracking();
+        Alert.alert("Tracking Active", "Your location is being shared every 60 seconds.");
       } else {
         Alert.alert("Permission Required", "Please enable location permissions to start tracking.");
       }
     } else {
       await stopDriverTracking();
+      stopSocketTracking();
       setTrackingEnabled(false);
     }
   };

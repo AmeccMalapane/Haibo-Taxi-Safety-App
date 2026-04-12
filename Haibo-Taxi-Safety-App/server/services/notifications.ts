@@ -1,7 +1,8 @@
 import { db } from "../db";
-import { notifications, users } from "../../shared/schema";
+import { notifications, users, emergencyContacts } from "../../shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendPushNotification, sendMulticastNotification } from "./firebase";
+import { emitToUser, broadcast, getIO } from "./realtime";
 
 export type NotificationType = "sos" | "delivery" | "ride" | "payment" | "system" | "complaint_update";
 
@@ -93,7 +94,7 @@ export async function notifyUsers(
 }
 
 /**
- * Send SOS alert to emergency contacts and nearby users.
+ * Send SOS alert to emergency contacts (SMS), admins (push), and command center (WebSocket).
  */
 export async function sendSOSAlert(
   userId: string,
@@ -105,9 +106,11 @@ export async function sendSOSAlert(
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return;
 
+  const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
   const sosMessage = message || `${user.displayName || user.phone} triggered an SOS alert!`;
+  const smsBody = `HAIBO SOS ALERT: ${user.displayName || "A passenger"} needs help! Location: ${mapsLink}`;
 
-  // Notify admins
+  // 1. Notify all admins via push
   const admins = await db.select({ id: users.id })
     .from(users)
     .where(eq(users.role, "admin"));
@@ -118,9 +121,44 @@ export async function sendSOSAlert(
       "sos",
       "SOS Alert",
       sosMessage,
-      { latitude: String(latitude), longitude: String(longitude), userId }
+      { latitude: String(latitude), longitude: String(longitude), userId, mapsLink }
     );
   }
 
-  console.log(`[SOS] Alert from ${user.phone} at ${latitude},${longitude}`);
+  // 2. Broadcast to command center via WebSocket
+  const io = getIO();
+  if (io) {
+    io.to("admins").emit("sos:alert", {
+      userId,
+      phone: user.phone,
+      displayName: user.displayName,
+      latitude,
+      longitude,
+      message: sosMessage,
+      mapsLink,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // 3. Send SMS to emergency contacts
+  try {
+    const contacts = await db.select().from(emergencyContacts)
+      .where(eq(emergencyContacts.userId, userId));
+
+    if (contacts.length > 0) {
+      const { sendSms } = await import("./sms");
+      for (const contact of contacts) {
+        try {
+          await sendSms(contact.phone, smsBody);
+          console.log(`[SOS] SMS sent to ${contact.name} (${contact.phone})`);
+        } catch (smsErr) {
+          console.log(`[SOS] SMS to ${contact.phone} failed:`, smsErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.log("[SOS] Emergency contacts lookup failed:", err);
+  }
+
+  console.log(`[SOS] Full alert from ${user.phone} at ${latitude},${longitude}`);
 }

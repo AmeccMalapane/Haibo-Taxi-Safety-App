@@ -9,12 +9,16 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import { Feather, Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import {
-  Nunito_400Regular,
-  Nunito_500Medium,
-  Nunito_600SemiBold,
-  Nunito_700Bold,
-  Nunito_800ExtraBold,
-} from "@expo-google-fonts/nunito";
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -172,11 +176,13 @@ function AppWithFonts() {
           ...Ionicons.font,
           ...MaterialIcons.font,
           ...FontAwesome.font,
-          Nunito_400Regular,
-          Nunito_500Medium,
-          Nunito_600SemiBold,
-          Nunito_700Bold,
-          Nunito_800ExtraBold,
+          SpaceGrotesk_500Medium,
+          SpaceGrotesk_600SemiBold,
+          SpaceGrotesk_700Bold,
+          Inter_400Regular,
+          Inter_500Medium,
+          Inter_600SemiBold,
+          Inter_700Bold,
         });
       } catch (e) {
         console.warn("Error loading fonts:", e);

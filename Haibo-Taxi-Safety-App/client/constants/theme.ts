@@ -152,69 +152,76 @@ export const Typography = {
     fontSize: 30,
     lineHeight: 38,
     fontWeight: "700" as const,
+    fontFamily: "SpaceGrotesk_700Bold",
   },
   h2: {
     fontSize: 26,
     lineHeight: 34,
     fontWeight: "700" as const,
+    fontFamily: "SpaceGrotesk_700Bold",
   },
   h3: {
     fontSize: 22,
     lineHeight: 30,
     fontWeight: "600" as const,
+    fontFamily: "SpaceGrotesk_600SemiBold",
   },
   h4: {
     fontSize: 18,
     lineHeight: 26,
     fontWeight: "600" as const,
+    fontFamily: "SpaceGrotesk_600SemiBold",
   },
   body: {
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "400" as const,
+    fontFamily: "Inter_400Regular",
   },
   small: {
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "400" as const,
+    fontFamily: "Inter_400Regular",
   },
   link: {
     fontSize: 15,
     lineHeight: 22,
-    fontWeight: "400" as const,
+    fontWeight: "500" as const,
+    fontFamily: "Inter_500Medium",
   },
   label: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: "600" as const,
+    fontFamily: "Inter_600SemiBold",
   },
 };
 
 export const FontFamily = {
-  regular: "Nunito_400Regular",
-  medium: "Nunito_500Medium",
-  semiBold: "Nunito_600SemiBold",
-  bold: "Nunito_700Bold",
-  extraBold: "Nunito_800ExtraBold",
+  heading: "SpaceGrotesk_700Bold",
+  headingSemiBold: "SpaceGrotesk_600SemiBold",
+  headingMedium: "SpaceGrotesk_500Medium",
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semiBold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
 };
 
 export const Fonts = Platform.select({
   ios: {
-    sans: "Nunito_400Regular",
-    serif: "ui-serif",
-    rounded: "Nunito_600SemiBold",
+    sans: "Inter_400Regular",
+    heading: "SpaceGrotesk_700Bold",
     mono: "ui-monospace",
   },
   default: {
-    sans: "Nunito_400Regular",
-    serif: "serif",
-    rounded: "Nunito_600SemiBold",
+    sans: "Inter_400Regular",
+    heading: "SpaceGrotesk_700Bold",
     mono: "monospace",
   },
   web: {
-    sans: "'Nunito', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'Nunito', 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    sans: "'Inter', system-ui, -apple-system, sans-serif",
+    heading: "'Space Grotesk', 'Inter', system-ui, sans-serif",
+    mono: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   },
 });

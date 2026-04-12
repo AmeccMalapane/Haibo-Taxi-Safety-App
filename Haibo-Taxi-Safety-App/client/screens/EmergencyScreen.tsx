@@ -17,19 +17,24 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { getEmergencyContacts } from "@/lib/storage";
 import { EmergencyContact } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { triggerSOS } from "@/lib/socket";
 
 export default function EmergencyScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { isAuthenticated } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [sosTriggered, setSOSTriggered] = useState(false);
   const [cancelHoldProgress, setCancelHoldProgress] = useState(0);
   const cancelTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cancelIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -73,8 +78,34 @@ export default function EmergencyScreen() {
       setContacts(savedContacts);
     })();
 
+    // Trigger SOS on screen open
+    fireSOSAlert();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   }, []);
+
+  const fireSOSAlert = async () => {
+    if (sosTriggered) return;
+    setSOSTriggered(true);
+    try {
+      let lat = -26.2041, lng = 28.0473;
+      if (location) {
+        lat = location.coords.latitude;
+        lng = location.coords.longitude;
+      }
+      // 1. WebSocket SOS (instant — reaches command center live)
+      triggerSOS(lat, lng, "Emergency SOS from Haibo app");
+      // 2. API SOS (persists to DB + push notifications to admins)
+      if (isAuthenticated && getApiUrl()) {
+        try {
+          await apiRequest("/api/notifications/sos", {
+            method: "POST",
+            body: JSON.stringify({ latitude: lat, longitude: lng, message: "Emergency SOS from Haibo app" }),
+          });
+        } catch (e) { console.log("[SOS] API call failed:", e); }
+      }
+      console.log(`[SOS] Alert sent: ${lat},${lng}`);
+    } catch (err) { console.error("[SOS] Failed:", err); }
+  };
 
   const animatedPulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
