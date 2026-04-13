@@ -93,8 +93,8 @@ export const SOSButton = memo(({ tabBarHeight = 80 }: SOSButtonProps) => {
         accessibilityLabel="SOS Emergency Button"
         accessibilityRole="button"
       >
-        <Image 
-          source={require("../assets/svg/HAIBOICON.svg")} 
+        <Image
+          source={require("../../assets/images/icon.png")}
           style={styles.icon}
           resizeMode="contain"
         />

@@ -33,7 +33,7 @@ export function FloatingHeader({ title }: FloatingHeaderProps) {
           ]}
         >
           <Image
-            source={require("../assets/svg/HAIBOICON.svg")}
+            source={require("../../assets/images/icon.png")}
             style={styles.logoIcon}
             resizeMode="contain"
           />

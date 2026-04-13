@@ -29,8 +29,8 @@ function EmptyScreen() {
 const TabIcon = memo(({ name, focused, color, isHome }: { name: any, focused: boolean, color: string, isHome?: boolean }) => (
   <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
     {isHome && focused ? (
-      <Image 
-        source={require("../assets/svg/HAIBOICON.svg")} 
+      <Image
+        source={require("../../assets/images/icon.png")}
         style={styles.homeIcon}
         resizeMode="contain"
       />
