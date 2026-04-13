@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, real, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, real, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -726,7 +726,10 @@ export const events = pgTable("events", {
   postedBy: varchar("posted_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Backs ORDER BY event_date DESC in GET /api/events list queries.
+  eventDateIdx: index("idx_events_event_date").on(table.eventDate),
+}));
 
 export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
