@@ -80,10 +80,8 @@ export default function PaymentScreen() {
 
   const checkPaystackStatus = useCallback(async () => {
     try {
-      const url = new URL("/api/paystack/status", getApiUrl());
-      const response = await fetch(url.toString());
-      const data = await response.json();
-      setPaystackConfigured(data.configured);
+      const data = await apiRequest("/api/paystack/status", { method: "GET" });
+      setPaystackConfigured(!!data?.configured);
     } catch (error) {
       console.log("Paystack status check failed, using local mode");
       setPaystackConfigured(false);

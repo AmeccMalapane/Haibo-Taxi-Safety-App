@@ -113,7 +113,7 @@ async function sendLocationUpdate(userId: string): Promise<void> {
       accuracy: Location.Accuracy.Balanced,
     });
 
-    await apiRequest("POST", "/api/driver/location-update", {
+    await apiRequest("POST", "/api/drivers/location-update", {
       userId,
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
@@ -140,7 +140,7 @@ export async function flushPendingLocations(): Promise<void> {
     const pending = JSON.parse(stored);
     for (const loc of pending) {
       try {
-        await apiRequest("POST", "/api/driver/location-update", loc);
+        await apiRequest("POST", "/api/drivers/location-update", loc);
       } catch {
         // Skip failed uploads
       }
