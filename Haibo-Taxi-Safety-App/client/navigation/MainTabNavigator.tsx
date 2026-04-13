@@ -20,11 +20,16 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { SOSButton } from "@/components/SOSButton";
 
 // 5-tab layout with the central Haibo SOS button:
-//   1. Home    — taxi map, rank finder
-//   2. Wallet  — Haibo Pay
-//   3. SOS     — center, raised, brand mark, navigates to Emergency
-//   4. Menu    — services hub
-//   5. Profile — account
+//   1. Home      — taxi map, rank finder
+//   2. Taxi fare — fare lookup powered by taxi_routes_fares.json
+//   3. SOS       — center, raised, brand mark, navigates to Emergency
+//   4. Community — Haibo community hub (groups, hashtags, posts)
+//   5. Phusha    — TikTok-style reels feed (PushaScreen + phusha_content.json)
+//
+// Profile and Menu were removed from the tab bar at the user's request and
+// are now reachable from FloatingHeader corners on Home (top-left = menu,
+// top-right = profile avatar). They remain registered as root-stack screens
+// so deep-link navigation from anywhere still works.
 //
 // The center slot uses a custom tabBarButton that renders SOSButton in
 // inline mode and lifts it above the bar via negative top offset, so the
@@ -35,10 +40,10 @@ import { SOSButton } from "@/components/SOSButton";
 
 export type MainTabParamList = {
   HomeTab: undefined;
-  WalletTab: undefined;
+  TaxiFareTab: undefined;
   SOSTab: undefined;
-  MenuTab: undefined;
-  ProfileTab: undefined;
+  CommunityTab: undefined;
+  PushaTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -134,16 +139,16 @@ export default function MainTabNavigator() {
         />
 
         <Tab.Screen
-          name="WalletTab"
+          name="TaxiFareTab"
           component={EmptyScreen}
           options={{
-            tabBarIcon: (props) => <TabIcon name="credit-card" {...props} />,
-            tabBarAccessibilityLabel: "Haibo Pay wallet",
+            tabBarIcon: (props) => <TabIcon name="dollar-sign" {...props} />,
+            tabBarAccessibilityLabel: "Taxi fares",
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              navigation.navigate("Wallet");
+              navigation.navigate("TaxiFare");
             },
           }}
         />
@@ -173,31 +178,31 @@ export default function MainTabNavigator() {
         />
 
         <Tab.Screen
-          name="MenuTab"
+          name="CommunityTab"
           component={EmptyScreen}
           options={{
-            tabBarIcon: (props) => <TabIcon name="grid" {...props} />,
-            tabBarAccessibilityLabel: "Menu and services",
+            tabBarIcon: (props) => <TabIcon name="users" {...props} />,
+            tabBarAccessibilityLabel: "Community hub",
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              navigation.navigate("Menu");
+              navigation.navigate("Community");
             },
           }}
         />
 
         <Tab.Screen
-          name="ProfileTab"
+          name="PushaTab"
           component={EmptyScreen}
           options={{
-            tabBarIcon: (props) => <TabIcon name="user" {...props} />,
-            tabBarAccessibilityLabel: "Profile",
+            tabBarIcon: (props) => <TabIcon name="play-circle" {...props} />,
+            tabBarAccessibilityLabel: "Phusha reels",
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              navigation.navigate("Profile");
+              navigation.navigate("Pusha");
             },
           }}
         />
