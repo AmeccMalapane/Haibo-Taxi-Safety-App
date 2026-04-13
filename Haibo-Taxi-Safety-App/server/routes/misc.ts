@@ -217,6 +217,57 @@ router.get("/lost-found", async (req, res: Response) => {
   }
 });
 
+// GET /api/lost-found/:id - Fetch a single lost/found item.
+// Returns the raw schema plus a `contactInfo` alias for the Details screen
+// (which has a single contact field rather than name+phone).
+router.get("/lost-found/:id", async (req, res: Response) => {
+  try {
+    const result = await db.select().from(lostFoundItems)
+      .where(eq(lostFoundItems.id, req.params.id))
+      .limit(1);
+
+    if (result.length === 0) {
+      res.status(404).json({ error: "Item not found" });
+      return;
+    }
+
+    const item = result[0];
+    res.json({ ...item, contactInfo: item.contactPhone });
+  } catch (error: any) {
+    console.error("Get lost-found item error:", error);
+    res.status(500).json({ error: "Failed to fetch item" });
+  }
+});
+
+// PUT /api/lost-found/:id/claim - Mark an item as claimed/resolved.
+// Client passes deviceId in the body; falls back to authenticated user id
+// when present. Claim is intentionally open — anyone with the URL can mark
+// something resolved (matches the "it's been handled" UX in the app).
+router.put("/lost-found/:id/claim", optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const claimedBy = req.user?.userId || (req.body?.deviceId as string | undefined) || null;
+
+    const [updated] = await db.update(lostFoundItems)
+      .set({
+        status: "claimed",
+        claimedAt: new Date(),
+        claimedBy,
+      })
+      .where(eq(lostFoundItems.id, req.params.id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Item not found" });
+      return;
+    }
+
+    res.json({ ...updated, contactInfo: updated.contactPhone });
+  } catch (error: any) {
+    console.error("Claim lost-found item error:", error);
+    res.status(500).json({ error: "Failed to claim item" });
+  }
+});
+
 // POST /api/lost-found - Report a lost/found item
 router.post("/lost-found", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
