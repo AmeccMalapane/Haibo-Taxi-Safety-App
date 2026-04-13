@@ -5,305 +5,308 @@ import {
   FlatList,
   Dimensions,
   Pressable,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-  ScrollView,
-  Alert,
+  ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import type { SvgProps } from "react-native-svg";
 
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { Button } from "@/components/Button";
+import { GradientButton } from "@/components/GradientButton";
 
-const { width, height } = Dimensions.get("window");
+import SosIllustration from "@/assets/svg/SOS.svg";
+import TaxiStopIllustration from "@/assets/svg/TXISTOP.svg";
+import CommunityIllustration from "@/assets/svg/COMMUNITY.svg";
+import FindRanksIllustration from "@/assets/svg/FINDRNKS.svg";
+
+// typeui-clean applied to onboarding — rose gradient hero stage with the
+// brand SVG illustrations, white floating content card with title +
+// description, anchored pagination + GradientButton CTA.
+//
+// Drops the old role-selection + driver registration step entirely:
+// App.tsx's handleOnboardingComplete takes no args and silently throws
+// away the role/driverData, so that whole flow was dead code from a
+// feature that never landed. Profile + role are now captured in
+// ProfileSetupScreen.
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface OnboardingSlide {
   id: string;
   title: string;
   description: string;
-  image: any;
+  Illustration: React.FC<SvgProps>;
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
     id: "1",
-    title: "Safety First",
-    description: "Your safety is our priority. One-tap SOS and real-time tracking for every ride.",
-    image: require("../assets/svg/SOS.svg"),
+    title: "Safety first",
+    description:
+      "One-tap SOS and live location sharing keep you covered on every ride.",
+    Illustration: SosIllustration,
   },
   {
     id: "2",
-    title: "Reliable Navigation",
-    description: "Find the nearest taxi ranks and optimized routes across South Africa.",
-    image: require("../assets/svg/TXISTOP.svg"),
+    title: "Find every rank",
+    description:
+      "Discover taxi ranks and routes across South Africa with real-time updates.",
+    Illustration: TaxiStopIllustration,
   },
   {
     id: "3",
-    title: "Strong Community",
-    description: "Connect with other commuters, share updates, and find lost items together.",
-    image: require("../assets/svg/COMMUNITY.svg"),
+    title: "Built by your community",
+    description:
+      "Share rides, lost-and-found, and safety alerts with commuters near you.",
+    Illustration: CommunityIllustration,
   },
   {
     id: "4",
-    title: "Seamless Payments",
-    description: "Pay for your rides digitally with Haibo Pay. Fast, secure, and cashless.",
-    image: require("../assets/svg/FINDRNKS.svg"),
+    title: "Pay the smart way",
+    description:
+      "Cashless payments to drivers and ranks — fast, secure, and tracked.",
+    Illustration: FindRanksIllustration,
   },
 ];
 
 interface OnboardingScreenProps {
-  onComplete: (role: "driver" | "commuter", driverData?: any) => void;
+  onComplete: () => void;
 }
 
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showRoleSelection, setShowRoleSelection] = useState(false);
-  const [userRole, setUserRole] = useState<"driver" | "commuter" | null>(null);
-  
-  // Driver Form State
-  const [driverName, setDriverName] = useState("");
-  const [plateNumber, setPlateNumber] = useState("");
-  
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
 
   const handleNext = () => {
+    Haptics.selectionAsync();
     if (currentIndex < SLIDES.length - 1) {
       const nextIndex = currentIndex + 1;
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
     } else {
-      setShowRoleSelection(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onComplete();
     }
   };
 
-  const handleDriverSubmit = () => {
-    if (!driverName || !plateNumber) {
-      Alert.alert("Required", "Please provide your name and taxi plate number.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
-    
-    // Generate reference code from plate number
-    const refCode = `HB-${plateNumber.replace(/\s/g, "").toUpperCase()}`;
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onComplete("driver", {
-      name: driverName,
-      plateNumber: plateNumber,
-      refCode: refCode,
-      trackingEnabled: true,
-    });
+  const handleSkip = () => {
+    Haptics.selectionAsync();
+    onComplete();
   };
 
-  const renderSlide = ({ item }: { item: OnboardingSlide }) => (
-    <View style={[styles.slide, { width }]}>
-      <View style={styles.imageContainer}>
-        <Image source={item.image} style={styles.image} resizeMode="contain" />
-      </View>
-      <View style={styles.textContainer}>
-        <ThemedText style={styles.title}>{item.title}</ThemedText>
-        <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
-          {item.description}
-        </ThemedText>
-      </View>
-    </View>
-  );
-
-  if (showRoleSelection) {
-    if (userRole === "driver") {
-      return (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={[styles.container, { backgroundColor: theme.backgroundDefault }]}
-        >
-          <ScrollView contentContainerStyle={[styles.formContainer, { paddingTop: insets.top + 20 }]}>
-            <Pressable onPress={() => setUserRole(null)} style={styles.backButton}>
-              <Feather name="arrow-left" size={24} color={theme.text} />
-            </Pressable>
-            
-            <ThemedText style={styles.roleTitle}>Driver Registration</ThemedText>
-            <ThemedText style={[styles.roleSubtitle, { color: theme.textSecondary }]}>
-              Register to receive Haibo Pay and track your routes.
-            </ThemedText>
-
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Full Name</ThemedText>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="Enter your name"
-                placeholderTextColor={theme.textSecondary}
-                value={driverName}
-                onChangeText={setDriverName}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Taxi Plate Number</ThemedText>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="e.g. GP 123 456"
-                placeholderTextColor={theme.textSecondary}
-                value={plateNumber}
-                onChangeText={setPlateNumber}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            <View style={[styles.infoBox, { backgroundColor: BrandColors.primary.blue + "10" }]}>
-              <Feather name="info" size={20} color={BrandColors.primary.blue} />
-              <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-                Your plate number will be used to generate your unique Haibo Pay reference code.
-              </ThemedText>
-            </View>
-
-            <Button title="Complete Registration" onPress={handleDriverSubmit} />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      );
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+        setCurrentIndex(viewableItems[0].index);
+      }
     }
+  ).current;
 
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const renderSlide = ({ item }: { item: OnboardingSlide }) => {
+    const Illustration = item.Illustration;
     return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top + 40 }]}>
-        <View style={styles.roleHeader}>
-          <ThemedText style={styles.roleTitle}>Choose Your Role</ThemedText>
-          <ThemedText style={[styles.roleSubtitle, { color: theme.textSecondary }]}>
-            Tell us how you'll be using Haibo!
+      <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
+        <View
+          style={[
+            styles.illustrationStage,
+            { paddingTop: insets.top + Spacing["3xl"] + Spacing.lg },
+          ]}
+        >
+          <Illustration width={ILLUSTRATION_SIZE} height={ILLUSTRATION_SIZE} />
+        </View>
+        <View
+          style={[
+            styles.textCard,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+        >
+          <ThemedText style={styles.slideTitle}>{item.title}</ThemedText>
+          <ThemedText
+            style={[styles.slideDescription, { color: theme.textSecondary }]}
+          >
+            {item.description}
           </ThemedText>
         </View>
-
-        <View style={styles.roleOptions}>
-          <Pressable
-            style={[styles.roleCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              onComplete("commuter");
-            }}
-          >
-            <LinearGradient colors={["#4facfe", "#00f2fe"]} style={styles.roleIcon}>
-              <Feather name="user" size={32} color="#FFF" />
-            </LinearGradient>
-            <View style={styles.roleText}>
-              <ThemedText style={styles.roleName}>I am a Commuter</ThemedText>
-              <ThemedText style={[styles.roleDesc, { color: theme.textSecondary }]}>
-                I want to find safe rides and pay digitally.
-              </ThemedText>
-            </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            style={[styles.roleCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => {
-              setUserRole("driver");
-              Haptics.selectionAsync();
-            }}
-          >
-            <LinearGradient colors={BrandColors.gradient.primary} style={styles.roleIcon}>
-              <Feather name="truck" size={32} color="#FFF" />
-            </LinearGradient>
-            <View style={styles.roleText}>
-              <ThemedText style={styles.roleName}>I am a Taxi Driver</ThemedText>
-              <ThemedText style={[styles.roleDesc, { color: theme.textSecondary }]}>
-                I want to track my routes and receive payments.
-              </ThemedText>
-            </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </View>
-      </ThemedView>
+      </View>
     );
-  }
+  };
+
+  const isLastSlide = currentIndex === SLIDES.length - 1;
 
   return (
-    <ThemedView style={styles.container}>
-      <FlatList
-        ref={flatListRef}
-        data={SLIDES}
-        renderItem={renderSlide}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => {
-          const index = Math.round(e.nativeEvent.contentOffset.x / width);
-          setCurrentIndex(index);
-        }}
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      {/* Rose gradient stage — anchored hero band that the illustrations sit on */}
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[
+          styles.gradientStage,
+          { height: HERO_HEIGHT + insets.top },
+        ]}
       />
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
+      {/* Skip button overlays the gradient (top-right) — outside the carousel
+          so it doesn't swipe away with the slides */}
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        style={[styles.skipRow, { top: insets.top + Spacing.md }]}
+      >
+        <Pressable
+          onPress={handleSkip}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+        >
+          <ThemedText style={styles.skipText}>SKIP</ThemedText>
+        </Pressable>
+      </Animated.View>
+
+      {/* Carousel — slides float on top of the gradient + spill onto the white card */}
+      <View style={styles.carouselWrap}>
+        <FlatList
+          ref={flatListRef}
+          data={SLIDES}
+          renderItem={renderSlide}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          bounces={false}
+        />
+      </View>
+
+      {/* Anchored footer — pagination + CTA */}
+      <Animated.View
+        entering={FadeInUp.duration(500).delay(200)}
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + Spacing.xl,
+            backgroundColor: theme.backgroundRoot,
+          },
+        ]}
+      >
         <View style={styles.pagination}>
-          {SLIDES.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: index === currentIndex ? BrandColors.primary.red : theme.border,
-                  width: index === currentIndex ? 24 : 8,
-                },
-              ]}
-            />
-          ))}
+          {SLIDES.map((_, index) => {
+            const active = index === currentIndex;
+            return (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: active
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                    width: active ? 24 : 8,
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
 
-        <Pressable onPress={handleNext} style={styles.buttonContainer}>
-          <LinearGradient
-            colors={[BrandColors.primary.red, "#EA4F52"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.button}
+        <Animated.View entering={FadeInDown.duration(500).delay(300)}>
+          <GradientButton
+            onPress={handleNext}
+            size="large"
+            icon={isLastSlide ? "check" : "arrow-right"}
+            iconPosition="right"
           >
-            <ThemedText style={styles.buttonText}>
-              {currentIndex === SLIDES.length - 1 ? "Get Started" : "Next"}
-            </ThemedText>
-            <Feather name={currentIndex === SLIDES.length - 1 ? "check" : "arrow-right"} size={20} color="#FFF" />
-          </LinearGradient>
-        </Pressable>
-      </View>
-    </ThemedView>
+            {isLastSlide ? "Get started" : "Next"}
+          </GradientButton>
+        </Animated.View>
+      </Animated.View>
+    </View>
   );
 }
 
+const HERO_HEIGHT = 320;
+const ILLUSTRATION_SIZE = 220;
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  slide: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.xl },
-  imageContainer: { width: "100%", height: height * 0.4, alignItems: "center", justifyContent: "center" },
-  image: { width: "100%", height: "100%" },
-  textContainer: { alignItems: "center", marginTop: Spacing.xl, paddingHorizontal: 20 },
-  title: { fontSize: 28, fontWeight: "800", textAlign: "center", marginBottom: Spacing.md },
-  description: { fontSize: 16, textAlign: "center", lineHeight: 24 },
-  footer: { paddingHorizontal: Spacing.xl },
-  pagination: { flexDirection: "row", justifyContent: "center", marginBottom: Spacing.xl, gap: 8 },
-  dot: { height: 8, borderRadius: 4 },
-  buttonContainer: { width: "100%" },
-  button: { height: 56, borderRadius: BorderRadius.lg, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  buttonText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
-  // Role Selection
-  roleHeader: { paddingHorizontal: 30, marginBottom: 40 },
-  roleTitle: { fontSize: 32, fontWeight: "900", marginBottom: 8 },
-  roleSubtitle: { fontSize: 18, opacity: 0.7 },
-  roleOptions: { paddingHorizontal: 20, gap: 16 },
-  roleCard: { flexDirection: "row", alignItems: "center", padding: 20, borderRadius: BorderRadius.lg, borderWidth: 1, gap: 16 },
-  roleIcon: { width: 60, height: 60, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  roleText: { flex: 1 },
-  roleName: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
-  roleDesc: { fontSize: 13, opacity: 0.6 },
-  // Driver Form
-  formContainer: { paddingHorizontal: 25, paddingBottom: 40 },
-  backButton: { marginBottom: 20 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: "700", marginBottom: 8, marginLeft: 4 },
-  input: { height: 55, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, fontSize: 16 },
-  infoBox: { flexDirection: "row", padding: 16, borderRadius: 12, gap: 12, marginBottom: 30, alignItems: "center" },
-  infoText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  root: {
+    flex: 1,
+  },
+  gradientStage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  skipRow: {
+    position: "absolute",
+    right: Spacing.xl,
+    zIndex: 10,
+  },
+  skipText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    letterSpacing: 1.5,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  carouselWrap: {
+    flex: 1,
+  },
+  slide: {
+    flex: 1,
+    alignItems: "center",
+  },
+  illustrationStage: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: Spacing.xl,
+  },
+  textCard: {
+    flex: 1,
+    alignSelf: "stretch",
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing["3xl"],
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  slideTitle: {
+    ...Typography.h1,
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  slideDescription: {
+    ...Typography.body,
+    textAlign: "center",
+    maxWidth: 320,
+  },
+  footer: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+  },
+  pagination: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+  },
 });
