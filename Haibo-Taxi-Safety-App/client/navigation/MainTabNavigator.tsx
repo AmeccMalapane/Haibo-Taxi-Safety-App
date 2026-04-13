@@ -14,6 +14,9 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
+import TaxiFareScreen from "@/screens/TaxiFareScreen";
+import CommunityScreen from "@/screens/CommunityScreen";
+import PushaScreen from "@/screens/PushaScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { BrandColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -140,16 +143,10 @@ export default function MainTabNavigator() {
 
         <Tab.Screen
           name="TaxiFareTab"
-          component={EmptyScreen}
+          component={TaxiFareScreen}
           options={{
             tabBarIcon: (props) => <TabIcon name="dollar-sign" {...props} />,
             tabBarAccessibilityLabel: "Taxi fares",
-          }}
-          listeners={{
-            tabPress: (e) => {
-              e.preventDefault();
-              navigation.navigate("TaxiFare");
-            },
           }}
         />
 
@@ -179,31 +176,19 @@ export default function MainTabNavigator() {
 
         <Tab.Screen
           name="CommunityTab"
-          component={EmptyScreen}
+          component={CommunityScreen}
           options={{
             tabBarIcon: (props) => <TabIcon name="users" {...props} />,
             tabBarAccessibilityLabel: "Community hub",
-          }}
-          listeners={{
-            tabPress: (e) => {
-              e.preventDefault();
-              navigation.navigate("Community");
-            },
           }}
         />
 
         <Tab.Screen
           name="PushaTab"
-          component={EmptyScreen}
+          component={PushaScreen}
           options={{
             tabBarIcon: (props) => <TabIcon name="play-circle" {...props} />,
             tabBarAccessibilityLabel: "Phusha reels",
-          }}
-          listeners={{
-            tabPress: (e) => {
-              e.preventDefault();
-              navigation.navigate("Pusha");
-            },
           }}
         />
       </Tab.Navigator>
