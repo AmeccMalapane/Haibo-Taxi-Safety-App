@@ -42,6 +42,9 @@ import RouteSubmissionScreen from "@/screens/RouteSubmissionScreen";
 import CommunityRoutesScreen from "@/screens/CommunityRoutesScreen";
 import CommunityRouteDetailScreen from "@/screens/CommunityRouteDetailScreen";
 import ContributorProfileScreen from "@/screens/ContributorProfileScreen";
+import CommunityScreen from "@/screens/CommunityScreen";
+import PushaScreen from "@/screens/PushaScreen";
+import TaxiFareScreen from "@/screens/TaxiFareScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -89,6 +92,9 @@ export type RootStackParamList = {
   CommunityRoutes: undefined;
   CommunityRouteDetail: { routeId: string };
   ContributorProfile: undefined;
+  Community: undefined;
+  Pusha: undefined;
+  TaxiFare: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -419,6 +425,27 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="ContributorProfile"
         component={ContributorProfileScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="Community"
+        component={CommunityScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="Pusha"
+        component={PushaScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="TaxiFare"
+        component={TaxiFareScreen}
         options={{
           headerShown: false,
         }}
