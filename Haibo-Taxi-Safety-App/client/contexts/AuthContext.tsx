@@ -49,10 +49,28 @@ const REFRESH_TOKEN_KEY = "@haibo_auth_refresh_token";
 const USER_KEY = "@haibo_auth_user";
 const GUEST_KEY = "@haibo_auth_guest";
 
-// --- Singleton token for query-client to access ---
+// --- Singletons so query-client (outside the React tree) can read tokens
+//     and trigger auth side effects without prop drilling. ---
 let _currentToken: string | null = null;
+let _currentRefreshToken: string | null = null;
+let _onAuthExpired: (() => void) | null = null;
+let _onTokensRefreshed: ((token: string, refreshToken: string) => Promise<void>) | null = null;
+
 export function getCurrentToken(): string | null {
   return _currentToken;
+}
+export function getCurrentRefreshToken(): string | null {
+  return _currentRefreshToken;
+}
+export function notifyAuthExpired(): void {
+  _onAuthExpired?.();
+}
+export async function saveRefreshedTokens(token: string, refreshToken: string): Promise<void> {
+  // Update singletons synchronously so in-flight retries read the new value
+  // before React has a chance to re-render.
+  _currentToken = token;
+  _currentRefreshToken = refreshToken;
+  await _onTokensRefreshed?.(token, refreshToken);
 }
 
 // --- Context ---
@@ -74,10 +92,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadStoredAuth();
   }, []);
 
-  // Keep singleton token in sync
+  // Keep singletons in sync with React state
   useEffect(() => {
     _currentToken = state.token;
-  }, [state.token]);
+    _currentRefreshToken = state.refreshToken;
+  }, [state.token, state.refreshToken]);
+
+  // Wire query-client callbacks once on mount so it can trigger logout on
+  // refresh failure and persist refreshed tokens without re-rendering this
+  // provider on every request.
+  useEffect(() => {
+    _onAuthExpired = () => {
+      AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY]).catch(() => {});
+      setState({
+        user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isGuest: false,
+      });
+    };
+    _onTokensRefreshed = async (token: string, refreshToken: string) => {
+      await AsyncStorage.multiSet([
+        [TOKEN_KEY, token],
+        [REFRESH_TOKEN_KEY, refreshToken],
+      ]);
+      setState(prev => ({ ...prev, token, refreshToken }));
+    };
+    return () => {
+      _onAuthExpired = null;
+      _onTokensRefreshed = null;
+    };
+  }, []);
 
   const loadStoredAuth = async () => {
     try {

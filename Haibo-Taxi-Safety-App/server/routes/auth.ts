@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { users, otpCodes } from "../../shared/schema";
 import { eq, and, gt, sql } from "drizzle-orm";
-import { generateToken, generateRefreshToken, authMiddleware, AuthRequest } from "../middleware/auth";
+import { generateToken, generateRefreshToken, verifyRefreshToken, authMiddleware, AuthRequest } from "../middleware/auth";
 import { authRateLimit, sensitiveRateLimit, otpSendPhoneRateLimit } from "../middleware/rateLimit";
 import { sendOtpSms } from "../services/sms";
 import { generateOTP, generateReferralCode } from "../utils/helpers";
@@ -274,6 +274,51 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
   } catch (error: any) {
     console.error("Verify OTP error:", error);
     res.status(500).json({ error: "OTP verification failed" });
+  }
+});
+
+// POST /api/auth/refresh — exchange a valid refresh token for a fresh access+refresh pair.
+// Rate-limited per-IP to prevent stolen-refresh-token abuse.
+router.post("/refresh", authRateLimit, async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body as { refreshToken?: string };
+    if (!refreshToken || typeof refreshToken !== "string") {
+      res.status(400).json({ error: "Refresh token is required" });
+      return;
+    }
+
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch {
+      res.status(401).json({ error: "Invalid or expired refresh token" });
+      return;
+    }
+
+    // Re-read the user so role changes / deletions propagate on refresh.
+    const result = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
+    const user = result[0];
+    if (!user) {
+      res.status(401).json({ error: "User no longer exists" });
+      return;
+    }
+
+    const token = generateToken({
+      userId: user.id,
+      phone: user.phone,
+      role: user.role || "commuter",
+    });
+
+    const newRefreshToken = generateRefreshToken({
+      userId: user.id,
+      phone: user.phone,
+      role: user.role || "commuter",
+    });
+
+    res.json({ token, refreshToken: newRefreshToken });
+  } catch (error: any) {
+    console.error("Token refresh error:", error);
+    res.status(500).json({ error: "Token refresh failed" });
   }
 });
 
