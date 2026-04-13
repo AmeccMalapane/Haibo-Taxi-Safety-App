@@ -267,7 +267,7 @@ export default function RootStackNavigator() {
         component={LostFoundScreen}
         options={{
           presentation: "card",
-          headerTitle: "Lost & Found",
+          headerShown: false,
         }}
       />
       <Stack.Screen
