@@ -1,57 +1,95 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import {
   View,
   StyleSheet,
   Pressable,
-  Linking,
   Platform,
-  Animated,
   ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, BrandColors } from "@/constants/theme";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Spacing,
+  BorderRadius,
+  BrandColors,
+  Typography,
+} from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
+// typeui-clean rework — Menu as a calm services hub:
+//   1. Single brand-tinted icon palette across all rows (drops the 8-color
+//      rainbow — visual differentiation comes from the icon shape, not random
+//      hue assignments)
+//   2. Section labels use h4 token, no inline 14/700/uppercase soup
+//   3. Featured row: rose gradient "City Explorer" headline + subtle rose-
+//      bordered "Rate Driver" follow-up
+//   4. Theme toggle: gradient-filled active pill instead of solid red
+//   5. Account section detects auth state — shows "Manage account" when
+//      signed in, "Sign in" otherwise (was always "Dashboard Login")
+//   6. Drops the legacy Animated pulse on the login button (too noisy for a
+//      settings surface) and switches to staggered FadeInDown section entries
+
+type ThemeMode = "light" | "dark" | "system";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface MenuItemProps {
   icon: keyof typeof Feather.glyphMap;
   label: string;
+  hint?: string;
   onPress: () => void;
-  color?: string;
 }
 
-function MenuItem({ icon, label, onPress, color }: MenuItemProps) {
+function MenuItem({ icon, label, hint, onPress }: MenuItemProps) {
   const { theme } = useTheme();
-  const iconColor = color || theme.text;
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.menuItem,
-        { 
-          backgroundColor: pressed ? theme.backgroundSecondary : 'transparent',
+        {
+          backgroundColor: pressed ? theme.backgroundSecondary : "transparent",
         },
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
-      <View style={[styles.menuIconContainer, { backgroundColor: (color || theme.text) + "15" }]}>
-        <Feather name={icon} size={20} color={iconColor} />
+      <View
+        style={[
+          styles.menuIconContainer,
+          { backgroundColor: BrandColors.primary.gradientStart + "12" },
+        ]}
+      >
+        <Feather
+          name={icon}
+          size={18}
+          color={BrandColors.primary.gradientStart}
+        />
       </View>
-      <ThemedText style={styles.menuLabel}>{label}</ThemedText>
+      <View style={styles.menuLabelWrap}>
+        <ThemedText style={styles.menuLabel}>{label}</ThemedText>
+        {hint ? (
+          <ThemedText
+            style={[styles.menuHint, { color: theme.textSecondary }]}
+            numberOfLines={1}
+          >
+            {hint}
+          </ThemedText>
+        ) : null}
+      </View>
       <Feather name="chevron-right" size={18} color={theme.textSecondary} />
     </Pressable>
   );
 }
-
-type ThemeMode = "light" | "dark" | "system";
 
 interface ThemeOptionProps {
   mode: ThemeMode;
@@ -61,26 +99,50 @@ interface ThemeOptionProps {
   onPress: (mode: ThemeMode) => void;
 }
 
-function ThemeOption({ mode, currentMode, icon, label, onPress }: ThemeOptionProps) {
+function ThemeOption({
+  mode,
+  currentMode,
+  icon,
+  label,
+  onPress,
+}: ThemeOptionProps) {
   const { theme } = useTheme();
   const isActive = mode === currentMode;
+
+  if (isActive) {
+    return (
+      <Pressable
+        onPress={() => onPress(mode)}
+        style={styles.themeOptionWrap}
+        accessibilityRole="button"
+        accessibilityState={{ selected: true }}
+        accessibilityLabel={`${label} theme`}
+      >
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.themeOptionActive}
+        >
+          <Feather name={icon} size={16} color="#FFFFFF" />
+          <ThemedText style={styles.themeOptionActiveLabel}>
+            {label}
+          </ThemedText>
+        </LinearGradient>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
       onPress={() => onPress(mode)}
-      style={[
-        styles.themeOption,
-        { 
-          backgroundColor: isActive ? BrandColors.primary.red : 'transparent',
-        },
-      ]}
+      style={styles.themeOption}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} theme`}
     >
-      <Feather name={icon} size={18} color={isActive ? '#FFFFFF' : theme.textSecondary} />
-      <ThemedText 
-        style={[
-          styles.themeOptionLabel,
-          { color: isActive ? '#FFFFFF' : theme.textSecondary },
-        ]}
+      <Feather name={icon} size={16} color={theme.textSecondary} />
+      <ThemedText
+        style={[styles.themeOptionLabel, { color: theme.textSecondary }]}
       >
         {label}
       </ThemedText>
@@ -90,28 +152,9 @@ function ThemeOption({ mode, currentMode, icon, label, onPress }: ThemeOptionPro
 
 export default function MenuScreen() {
   const { theme, themeMode, setThemeMode } = useTheme();
+  const { isAuthenticated, user } = useAuth();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
 
   const handleThemeChange = async (mode: ThemeMode) => {
     setThemeMode(mode);
@@ -129,116 +172,281 @@ export default function MenuScreen() {
   const handleLostFound = () => navigation.navigate("LostFound");
   const handleReferral = () => navigation.navigate("Referral");
   const handleJobs = () => navigation.navigate("Jobs");
-  const handleEvents = () => navigation.navigate("Events");
   const handleCityExplorer = () => navigation.navigate("CityExplorer");
   const handleAuthLogin = () => navigation.navigate("Auth");
   const handleSettings = () => navigation.navigate("Settings");
   const handleRating = () => navigation.navigate("Rating");
 
+  const accountTitle = isAuthenticated
+    ? user?.displayName || "Manage your account"
+    : "Sign in to Haibo!";
+  const accountHint = isAuthenticated
+    ? "View profile, edit details and security"
+    : "Save your contacts and unlock Haibo Pay";
+
   return (
     <ThemedView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={[
-          styles.scrollContent, 
-          { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }
+          styles.scrollContent,
+          {
+            paddingTop: insets.top + Spacing.lg,
+            paddingBottom: insets.bottom + Spacing["3xl"],
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Appearance</ThemedText>
-          <View style={[styles.themeToggle, { backgroundColor: theme.backgroundSecondary }]}>
-            <ThemeOption mode="light" currentMode={themeMode} icon="sun" label="Light" onPress={handleThemeChange} />
-            <ThemeOption mode="dark" currentMode={themeMode} icon="moon" label="Dark" onPress={handleThemeChange} />
-            <ThemeOption mode="system" currentMode={themeMode} icon="smartphone" label="System" onPress={handleThemeChange} />
-          </View>
-        </View>
+        {/* Header */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+          <ThemedText style={styles.headerTitle}>Menu</ThemedText>
+          <ThemedText
+            style={[styles.headerSubtitle, { color: theme.textSecondary }]}
+          >
+            Services, safety tools and your account
+          </ThemedText>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Featured</ThemedText>
-          <Pressable
-            onPress={handleCityExplorer}
-            style={({ pressed }) => [
-              styles.unifiedButton,
-              { 
-                backgroundColor: BrandColors.primary.red,
-                opacity: pressed ? 0.9 : 1,
-                marginBottom: Spacing.md,
-              },
+        {/* Appearance */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(100)}
+          style={styles.section}
+        >
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
+            APPEARANCE
+          </ThemedText>
+          <View
+            style={[
+              styles.themeToggle,
+              { backgroundColor: theme.backgroundSecondary },
             ]}
           >
-            <View style={styles.buttonIconContainer}>
-              <Feather name="map" size={24} color="#FFFFFF" />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <ThemedText style={styles.buttonTitle}>City Explorer Challenge</ThemedText>
-              <ThemedText style={styles.buttonSubtitle}>Earn points & win rewards</ThemedText>
-            </View>
-            <View style={styles.buttonBadge}>
-              <ThemedText style={styles.buttonBadgeText}>+50</ThemedText>
-            </View>
+            <ThemeOption
+              mode="light"
+              currentMode={themeMode}
+              icon="sun"
+              label="Light"
+              onPress={handleThemeChange}
+            />
+            <ThemeOption
+              mode="dark"
+              currentMode={themeMode}
+              icon="moon"
+              label="Dark"
+              onPress={handleThemeChange}
+            />
+            <ThemeOption
+              mode="system"
+              currentMode={themeMode}
+              icon="smartphone"
+              label="Auto"
+              onPress={handleThemeChange}
+            />
+          </View>
+        </Animated.View>
+
+        {/* Featured */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(200)}
+          style={styles.section}
+        >
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
+            FEATURED
+          </ThemedText>
+
+          {/* City Explorer — gradient hero card */}
+          <Pressable
+            onPress={handleCityExplorer}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="City Explorer Challenge"
+          >
+            <LinearGradient
+              colors={BrandColors.gradient.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.featuredCard}
+            >
+              <View style={styles.featuredIconWrap}>
+                <Feather name="map" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.featuredTextWrap}>
+                <ThemedText style={styles.featuredTitle}>
+                  City Explorer Challenge
+                </ThemedText>
+                <ThemedText style={styles.featuredSubtitle}>
+                  Earn points across Mzansi
+                </ThemedText>
+              </View>
+              <View style={styles.featuredBadge}>
+                <ThemedText style={styles.featuredBadgeText}>+50</ThemedText>
+              </View>
+            </LinearGradient>
           </Pressable>
 
+          {/* Rate Driver — rose-bordered follow-up */}
           <Pressable
             onPress={handleRating}
             style={({ pressed }) => [
-              styles.unifiedButton,
-              { 
-                backgroundColor: BrandColors.secondary.orange,
-                opacity: pressed ? 0.9 : 1,
+              styles.featuredOutline,
+              {
+                backgroundColor: theme.surface,
+                borderColor: BrandColors.primary.gradientStart + "33",
+              },
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Rate your driver"
+          >
+            <View
+              style={[
+                styles.featuredOutlineIcon,
+                {
+                  backgroundColor: BrandColors.primary.gradientStart + "12",
+                },
+              ]}
+            >
+              <Feather
+                name="star"
+                size={20}
+                color={BrandColors.primary.gradientStart}
+              />
+            </View>
+            <View style={styles.featuredTextWrap}>
+              <ThemedText style={styles.featuredOutlineTitle}>
+                Rate your driver
+              </ThemedText>
+              <ThemedText
+                style={[
+                  styles.featuredOutlineSubtitle,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Help us improve safety on every trip
+              </ThemedText>
+            </View>
+            <Feather
+              name="chevron-right"
+              size={18}
+              color={theme.textSecondary}
+            />
+          </Pressable>
+        </Animated.View>
+
+        {/* Services */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(300)}
+          style={styles.section}
+        >
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
+            SERVICES
+          </ThemedText>
+          <View
+            style={[
+              styles.menuCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
               },
             ]}
           >
-            <View style={styles.buttonIconContainer}>
-              <Feather name="star" size={24} color="#FFFFFF" />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <ThemedText style={styles.buttonTitle}>Rate Your Driver</ThemedText>
-              <ThemedText style={styles.buttonSubtitle}>Help improve safety & service</ThemedText>
-            </View>
-            <Feather name="chevron-right" size={20} color="#FFFFFF" />
-          </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Services</ThemedText>
-          <View style={[styles.menuCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <MenuItem icon="gift" label="Refer Friends" onPress={handleReferral} color={BrandColors.primary.green} />
+            <MenuItem
+              icon="phone-call"
+              label="Emergency services"
+              hint="10111, ambulance, fire"
+              onPress={handleEmergencyServices}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="package" label="Haibo! Hub" onPress={handleHub} color={BrandColors.primary.blue} />
+            <MenuItem
+              icon="book-open"
+              label="Safety directory"
+              hint="Trusted contacts and resources"
+              onPress={handleSafetyDirectory}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="search" label="Lost & Found" onPress={handleLostFound} color={BrandColors.secondary.orange} />
+            <MenuItem
+              icon="search"
+              label="Lost & found"
+              hint="Report or claim items left in taxis"
+              onPress={handleLostFound}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="phone-call" label="Emergency Services" onPress={handleEmergencyServices} color={BrandColors.primary.red} />
+            <MenuItem
+              icon="package"
+              label="Haibo! Hub"
+              hint="Send packages across SA"
+              onPress={handleHub}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="book-open" label="Safety Directory" onPress={handleSafetyDirectory} color="#00BCD4" />
+            <MenuItem
+              icon="gift"
+              label="Refer friends"
+              hint="Earn rewards for every signup"
+              onPress={handleReferral}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="briefcase" label="Job Search" onPress={handleJobs} color="#1976D2" />
+            <MenuItem
+              icon="briefcase"
+              label="Jobs"
+              hint="Driver, association and admin roles"
+              onPress={handleJobs}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <MenuItem icon="settings" label="Settings" onPress={handleSettings} color={BrandColors.gray[600]} />
+            <MenuItem
+              icon="settings"
+              label="Settings"
+              onPress={handleSettings}
+            />
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Account</ThemedText>
-          <Animated.View style={{ transform: [{ scale: pulseAnim }], marginBottom: Spacing.md }}>
-            <Pressable
-              onPress={handleAuthLogin}
-              style={({ pressed }) => [
-                styles.unifiedButton,
-                { backgroundColor: BrandColors.primary.red, opacity: pressed ? 0.9 : 1 },
-              ]}
+        {/* Account */}
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(400)}
+          style={styles.section}
+        >
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
+            ACCOUNT
+          </ThemedText>
+
+          <Pressable
+            onPress={handleAuthLogin}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={accountTitle}
+          >
+            <LinearGradient
+              colors={BrandColors.gradient.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.accountCard}
             >
-              <View style={styles.buttonIconContainer}>
-                <Feather name="user" size={24} color="#FFFFFF" />
+              <View style={styles.featuredIconWrap}>
+                <Feather
+                  name={isAuthenticated ? "user" : "log-in"}
+                  size={22}
+                  color="#FFFFFF"
+                />
               </View>
-              <View style={styles.buttonTextContainer}>
-                <ThemedText style={styles.buttonTitle}>Dashboard Login</ThemedText>
-                <ThemedText style={styles.buttonSubtitle}>Access your full account</ThemedText>
+              <View style={styles.featuredTextWrap}>
+                <ThemedText style={styles.featuredTitle} numberOfLines={1}>
+                  {accountTitle}
+                </ThemedText>
+                <ThemedText style={styles.featuredSubtitle} numberOfLines={1}>
+                  {accountHint}
+                </ThemedText>
               </View>
               <Feather name="arrow-right" size={20} color="#FFFFFF" />
-            </Pressable>
-          </Animated.View>
-        </View>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
       </ScrollView>
     </ThemedView>
   );
@@ -251,90 +459,127 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.lg,
   },
+
+  // Header
+  header: {
+    marginBottom: Spacing.xl,
+  },
+  headerTitle: {
+    ...Typography.h1,
+  },
+  headerSubtitle: {
+    ...Typography.body,
+    marginTop: 2,
+  },
+
+  // Section
   section: {
     marginBottom: Spacing.xl,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: BrandColors.primary.red,
+    ...Typography.label,
+    letterSpacing: 1.4,
+    fontSize: 11,
     marginBottom: Spacing.md,
-    marginLeft: 4,
+    marginLeft: Spacing.xs,
   },
+
+  // Theme toggle
   themeToggle: {
     flexDirection: "row",
     borderRadius: BorderRadius.md,
     padding: 4,
+    gap: 4,
+  },
+  themeOptionWrap: {
+    flex: 1,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
   },
   themeOption: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.sm,
-    gap: 8,
+    gap: 6,
+  },
+  themeOptionActive: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    gap: 6,
   },
   themeOptionLabel: {
-    fontSize: 14,
+    ...Typography.small,
     fontWeight: "600",
   },
-  unifiedButton: {
+  themeOptionActiveLabel: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  // Featured (gradient card)
+  featuredCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: Spacing.md,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
   },
-  buttonIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  featuredIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
   },
-  buttonTextContainer: {
+  featuredTextWrap: {
     flex: 1,
   },
-  buttonTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+  featuredTitle: {
+    ...Typography.h4,
     color: "#FFFFFF",
-    marginBottom: 2,
   },
-  buttonSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.8)",
+  featuredSubtitle: {
+    ...Typography.small,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 2,
   },
-  buttonBadge: {
+  featuredBadge: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: BorderRadius.full,
   },
-  buttonBadgeText: {
-    fontSize: 12,
+  featuredBadgeText: {
+    ...Typography.label,
+    fontSize: 11,
     fontWeight: "800",
-    color: BrandColors.primary.red,
+    color: BrandColors.primary.gradientStart,
   },
-  menuCard: {
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-  },
-  menuItem: {
+
+  // Featured outline (rose-bordered)
+  featuredOutline: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
   },
-  menuIconContainer: {
+  featuredOutlineIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -342,13 +587,67 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: Spacing.md,
   },
-  menuLabel: {
+  featuredOutlineTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  featuredOutlineSubtitle: {
+    ...Typography.small,
+    marginTop: 2,
+  },
+
+  // Menu card + items
+  menuCard: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  menuLabelWrap: {
     flex: 1,
-    fontSize: 16,
+  },
+  menuLabel: {
+    ...Typography.body,
     fontWeight: "600",
+  },
+  menuHint: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: 2,
   },
   divider: {
     height: 1,
-    marginHorizontal: Spacing.lg,
+    marginLeft: Spacing.lg + 36 + Spacing.md,
+  },
+
+  // Account
+  accountCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
