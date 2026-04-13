@@ -30,7 +30,11 @@ Paystack test public key is configured: `pk_test_1652390c7d5a1cc8d50b67bcc185cc0
 **Note:** This is a test key. For production, replace with a live Paystack key.
 
 ### 4. Google Maps API — Configured
-Google Maps API key is present in `app.json` for both iOS and Android: `AIzaSyBnTPyX9s0FOUS77wTC_-JkdF_5j8wUDwk`
+Google Maps API key is injected at build time via the `GOOGLE_MAPS_API_KEY`
+EAS environment variable. The `app.config.js` dynamic config reads it and
+passes it to both `ios.config.googleMapsApiKey` and
+`android.config.googleMaps.apiKey`. See `app.config.js` for the wiring.
+(Previous key was rotated 2026-04-13.)
 
 ### 5. Mock Data — Preserved
 As requested, all mock data remains in place. The app uses `AsyncStorage`-based local data for:

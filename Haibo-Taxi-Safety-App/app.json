@@ -9,10 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.haibo.africa.haiboapp",
-      "config": {
-        "googleMapsApiKey": "AIzaSyBnTPyX9s0FOUS77wTC_-JkdF_5j8wUDwk"
-      }
+      "bundleIdentifier": "com.haibo.africa.haiboapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,13 +18,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.haibo.africa.haiboapp",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyBnTPyX9s0FOUS77wTC_-JkdF_5j8wUDwk"
-        }
-      },
-      "googleServicesFile": "./google-services.json"
+      "package": "com.haibo.africa.haiboapp"
     },
     "web": {
       "output": "single",
