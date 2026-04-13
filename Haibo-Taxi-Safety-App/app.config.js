@@ -9,7 +9,13 @@ const androidGoogleServices =
 const iosGoogleServices =
   process.env.GOOGLE_SERVICE_INFO_PLIST || expo.ios?.googleServicesFile || "./GoogleService-Info.plist";
 
-const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY || "";
+// Platform-specific Maps keys — each restricted in Google Cloud Console to
+// its own bundle. Fall back to the generic GOOGLE_MAPS_API_KEY (historically
+// the Android-restricted one) if a platform-specific var isn't set.
+const androidMapsKey =
+  process.env.GOOGLE_MAPS_API_KEY_ANDROID || process.env.GOOGLE_MAPS_API_KEY || "";
+const iosMapsKey =
+  process.env.GOOGLE_MAPS_API_KEY_IOS || process.env.GOOGLE_MAPS_API_KEY || "";
 
 module.exports = {
   expo: {
@@ -19,7 +25,7 @@ module.exports = {
       googleServicesFile: iosGoogleServices,
       config: {
         ...(expo.ios?.config || {}),
-        googleMapsApiKey: googleMapsKey,
+        googleMapsApiKey: iosMapsKey,
       },
     },
     android: {
@@ -28,7 +34,7 @@ module.exports = {
       config: {
         ...(expo.android?.config || {}),
         googleMaps: {
-          apiKey: googleMapsKey,
+          apiKey: androidMapsKey,
         },
       },
     },
