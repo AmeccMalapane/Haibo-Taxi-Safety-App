@@ -13,7 +13,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useLostFound } from "@/hooks/useApiData";
 
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
@@ -57,10 +57,13 @@ export default function LostFoundScreen() {
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: itemsData, isLoading, refetch } = useQuery<LostFoundItem[]>({
-    queryKey: ["/api/lost-found", filterType !== "all" ? `?type=${filterType}` : ""],
-  });
-  const items = itemsData ?? [];
+  // useLostFound unwraps the server's { data, pagination } envelope.
+  // Calling useQuery<LostFoundItem[]> directly crashed here before because
+  // `items` was the envelope object and `.filter` was undefined.
+  const { data, isLoading, refetch } = useLostFound(
+    filterType === "all" ? undefined : filterType,
+  );
+  const items: LostFoundItem[] = (data as LostFoundItem[] | undefined) ?? [];
 
   const filteredItems = items.filter((item) => {
     if (searchQuery) {

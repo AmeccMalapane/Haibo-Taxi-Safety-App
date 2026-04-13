@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 
+import { useJobs } from "@/hooks/useApiData";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
@@ -90,23 +91,21 @@ export default function JobsScreen() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>("all");
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
-  const jobsQueryUrl = selectedCategory === "all" 
-    ? "/api/jobs" 
-    : `/api/jobs?category=${selectedCategory}`;
-  
-  const { data: jobs, isLoading } = useQuery<Job[]>({
-    queryKey: [jobsQueryUrl],
-  });
+  // useJobs unwraps the server's { data, pagination } envelope.
+  // A prior direct useQuery<Job[]> call crashed because jobs was the
+  // envelope object and jobs.filter was undefined.
+  const { data: jobsData, isLoading } = useJobs(
+    selectedCategory === "all" ? undefined : selectedCategory,
+  );
+  const jobs: Job[] = (jobsData as Job[] | undefined) ?? [];
 
   const { data: stats } = useQuery<JobStats>({
     queryKey: ["/api/jobs-stats"],
   });
 
   const filteredJobs = useMemo(() => {
-    if (!jobs) return [];
-    
     if (!searchQuery.trim()) return jobs;
-    
+
     const query = searchQuery.toLowerCase();
     return jobs.filter(
       (job) =>
