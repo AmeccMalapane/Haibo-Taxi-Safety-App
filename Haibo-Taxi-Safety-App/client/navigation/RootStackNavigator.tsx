@@ -235,7 +235,7 @@ export default function RootStackNavigator() {
         component={HubScreen}
         options={{
           presentation: "card",
-          headerTitle: "Haibo! Hub",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -243,7 +243,7 @@ export default function RootStackNavigator() {
         component={SendPackageScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Send Package",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -251,7 +251,7 @@ export default function RootStackNavigator() {
         component={TrackPackageScreen}
         options={{
           presentation: "card",
-          headerTitle: "Track Package",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -259,7 +259,7 @@ export default function RootStackNavigator() {
         component={PackageHistoryScreen}
         options={{
           presentation: "card",
-          headerTitle: "Package History",
+          headerShown: false,
         }}
       />
       <Stack.Screen
