@@ -331,7 +331,7 @@ export default function RootStackNavigator() {
         component={JobsScreen}
         options={{
           presentation: "card",
-          headerTitle: "Job Search",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -339,7 +339,7 @@ export default function RootStackNavigator() {
         component={EventsScreen}
         options={{
           presentation: "card",
-          headerTitle: "Events",
+          headerShown: false,
         }}
       />
       <Stack.Screen

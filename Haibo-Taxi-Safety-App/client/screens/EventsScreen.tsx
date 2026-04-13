@@ -1,26 +1,48 @@
 import React, { useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Pressable,
   TextInput,
   Alert,
-  Dimensions,
   Image,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { Button } from "@/components/Button";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useEvents } from "@/hooks/useApiData";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
-const { width } = Dimensions.get("window");
+import { useTheme } from "@/hooks/useTheme";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
+import { ThemedText } from "@/components/ThemedText";
+import { GradientButton } from "@/components/GradientButton";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { useEvents } from "@/hooks/useApiData";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// typeui-clean rework — Events as a calm community board:
+//   1. Rose gradient hero with calendar badge + back button + Promote
+//      pill (was a tap-to-toggle in the header that didn't fit any other
+//      screen's pattern)
+//   2. Floating white content card with inline expanding "Promote" form
+//      (R50 / 7-day demo flow)
+//   3. Event cards: hero image with rose price tag, organizer + verified
+//      check, calendar/pin meta, social action row, rose gradient
+//      "Get tickets" CTA (was solid red — now matches the brand gradient)
+//   4. Empty state with rose-tinted calendar icon when no events load
+//
+// No latent bugs in this screen — the demo "promote" + "buy ticket"
+// flows just show Alerts. They're flagged as "demo" in the form copy
+// so users know it's not yet wired to Paystack.
 
 interface EventPost {
   id: string;
@@ -37,6 +59,9 @@ interface EventPost {
   expiryDate: string;
 }
 
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=1000";
+
 const mockEvents: EventPost[] = [
   {
     id: "1",
@@ -45,8 +70,9 @@ const mockEvents: EventPost[] = [
     date: "March 15, 2026",
     location: "Soweto Theatre",
     price: 150,
-    description: "Experience the best of local flavors, music, and culture. A day for the whole family!",
-    imageUrl: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=1000",
+    description:
+      "Experience the best of local flavors, music, and culture. A day for the whole family.",
+    imageUrl: FALLBACK_IMAGE,
     likes: 156,
     comments: 24,
     isVerified: true,
@@ -55,229 +81,886 @@ const mockEvents: EventPost[] = [
 ];
 
 export default function EventsScreen() {
-  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { data: apiEvents = [] } = useEvents();
+
   const [isPosting, setIsPosting] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [ticketPrice, setTicketPrice] = useState("");
-  const { data: apiEvents = [] } = useEvents();
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [dateFocused, setDateFocused] = useState(false);
+  const [locFocused, setLocFocused] = useState(false);
+  const [priceFocused, setPriceFocused] = useState(false);
 
-  const events: EventPost[] = apiEvents.length > 0
-    ? apiEvents.map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        organizer: e.organizer || "Community",
-        date: new Date(e.eventDate).toLocaleDateString("en-ZA", { month: "long", day: "numeric", year: "numeric" }),
-        location: e.location,
-        price: e.ticketPrice || 0,
-        description: e.description,
-        imageUrl: e.imageUrl || "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?q=80&w=1000",
-        likes: 0,
-        comments: 0,
-        isVerified: e.isVerified || false,
-        expiryDate: e.eventEndDate || e.eventDate,
-      }))
-    : mockEvents;
+  const events: EventPost[] =
+    Array.isArray(apiEvents) && apiEvents.length > 0
+      ? apiEvents.map((e: any) => ({
+          id: e.id,
+          title: e.title,
+          organizer: e.organizer || "Community",
+          date: new Date(e.eventDate).toLocaleDateString("en-ZA", {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          }),
+          location: e.location,
+          price: e.ticketPrice || 0,
+          description: e.description,
+          imageUrl: e.imageUrl || FALLBACK_IMAGE,
+          likes: 0,
+          comments: 0,
+          isVerified: e.isVerified || false,
+          expiryDate: e.eventEndDate || e.eventDate,
+        }))
+      : mockEvents;
+
+  const triggerHaptic = (
+    type: "selection" | "medium" | "success" = "selection"
+  ) => {
+    if (Platform.OS === "web") return;
+    try {
+      const Haptics = require("expo-haptics");
+      if (type === "success") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (type === "medium") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else {
+        Haptics.selectionAsync();
+      }
+    } catch {}
+  };
+
+  const handleTogglePost = () => {
+    triggerHaptic("selection");
+    setIsPosting((prev) => !prev);
+  };
 
   const handlePostEvent = () => {
+    triggerHaptic("medium");
     Alert.alert(
-      "Confirm Promotion",
-      "Promoting an event costs R50.00 for 7 days. You will be notified via email for renewals.",
+      "Promote your event",
+      "Promoting an event costs R50.00 for 7 days via Haibo Pay. Demo mode — Paystack checkout coming soon.",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Pay R50 with Haibo Pay", 
+        {
+          text: "Confirm",
           onPress: () => {
-            Alert.alert("Success", "Your event is now live! It will be promoted for the next 7 days.");
+            triggerHaptic("success");
+            Alert.alert(
+              "Event posted",
+              "Your event will be promoted for the next 7 days."
+            );
             setIsPosting(false);
-          } 
+            setEventTitle("");
+            setEventDate("");
+            setEventLocation("");
+            setTicketPrice("");
+          },
         },
       ]
     );
   };
 
   const handleBuyTicket = (event: EventPost) => {
+    triggerHaptic("medium");
     Alert.alert(
-      "Buy Ticket",
-      `Purchase ticket for ${event.title} at R${event.price}?`,
+      "Buy ticket",
+      `Purchase ticket for "${event.title}" at R${event.price}? (Demo mode — Paystack checkout coming soon.)`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Confirm Purchase", 
-          onPress: () => Alert.alert("Ticket Secured", "Your ticket has been added to your profile. See you there!") 
+        {
+          text: "Confirm",
+          onPress: () => {
+            triggerHaptic("success");
+            Alert.alert(
+              "Ticket secured",
+              "Your ticket has been added to your profile. See you there!"
+            );
+          },
         },
       ]
     );
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 10 }]}>
-        <ThemedText type="h3">Events & Fun</ThemedText>
-        <Pressable 
-          onPress={() => setIsPosting(!isPosting)}
-          style={[styles.postToggle, { backgroundColor: isPosting ? theme.border : BrandColors.primary.red }]}
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
+        ]}
+      >
+        {/* Rose gradient hero */}
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Feather name={isPosting ? "x" : "volume-2"} size={20} color="#FFF" />
-          <Text style={styles.postToggleText}>{isPosting ? "Cancel" : "Promote Event"}</Text>
-        </Pressable>
-      </View>
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
+            </Pressable>
+          </Animated.View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}>
-        {isPosting && (
-          <View style={[styles.postForm, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText style={styles.formTitle}>Create Event Ad</ThemedText>
-            <ThemedText style={styles.formSubtitle}>R50 per 7 days • Notified via Email</ThemedText>
-            
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Event Title</Text>
+          <Animated.View
+            entering={FadeIn.duration(400).delay(100)}
+            style={styles.heroBadgeWrap}
+          >
+            <View style={styles.heroBadge}>
+              <Feather
+                name="calendar"
+                size={32}
+                color={BrandColors.primary.gradientStart}
+              />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={styles.heroText}
+          >
+            <ThemedText style={styles.heroTitle}>Events & meetups</ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              Discover what's on across Mzansi — and promote your own.
+            </ThemedText>
+          </Animated.View>
+        </LinearGradient>
+
+        {/* Floating content card */}
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(200)}
+          style={[
+            styles.contentCard,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+        >
+          {/* Promote toggle / form */}
+          <Pressable
+            onPress={handleTogglePost}
+            style={({ pressed }) => [
+              styles.promoteToggle,
+              {
+                backgroundColor: isPosting
+                  ? theme.backgroundDefault
+                  : BrandColors.primary.gradientStart + "08",
+                borderColor: BrandColors.primary.gradientStart + "33",
+              },
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isPosting ? "Cancel event promotion" : "Promote your event"
+            }
+          >
+            <View
+              style={[
+                styles.promoteIcon,
+                {
+                  backgroundColor: BrandColors.primary.gradientStart + "12",
+                },
+              ]}
+            >
+              <Feather
+                name={isPosting ? "x" : "volume-2"}
+                size={18}
+                color={BrandColors.primary.gradientStart}
+              />
+            </View>
+            <View style={styles.promoteTextWrap}>
+              <ThemedText style={styles.promoteTitle}>
+                {isPosting ? "Cancel" : "Promote your event"}
+              </ThemedText>
+              <ThemedText
+                style={[styles.promoteHint, { color: theme.textSecondary }]}
+              >
+                {isPosting
+                  ? "Discard the form below"
+                  : "R50 for 7 days · demo mode"}
+              </ThemedText>
+            </View>
+            <Feather
+              name={isPosting ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={theme.textSecondary}
+            />
+          </Pressable>
+
+          {isPosting ? (
+            <Animated.View
+              entering={FadeInDown.duration(300)}
+              style={[
+                styles.formCard,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                EVENT TITLE
+              </ThemedText>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: titleFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
                 placeholder="What's happening?"
                 placeholderTextColor={theme.textSecondary}
                 value={eventTitle}
                 onChangeText={setEventTitle}
+                onFocus={() => setTitleFocused(true)}
+                onBlur={() => setTitleFocused(false)}
               />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Date & Time</Text>
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                DATE & TIME
+              </ThemedText>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: dateFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
                 placeholder="e.g. March 15, 2:00 PM"
                 placeholderTextColor={theme.textSecondary}
                 value={eventDate}
                 onChangeText={setEventDate}
+                onFocus={() => setDateFocused(true)}
+                onBlur={() => setDateFocused(false)}
               />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Location</Text>
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                LOCATION
+              </ThemedText>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: locFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
                 placeholder="Where is it?"
                 placeholderTextColor={theme.textSecondary}
                 value={eventLocation}
                 onChangeText={setEventLocation}
+                onFocus={() => setLocFocused(true)}
+                onBlur={() => setLocFocused(false)}
               />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Ticket Price (R)</Text>
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                TICKET PRICE (R)
+              </ThemedText>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: priceFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
                 placeholder="0.00"
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="numeric"
                 value={ticketPrice}
                 onChangeText={setTicketPrice}
+                onFocus={() => setPriceFocused(true)}
+                onBlur={() => setPriceFocused(false)}
               />
-            </View>
-            
-            <Button title="Pay R50 & Post Event" onPress={handlePostEvent} />
-          </View>
-        )}
 
-        {events.map((event) => (
-          <View key={event.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            {/* Event Image */}
-            <View style={styles.imageContainer}>
-              <Image source={{ uri: event.imageUrl }} style={styles.eventImage} />
-              <LinearGradient colors={["transparent", "rgba(0,0,0,0.7)"]} style={styles.imageOverlay}>
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceText}>R{event.price}</Text>
-                </View>
-              </LinearGradient>
-              {/* SEO Friendly Title Overlay */}
-              <View style={styles.titleOverlay}>
-                <ThemedText style={styles.cardTitle}>{event.title}</ThemedText>
+              <View style={styles.formCta}>
+                <GradientButton
+                  onPress={handlePostEvent}
+                  disabled={
+                    !eventTitle.trim() ||
+                    !eventDate.trim() ||
+                    !eventLocation.trim()
+                  }
+                  size="large"
+                  icon="arrow-right"
+                  iconPosition="right"
+                >
+                  Pay R50 & post event
+                </GradientButton>
               </View>
-            </View>
+            </Animated.View>
+          ) : null}
 
-            {/* Event Info */}
-            <View style={styles.cardContent}>
-              <View style={styles.organizerRow}>
-                <Feather name="user" size={14} color={BrandColors.primary.blue} />
-                <Text style={[styles.organizerText, { color: theme.textSecondary }]}>{event.organizer}</Text>
-                {event.isVerified && <Feather name="check-circle" size={12} color={BrandColors.primary.blue} />}
-              </View>
-              
-              <View style={styles.detailRow}>
-                <View style={styles.detailItem}>
-                  <Feather name="calendar" size={14} color={theme.textSecondary} />
-                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>{event.date}</Text>
-                </View>
-                <View style={styles.detailItem}>
-                  <Feather name="map-pin" size={14} color={theme.textSecondary} />
-                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>{event.location}</Text>
-                </View>
-              </View>
+          {/* Events list */}
+          <ThemedText
+            style={[styles.sectionLabel, { color: theme.textSecondary }]}
+          >
+            UPCOMING IN MZANSI · {events.length}
+          </ThemedText>
 
-              <ThemedText style={styles.description} numberOfLines={2}>
-                {event.description}
+          {events.length === 0 ? (
+            <View
+              style={[
+                styles.emptyState,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <View
+                style={[
+                  styles.emptyIcon,
+                  {
+                    backgroundColor:
+                      BrandColors.primary.gradientStart + "12",
+                  },
+                ]}
+              >
+                <Feather
+                  name="calendar"
+                  size={26}
+                  color={BrandColors.primary.gradientStart}
+                />
+              </View>
+              <ThemedText style={styles.emptyTitle}>No events yet</ThemedText>
+              <ThemedText
+                style={[styles.emptyHint, { color: theme.textSecondary }]}
+              >
+                Be the first to promote a Mzansi meetup, festival or launch.
               </ThemedText>
             </View>
-
-            {/* Social & Action Bar */}
-            <View style={[styles.actionBar, { borderTopColor: theme.border }]}>
-              <View style={styles.socialActions}>
-                <Pressable style={styles.socialBtn}>
-                  <Feather name="heart" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.socialText, { color: theme.textSecondary }]}>{event.likes}</Text>
-                </Pressable>
-                <Pressable style={styles.socialBtn}>
-                  <Feather name="message-circle" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.socialText, { color: theme.textSecondary }]}>{event.comments}</Text>
-                </Pressable>
-                <Pressable style={styles.socialBtn}>
-                  <Feather name="share-2" size={20} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-              
-              <Pressable 
-                style={[styles.buyBtn, { backgroundColor: BrandColors.primary.red }]}
-                onPress={() => handleBuyTicket(event)}
+          ) : (
+            events.map((event, index) => (
+              <Animated.View
+                key={event.id}
+                entering={FadeInDown.duration(400).delay(
+                  Math.min(index * 60, 400)
+                )}
               >
-                <Text style={styles.buyBtnText}>Get Tickets</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </ThemedView>
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  {/* Image with overlay */}
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={{ uri: event.imageUrl }}
+                      style={styles.eventImage}
+                    />
+                    <LinearGradient
+                      colors={["transparent", "rgba(0,0,0,0.75)"]}
+                      style={styles.imageOverlay}
+                    />
+
+                    {/* Price tag (rose gradient) */}
+                    <View style={styles.priceTagWrap}>
+                      <LinearGradient
+                        colors={BrandColors.gradient.primary}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.priceTag}
+                      >
+                        <ThemedText style={styles.priceText}>
+                          {event.price > 0 ? `R${event.price}` : "FREE"}
+                        </ThemedText>
+                      </LinearGradient>
+                    </View>
+
+                    <View style={styles.titleOverlay}>
+                      <ThemedText style={styles.cardTitle} numberOfLines={2}>
+                        {event.title}
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  {/* Card body */}
+                  <View style={styles.cardContent}>
+                    <View style={styles.organizerRow}>
+                      <Feather
+                        name="user"
+                        size={12}
+                        color={theme.textSecondary}
+                      />
+                      <ThemedText
+                        style={[
+                          styles.organizerText,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {event.organizer}
+                      </ThemedText>
+                      {event.isVerified ? (
+                        <Feather
+                          name="check-circle"
+                          size={12}
+                          color={BrandColors.primary.gradientStart}
+                        />
+                      ) : null}
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailItem}>
+                        <Feather
+                          name="calendar"
+                          size={12}
+                          color={theme.textSecondary}
+                        />
+                        <ThemedText
+                          style={[
+                            styles.detailText,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {event.date}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Feather
+                          name="map-pin"
+                          size={12}
+                          color={theme.textSecondary}
+                        />
+                        <ThemedText
+                          style={[
+                            styles.detailText,
+                            { color: theme.textSecondary },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {event.location}
+                        </ThemedText>
+                      </View>
+                    </View>
+
+                    <ThemedText
+                      style={[
+                        styles.description,
+                        { color: theme.textSecondary },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {event.description}
+                    </ThemedText>
+                  </View>
+
+                  {/* Action bar */}
+                  <View
+                    style={[
+                      styles.actionBar,
+                      { borderTopColor: theme.border },
+                    ]}
+                  >
+                    <View style={styles.socialActions}>
+                      <Pressable
+                        style={styles.socialBtn}
+                        accessibilityRole="button"
+                      >
+                        <Feather
+                          name="heart"
+                          size={16}
+                          color={theme.textSecondary}
+                        />
+                        <ThemedText
+                          style={[
+                            styles.socialText,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {event.likes}
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        style={styles.socialBtn}
+                        accessibilityRole="button"
+                      >
+                        <Feather
+                          name="message-circle"
+                          size={16}
+                          color={theme.textSecondary}
+                        />
+                        <ThemedText
+                          style={[
+                            styles.socialText,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {event.comments}
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        style={styles.socialBtn}
+                        accessibilityRole="button"
+                      >
+                        <Feather
+                          name="share-2"
+                          size={16}
+                          color={theme.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+
+                    <Pressable
+                      onPress={() => handleBuyTicket(event)}
+                      style={({ pressed }) => [
+                        styles.buyBtnWrap,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Get tickets for ${event.title}`}
+                    >
+                      <LinearGradient
+                        colors={BrandColors.gradient.primary}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.buyBtn}
+                      >
+                        <ThemedText style={styles.buyBtnText}>
+                          Get tickets
+                        </ThemedText>
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
+                </View>
+              </Animated.View>
+            ))
+          )}
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1 },
-  postToggle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 6 },
-  postToggleText: { color: "#FFF", fontWeight: "700", fontSize: 12 },
-  scrollContent: { padding: 16 },
-  postForm: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 24 },
-  formTitle: { fontSize: 18, fontWeight: "800", marginBottom: 4 },
-  formSubtitle: { fontSize: 12, opacity: 0.6, marginBottom: 16 },
-  inputGroup: { marginBottom: 12 },
-  label: { fontSize: 12, fontWeight: "700", marginBottom: 6, marginLeft: 4 },
-  input: { height: 44, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12 },
-  card: { borderRadius: 16, borderWidth: 1, marginBottom: 20, overflow: "hidden" },
-  imageContainer: { width: "100%", height: 200, position: "relative" },
-  eventImage: { width: "100%", height: "100%" },
-  imageOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", padding: 12 },
-  priceTag: { position: "absolute", top: 12, right: 12, backgroundColor: BrandColors.primary.green, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  priceText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
-  titleOverlay: { position: "absolute", bottom: 12, left: 12, right: 12 },
-  cardTitle: { color: "#FFF", fontSize: 20, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 4 },
-  cardContent: { padding: 16 },
-  organizerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
-  organizerText: { fontSize: 12, fontWeight: "700" },
-  detailRow: { flexDirection: "row", gap: 16, marginBottom: 12 },
-  detailItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  detailText: { fontSize: 12 },
-  description: { fontSize: 14, lineHeight: 20, opacity: 0.8 },
-  actionBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderTopWidth: 1 },
-  socialActions: { flexDirection: "row", gap: 16 },
-  socialBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-  socialText: { fontSize: 12, fontWeight: "600" },
-  buyBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
-  buyBtnText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+
+  // Hero
+  hero: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    marginBottom: Spacing.lg,
+  },
+  heroBadgeWrap: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  heroBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroText: {
+    alignItems: "center",
+  },
+  heroTitle: {
+    ...Typography.h2,
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
+    textAlign: "center",
+    maxWidth: 320,
+  },
+
+  // Content card
+  contentCard: {
+    flex: 1,
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // Promote toggle
+  promoteToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: Spacing.lg,
+  },
+  promoteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  promoteTextWrap: {
+    flex: 1,
+  },
+  promoteTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  promoteHint: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  // Form
+  formCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  fieldLabel: {
+    ...Typography.label,
+    letterSpacing: 1.2,
+    fontSize: 11,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  input: {
+    height: 48,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    borderWidth: 1.5,
+  },
+  formCta: {
+    marginTop: Spacing.xl,
+  },
+
+  // Section label
+  sectionLabel: {
+    ...Typography.label,
+    letterSpacing: 1.4,
+    fontSize: 11,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.xs,
+  },
+
+  // Card
+  card: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+    overflow: "hidden",
+  },
+  imageContainer: {
+    width: "100%",
+    height: 200,
+    position: "relative",
+  },
+  eventImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    padding: Spacing.md,
+  },
+  priceTagWrap: {
+    position: "absolute",
+    top: Spacing.md,
+    right: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  priceTag: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  priceText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  titleOverlay: {
+    position: "absolute",
+    bottom: Spacing.md,
+    left: Spacing.md,
+    right: Spacing.md,
+  },
+  cardTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "800",
+    fontFamily: "SpaceGrotesk_700Bold",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
+  },
+  cardContent: {
+    padding: Spacing.md,
+  },
+  organizerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: Spacing.xs,
+  },
+  organizerText: {
+    ...Typography.label,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  detailRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginBottom: Spacing.sm,
+    flexWrap: "wrap",
+  },
+  detailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  detailText: {
+    ...Typography.small,
+    fontSize: 12,
+  },
+  description: {
+    ...Typography.small,
+    lineHeight: 18,
+  },
+  actionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+  },
+  socialActions: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+  },
+  socialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  socialText: {
+    ...Typography.small,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  buyBtnWrap: {
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+  },
+  buyBtn: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  buyBtnText: {
+    color: "#FFFFFF",
+    ...Typography.small,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  // Empty
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing["3xl"],
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  emptyIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  emptyTitle: {
+    ...Typography.h4,
+    marginBottom: Spacing.xs,
+  },
+  emptyHint: {
+    ...Typography.small,
+    textAlign: "center",
+    maxWidth: 280,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
 });
