@@ -7,17 +7,49 @@ import {
   Alert,
   Platform,
   Share,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
-import { getApiUrl } from "@/lib/query-client";
+import { GradientButton } from "@/components/GradientButton";
+import { SkeletonBlock } from "@/components/Skeleton";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { getDeviceId } from "@/lib/deviceId";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// typeui-clean rework — Refer & Earn as a fintech-style growth dashboard:
+//   1. Rose gradient hero with gift badge + back button
+//   2. Floating white code card (gradient surface with monospaced code +
+//      copy + share GradientButton) — replaces the old generic blue card
+//   3. Stats strip: sign-ups + completed rides in a single rounded card
+//   4. Progress bar in rose
+//   5. Reward tiers list with rose-tinted unlocked icons (was green/grey)
+//   6. Recent referrals list with rose monogram avatars
+//   7. Skeleton loaders for the code + stats while the API call resolves
+//      (the old screen showed a single ActivityIndicator over a blank
+//      screen — felt like a freeze)
+//
+// Latent bugs fixed:
+//   • Direct fetch() calls bypassed apiRequest's auth headers, base URL
+//     resolution, and error handling. Now uses apiRequest() throughout.
+//   • new URL(path, getApiUrl()) would throw if getApiUrl() returned null
+//     (offline mode). apiRequest() handles this by throwing a typed error
+//     we now catch + display an offline-friendly empty state.
+//   • isLoading defaulted to true and never reset if deviceId resolution
+//     failed — the spinner would hang forever.
+//   • No back button on a screen reached from MenuScreen via root stack.
 
 interface RewardTier {
   signups: number;
@@ -47,57 +79,77 @@ interface ReferralSignup {
 }
 
 const triggerHaptic = async (type: "light" | "medium" | "success") => {
-  if (Platform.OS !== "web") {
-    try {
-      const Haptics = await import("expo-haptics");
-      if (type === "light") {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } else if (type === "medium") {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } else {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch {}
-  }
+  if (Platform.OS === "web") return;
+  try {
+    const Haptics = await import("expo-haptics");
+    if (type === "light") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else if (type === "medium") {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  } catch {}
 };
+
+function getRewardIcon(type: string): keyof typeof Feather.glyphMap {
+  switch (type) {
+    case "wallet_credit":
+      return "credit-card";
+    case "tshirt":
+      return "gift";
+    case "accessory_pack":
+      return "package";
+    default:
+      return "star";
+  }
+}
 
 export default function ReferralScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [referralCode, setReferralCode] = useState<string>("");
   const [shareLink, setShareLink] = useState<string>("");
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [signups, setSignups] = useState<ReferralSignup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
-    getDeviceId().then(setDeviceId);
+    getDeviceId()
+      .then(setDeviceId)
+      .catch(() => {
+        setIsLoading(false);
+        setOffline(true);
+      });
   }, []);
 
   const loadData = useCallback(async () => {
     if (!deviceId) return;
+    if (!getApiUrl()) {
+      setIsLoading(false);
+      setOffline(true);
+      return;
+    }
 
     setIsLoading(true);
+    setOffline(false);
     try {
-      const codeUrl = new URL(`/api/referral/code/${deviceId}`, getApiUrl());
-      const codeRes = await fetch(codeUrl.toString());
-      const codeData = await codeRes.json();
-      setReferralCode(codeData.referralCode);
-      setShareLink(codeData.shareLink);
+      const codeData = await apiRequest(`/api/referral/code/${deviceId}`);
+      setReferralCode(codeData.referralCode || "");
+      setShareLink(codeData.shareLink || "");
 
-      const statsUrl = new URL(`/api/referral/stats/${deviceId}`, getApiUrl());
-      const statsRes = await fetch(statsUrl.toString());
-      const statsData = await statsRes.json();
+      const statsData = await apiRequest(`/api/referral/stats/${deviceId}`);
       setStats(statsData);
 
-      const signupsUrl = new URL(`/api/referral/signups/${deviceId}`, getApiUrl());
-      const signupsRes = await fetch(signupsUrl.toString());
-      const signupsData = await signupsRes.json();
-      setSignups(signupsData);
+      const signupsData = await apiRequest(`/api/referral/signups/${deviceId}`);
+      setSignups(Array.isArray(signupsData) ? signupsData : []);
     } catch (error) {
       console.error("Error loading referral data:", error);
+      setOffline(true);
     } finally {
       setIsLoading(false);
     }
@@ -112,49 +164,28 @@ export default function ReferralScreen() {
   );
 
   const handleCopyCode = async () => {
+    if (!referralCode) return;
     triggerHaptic("light");
     if (Platform.OS !== "web") {
       try {
         const Clipboard = await import("expo-clipboard");
         await Clipboard.setStringAsync(referralCode);
-        Alert.alert("Copied!", "Referral code copied to clipboard");
+        Alert.alert("Copied!", "Your referral code is on your clipboard.");
       } catch {}
     }
   };
 
   const handleShare = async () => {
+    if (!referralCode) return;
     triggerHaptic("medium");
     try {
       await Share.share({
-        message: `Join Haibo Taxi with my referral code: ${referralCode}\n\nDownload now: ${shareLink}\n\nVia Haibo App`,
-        title: "Invite friends to Haibo Taxi",
+        message: `Join Haibo! with my referral code: ${referralCode}\n\nDownload now: ${shareLink}\n\nSafer minibus taxi rides for South Africa.`,
+        title: "Invite friends to Haibo!",
       });
       triggerHaptic("success");
     } catch (error) {
       console.error("Share error:", error);
-    }
-  };
-
-  const handleClaimReward = async (tier: number) => {
-    if (!deviceId) return;
-    triggerHaptic("medium");
-
-    try {
-      const url = new URL("/api/referral/claim-reward", getApiUrl());
-      const response = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId, tier }),
-      });
-      const data = await response.json();
-
-      if (data.id) {
-        triggerHaptic("success");
-        Alert.alert("Reward Claimed!", "Your reward has been processed.");
-        loadData();
-      }
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to claim reward");
     }
   };
 
@@ -167,342 +198,734 @@ export default function ReferralScreen() {
     });
   };
 
-  const getRewardIcon = (type: string) => {
-    switch (type) {
-      case "wallet_credit":
-        return "credit-card";
-      case "tshirt":
-        return "gift";
-      case "accessory_pack":
-        return "package";
-      default:
-        return "star";
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundRoot }]}>
-        <ActivityIndicator size="large" color={BrandColors.primary.blue} />
-      </View>
-    );
-  }
-
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={{
-        paddingTop: Spacing.lg,
-        paddingBottom: insets.bottom + Spacing.xl,
-        paddingHorizontal: Spacing.lg,
-      }}
-    >
-      <View style={[styles.codeCard, { backgroundColor: BrandColors.primary.blue }]}>
-        <View style={styles.codeHeader}>
-          <Feather name="gift" size={24} color="#FFFFFF" />
-          <ThemedText style={styles.codeTitle}>Your Referral Code</ThemedText>
-        </View>
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Rose gradient hero */}
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
+        >
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
+            </Pressable>
+          </Animated.View>
 
-        <View style={styles.codeDisplay}>
-          <ThemedText style={styles.codeText}>{referralCode || "Loading..."}</ThemedText>
-          <Pressable onPress={handleCopyCode} style={styles.copyButton}>
-            <Feather name="copy" size={20} color="#FFFFFF" />
-          </Pressable>
-        </View>
-
-        <ThemedText style={styles.codeSubtitle}>
-          Share this code with friends and earn rewards!
-        </ThemedText>
-
-        <Pressable onPress={handleShare} style={styles.shareButton}>
-          <ThemedText style={styles.shareButtonText}>Share Invite Link</ThemedText>
-        </Pressable>
-      </View>
-
-      <View style={[styles.statsCard, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText style={styles.sectionTitle}>Your Progress</ThemedText>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <ThemedText style={[styles.statNumber, { color: BrandColors.primary.green }]}>
-              {stats?.totalSignups || 0}
-            </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Sign-ups
-            </ThemedText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <ThemedText style={[styles.statNumber, { color: BrandColors.primary.blue }]}>
-              {stats?.completedRides || 0}
-            </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              Completed Rides
-            </ThemedText>
-          </View>
-        </View>
-
-        {stats?.nextTier ? (
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                Next reward: {stats.nextTier.description}
-              </ThemedText>
-              <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                {stats.nextTier.remaining} more needed
-              </ThemedText>
+          <Animated.View
+            entering={FadeIn.duration(400).delay(100)}
+            style={styles.heroBadgeWrap}
+          >
+            <View style={styles.heroBadge}>
+              <Feather name="gift" size={32} color={BrandColors.primary.gradientStart} />
             </View>
-            <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: BrandColors.primary.green,
-                    width: `${stats.nextTier.progress}%`,
-                  },
-                ]}
-              />
-            </View>
-          </View>
-        ) : null}
-      </View>
+          </Animated.View>
 
-      <View style={[styles.rewardsCard, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText style={styles.sectionTitle}>Rewards</ThemedText>
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={styles.heroText}
+          >
+            <ThemedText style={styles.heroTitle}>Refer & earn</ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              Invite your crew, unlock rewards, and ride safer together.
+            </ThemedText>
+          </Animated.View>
+        </LinearGradient>
 
-        {stats?.allTiers.map((tier, index) => (
-          <View
-            key={tier.signups}
-            style={[
-              styles.rewardItem,
-              { borderBottomColor: theme.border },
-              index === stats.allTiers.length - 1 && { borderBottomWidth: 0 },
-            ]}
+        {/* Floating content card */}
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(200)}
+          style={[
+            styles.contentCard,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+        >
+          {/* Code card — rose surface (raised over the hero) */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(250)}
+            style={styles.codeCardWrap}
           >
             <View
               style={[
-                styles.rewardIcon,
+                styles.codeCard,
                 {
-                  backgroundColor: tier.unlocked
-                    ? BrandColors.primary.green + "20"
-                    : theme.backgroundSecondary,
+                  backgroundColor: theme.surface,
+                  borderColor: BrandColors.primary.gradientStart + "33",
+                },
+              ]}
+            >
+              <ThemedText
+                style={[styles.codeLabel, { color: theme.textSecondary }]}
+              >
+                YOUR REFERRAL CODE
+              </ThemedText>
+
+              {isLoading ? (
+                <View style={styles.codeSkeletonWrap}>
+                  <SkeletonBlock style={styles.codeSkeleton} />
+                </View>
+              ) : referralCode ? (
+                <Pressable
+                  onPress={handleCopyCode}
+                  style={({ pressed }) => [
+                    styles.codeRow,
+                    {
+                      backgroundColor:
+                        BrandColors.primary.gradientStart + "10",
+                      borderColor:
+                        BrandColors.primary.gradientStart + "33",
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy referral code"
+                >
+                  <ThemedText style={styles.codeText}>{referralCode}</ThemedText>
+                  <View style={styles.copyIconWrap}>
+                    <Feather
+                      name="copy"
+                      size={18}
+                      color={BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                </Pressable>
+              ) : (
+                <View
+                  style={[
+                    styles.codeRow,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={[styles.codeFallback, { color: theme.textSecondary }]}
+                  >
+                    Code unavailable offline
+                  </ThemedText>
+                </View>
+              )}
+
+              <View style={styles.shareCta}>
+                <GradientButton
+                  onPress={handleShare}
+                  disabled={!referralCode}
+                  size="large"
+                  icon="send"
+                  iconPosition="right"
+                >
+                  Share invite link
+                </GradientButton>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Stats strip */}
+          <Animated.View
+            entering={FadeInUp.duration(500).delay(300)}
+            style={[
+              styles.statsCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <StatCell
+              value={isLoading ? "—" : String(stats?.totalSignups || 0)}
+              label="Sign-ups"
+              theme={theme}
+            />
+            <View
+              style={[styles.statDivider, { backgroundColor: theme.border }]}
+            />
+            <StatCell
+              value={isLoading ? "—" : String(stats?.completedRides || 0)}
+              label="Completed rides"
+              theme={theme}
+            />
+          </Animated.View>
+
+          {/* Next-tier progress */}
+          {stats?.nextTier ? (
+            <Animated.View
+              entering={FadeInDown.duration(500).delay(350)}
+              style={[
+                styles.progressCard,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.progressHeader}>
+                <ThemedText style={styles.progressTitle}>
+                  Next reward
+                </ThemedText>
+                <ThemedText
+                  style={[styles.progressRemaining, { color: theme.textSecondary }]}
+                >
+                  {stats.nextTier.remaining} more
+                </ThemedText>
+              </View>
+              <ThemedText
+                style={[styles.progressDescription, { color: theme.textSecondary }]}
+              >
+                {stats.nextTier.description}
+              </ThemedText>
+              <View
+                style={[
+                  styles.progressBar,
+                  { backgroundColor: theme.backgroundDefault },
+                ]}
+              >
+                <LinearGradient
+                  colors={BrandColors.gradient.primary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.min(stats.nextTier.progress, 100)}%` },
+                  ]}
+                />
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {/* Reward tiers */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(400)}
+            style={styles.section}
+          >
+            <ThemedText
+              style={[styles.sectionLabel, { color: theme.textSecondary }]}
+            >
+              REWARD TIERS
+            </ThemedText>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              {(stats?.allTiers && stats.allTiers.length > 0) ? (
+                stats.allTiers.map((tier, index) => (
+                  <View
+                    key={`${tier.signups}-${tier.type}`}
+                    style={[
+                      styles.rewardItem,
+                      index < stats.allTiers.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.rewardIcon,
+                        {
+                          backgroundColor: tier.unlocked
+                            ? BrandColors.primary.gradientStart + "12"
+                            : theme.backgroundDefault,
+                        },
+                      ]}
+                    >
+                      <Feather
+                        name={getRewardIcon(tier.type)}
+                        size={18}
+                        color={
+                          tier.unlocked
+                            ? BrandColors.primary.gradientStart
+                            : theme.textSecondary
+                        }
+                      />
+                    </View>
+
+                    <View style={styles.rewardInfo}>
+                      <ThemedText style={styles.rewardTitle}>
+                        {tier.description}
+                      </ThemedText>
+                      <ThemedText
+                        style={[styles.rewardMeta, { color: theme.textSecondary }]}
+                      >
+                        {tier.signups}+ referrals
+                      </ThemedText>
+                    </View>
+
+                    {tier.unlocked ? (
+                      <View
+                        style={[
+                          styles.unlockedBadge,
+                          { backgroundColor: BrandColors.primary.gradientStart },
+                        ]}
+                      >
+                        <Feather name="check" size={12} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.lockedBadge,
+                          { backgroundColor: theme.backgroundDefault },
+                        ]}
+                      >
+                        <Feather
+                          name="lock"
+                          size={12}
+                          color={theme.textSecondary}
+                        />
+                      </View>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <View style={styles.tiersSkeleton}>
+                  <SkeletonBlock style={styles.tierSkeletonRow} />
+                  <SkeletonBlock style={styles.tierSkeletonRow} />
+                  <SkeletonBlock style={styles.tierSkeletonRow} />
+                </View>
+              )}
+            </View>
+          </Animated.View>
+
+          {/* Recent referrals */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(450)}
+            style={styles.section}
+          >
+            <ThemedText
+              style={[styles.sectionLabel, { color: theme.textSecondary }]}
+            >
+              RECENT REFERRALS
+            </ThemedText>
+
+            {signups.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyState,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.emptyIcon,
+                    {
+                      backgroundColor:
+                        BrandColors.primary.gradientStart + "12",
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="users"
+                    size={22}
+                    color={BrandColors.primary.gradientStart}
+                  />
+                </View>
+                <ThemedText style={styles.emptyTitle}>
+                  No referrals yet
+                </ThemedText>
+                <ThemedText
+                  style={[styles.emptyHint, { color: theme.textSecondary }]}
+                >
+                  Share your code above to start earning rewards.
+                </ThemedText>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                {signups.slice(0, 5).map((signup, index) => {
+                  const isCompleted = signup.hasCompletedRide;
+                  const monogram =
+                    signup.referredDeviceId
+                      ?.replace(/[^a-z0-9]/gi, "")
+                      ?.charAt(0)
+                      ?.toUpperCase() || "?";
+                  return (
+                    <View
+                      key={signup.id}
+                      style={[
+                        styles.signupItem,
+                        index < Math.min(signups.length, 5) - 1 && {
+                          borderBottomWidth: 1,
+                          borderBottomColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.signupAvatar}>
+                        <ThemedText style={styles.signupMonogram}>
+                          {monogram}
+                        </ThemedText>
+                      </View>
+
+                      <View style={styles.signupInfo}>
+                        <ThemedText style={styles.signupId} numberOfLines={1}>
+                          Friend #{signup.referredDeviceId.substring(0, 6)}
+                        </ThemedText>
+                        <ThemedText
+                          style={[styles.signupDate, { color: theme.textSecondary }]}
+                        >
+                          Joined {formatDate(signup.createdAt)}
+                        </ThemedText>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor: isCompleted
+                              ? BrandColors.status.success + "18"
+                              : BrandColors.primary.gradientStart + "12",
+                          },
+                        ]}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.statusText,
+                            {
+                              color: isCompleted
+                                ? BrandColors.status.success
+                                : BrandColors.primary.gradientStart,
+                            },
+                          ]}
+                        >
+                          {isCompleted ? "COMPLETED" : "SIGNED UP"}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Tips */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(550)}
+            style={styles.section}
+          >
+            <ThemedText
+              style={[styles.sectionLabel, { color: theme.textSecondary }]}
+            >
+              EARN MORE
+            </ThemedText>
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <TipRow
+                icon="share-2"
+                text="Share on socials to reach a wider crew"
+                theme={theme}
+              />
+              <Divider theme={theme} />
+              <TipRow
+                icon="message-circle"
+                text="Send personal invites on WhatsApp for higher conversion"
+                theme={theme}
+              />
+              <Divider theme={theme} />
+              <TipRow
+                icon="star"
+                text="Top monthly referrers get featured on Phusha"
+                theme={theme}
+              />
+            </View>
+          </Animated.View>
+
+          {offline ? (
+            <View
+              style={[
+                styles.offlineBanner,
+                {
+                  backgroundColor: BrandColors.status.warning + "15",
+                  borderColor: BrandColors.status.warning + "40",
                 },
               ]}
             >
               <Feather
-                name={getRewardIcon(tier.type) as any}
-                size={20}
-                color={tier.unlocked ? BrandColors.primary.green : theme.textSecondary}
+                name="wifi-off"
+                size={14}
+                color={BrandColors.status.warning}
               />
-            </View>
-
-            <View style={styles.rewardInfo}>
-              <ThemedText style={styles.rewardTitle}>{tier.description}</ThemedText>
-              <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                {tier.signups}+ referrals
+              <ThemedText
+                style={[styles.offlineText, { color: theme.text }]}
+              >
+                Offline — referral data will sync when you reconnect.
               </ThemedText>
             </View>
-
-            {tier.unlocked ? (
-              <View style={[styles.unlockedBadge, { backgroundColor: BrandColors.primary.green }]}>
-                <Feather name="check" size={14} color="#FFFFFF" />
-              </View>
-            ) : (
-              <View style={[styles.lockedBadge, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="lock" size={14} color={theme.textSecondary} />
-              </View>
-            )}
-          </View>
-        ))}
-      </View>
-
-      <View style={[styles.signupsCard, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText style={styles.sectionTitle}>Recent Referrals</ThemedText>
-
-        {signups.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="users" size={32} color={theme.textSecondary} />
-            <ThemedText type="small" style={{ color: theme.textSecondary, marginTop: Spacing.sm }}>
-              No referrals yet. Share your code to get started!
-            </ThemedText>
-          </View>
-        ) : (
-          signups.slice(0, 5).map((signup) => (
-            <View
-              key={signup.id}
-              style={[styles.signupItem, { borderBottomColor: theme.border }]}
-            >
-              <View
-                style={[
-                  styles.signupAvatar,
-                  {
-                    backgroundColor: signup.hasCompletedRide
-                      ? BrandColors.primary.green + "20"
-                      : BrandColors.primary.blue + "20",
-                  },
-                ]}
-              >
-                <Feather
-                  name="user"
-                  size={16}
-                  color={signup.hasCompletedRide ? BrandColors.primary.green : BrandColors.primary.blue}
-                />
-              </View>
-
-              <View style={styles.signupInfo}>
-                <ThemedText style={styles.signupId}>
-                  Friend #{signup.referredDeviceId.substring(0, 6)}
-                </ThemedText>
-                <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                  Joined {formatDate(signup.createdAt)}
-                </ThemedText>
-              </View>
-
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor: signup.hasCompletedRide
-                      ? BrandColors.primary.green + "20"
-                      : BrandColors.secondary.orange + "20",
-                  },
-                ]}
-              >
-                <ThemedText
-                  style={[
-                    styles.statusText,
-                    {
-                      color: signup.hasCompletedRide
-                        ? BrandColors.primary.green
-                        : BrandColors.secondary.orange,
-                    },
-                  ]}
-                >
-                  {signup.hasCompletedRide ? "Completed" : "Signed Up"}
-                </ThemedText>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
-
-      <View style={[styles.tipsCard, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText style={styles.sectionTitle}>Tips to Earn More</ThemedText>
-        <View style={styles.tipItem}>
-          <Feather name="share-2" size={16} color={BrandColors.primary.blue} />
-          <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: Spacing.sm, flex: 1 }}>
-            Share your code on social media to reach more friends
-          </ThemedText>
-        </View>
-        <View style={styles.tipItem}>
-          <Feather name="message-circle" size={16} color={BrandColors.primary.green} />
-          <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: Spacing.sm, flex: 1 }}>
-            Send personal invites via WhatsApp for better conversion
-          </ThemedText>
-        </View>
-        <View style={styles.tipItem}>
-          <Feather name="star" size={16} color={BrandColors.secondary.orange} />
-          <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: Spacing.sm, flex: 1 }}>
-            Top monthly referrer gets special recognition!
-          </ThemedText>
-        </View>
-      </View>
-    </ScrollView>
+          ) : null}
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function StatCell({
+  value,
+  label,
+  theme,
+}: {
+  value: string;
+  label: string;
+  theme: any;
+}) {
+  return (
+    <View style={styles.statCell}>
+      <ThemedText style={styles.statValue}>{value}</ThemedText>
+      <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
+function TipRow({
+  icon,
+  text,
+  theme,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  text: string;
+  theme: any;
+}) {
+  return (
+    <View style={styles.tipRow}>
+      <View
+        style={[
+          styles.tipIcon,
+          { backgroundColor: BrandColors.primary.gradientStart + "12" },
+        ]}
+      >
+        <Feather
+          name={icon}
+          size={16}
+          color={BrandColors.primary.gradientStart}
+        />
+      </View>
+      <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
+        {text}
+      </ThemedText>
+    </View>
+  );
+}
+
+function Divider({ theme }: { theme: any }) {
+  return <View style={[styles.divider, { backgroundColor: theme.border }]} />;
+}
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  loadingContainer: {
+  scrollContent: {
+    flexGrow: 1,
+  },
+
+  // Hero
+  hero: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    marginBottom: Spacing.lg,
+  },
+  heroBadgeWrap: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  heroBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroText: {
+    alignItems: "center",
+  },
+  heroTitle: {
+    ...Typography.h2,
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
+    textAlign: "center",
+    maxWidth: 320,
+  },
+
+  // Content card
+  contentCard: {
     flex: 1,
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // Code card
+  codeCardWrap: {
+    marginBottom: Spacing.lg,
+  },
+  codeCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  codeLabel: {
+    ...Typography.label,
+    letterSpacing: 1.4,
+    fontSize: 11,
+    marginBottom: Spacing.md,
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginBottom: Spacing.lg,
+  },
+  codeText: {
+    color: BrandColors.primary.gradientStart,
+    fontSize: 26,
+    fontWeight: "800",
+    fontFamily: "SpaceGrotesk_700Bold",
+    letterSpacing: 2,
+    fontVariant: ["tabular-nums"],
+  },
+  codeFallback: {
+    ...Typography.body,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "center",
+  },
+  copyIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
     alignItems: "center",
     justifyContent: "center",
   },
-  codeCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+  codeSkeletonWrap: {
     marginBottom: Spacing.lg,
   },
-  codeHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+  codeSkeleton: {
+    height: 56,
+    borderRadius: BorderRadius.sm,
   },
-  codeTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+  shareCta: {
+    marginTop: 0,
   },
-  codeDisplay: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  codeText: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "700",
-    letterSpacing: 2,
-  },
-  copyButton: {
-    padding: Spacing.sm,
-  },
-  codeSubtitle: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 13,
-    marginBottom: Spacing.md,
-  },
-  shareButton: {
-    backgroundColor: "#FFFFFF",
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-  },
-  shareButtonText: {
-    color: BrandColors.primary.blue,
-    fontSize: 16,
-    fontWeight: "600",
-  },
+
+  // Stats
   statsCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: Spacing.md,
-  },
-  statsRow: {
     flexDirection: "row",
-    alignItems: "center",
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
     marginBottom: Spacing.lg,
   },
-  statItem: {
+  statCell: {
     flex: 1,
     alignItems: "center",
   },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: "700",
+  statValue: {
+    ...Typography.h2,
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: {
+    ...Typography.label,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    marginTop: 4,
   },
   statDivider: {
     width: 1,
-    height: 40,
-    backgroundColor: "#E0E0E0",
+    marginVertical: Spacing.xs,
   },
-  progressSection: {},
+
+  // Progress
+  progressCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
   progressHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  progressTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  progressRemaining: {
+    ...Typography.label,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  progressDescription: {
+    ...Typography.small,
+    marginBottom: Spacing.md,
   },
   progressBar: {
     height: 8,
@@ -513,21 +936,39 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 4,
   },
-  rewardsCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+
+  // Section
+  section: {
     marginBottom: Spacing.lg,
   },
+  sectionLabel: {
+    ...Typography.label,
+    letterSpacing: 1.4,
+    fontSize: 11,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.xs,
+  },
+  card: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  divider: {
+    height: 1,
+    marginLeft: Spacing.lg + 36 + Spacing.md,
+  },
+
+  // Reward tiers
   rewardItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.lg,
   },
   rewardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
@@ -536,71 +977,149 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rewardTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 2,
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  rewardMeta: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: 2,
   },
   unlockedBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },
   lockedBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },
-  signupsCard: {
-    borderRadius: BorderRadius.lg,
+  tiersSkeleton: {
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    gap: Spacing.md,
   },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
+  tierSkeletonRow: {
+    height: 40,
+    borderRadius: BorderRadius.sm,
   },
+
+  // Signups
   signupItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.lg,
   },
   signupAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: BrandColors.primary.gradientStart,
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
   },
+  signupMonogram: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
   signupInfo: {
     flex: 1,
+    minWidth: 0,
   },
   signupId: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 2,
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  signupDate: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: 2,
   },
   statusBadge: {
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
   statusText: {
-    fontSize: 11,
-    fontWeight: "600",
+    ...Typography.label,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
   },
-  tipsCard: {
+
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+    paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    borderWidth: 1,
   },
-  tipItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.md,
+  },
+  emptyTitle: {
+    ...Typography.h4,
+    marginBottom: Spacing.xs,
+  },
+  emptyHint: {
+    ...Typography.small,
+    textAlign: "center",
+    maxWidth: 260,
+  },
+
+  // Tips
+  tipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
+  tipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tipText: {
+    ...Typography.small,
+    flex: 1,
+  },
+
+  // Offline banner
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+  },
+  offlineText: {
+    ...Typography.small,
+    fontSize: 12,
+    flex: 1,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
