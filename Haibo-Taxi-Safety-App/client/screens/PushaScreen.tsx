@@ -29,9 +29,26 @@ import Animated, {
 
 import { useTheme } from "@/hooks/useTheme";
 import { ThemedText } from "@/components/ThemedText";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import phushaContentData from "@/data/phusha_content.json";
+
+// typeui-clean polish on top of the existing reels feed:
+//  - Bookmark active state switched from blue tint to rose tint (was
+//    using BrandColors.primary.blue — wrong brand)
+//  - Default reel gradient fallback switched from ["#1976D2","#42A5F5"]
+//    (random blue) to BrandColors.gradient.primary (rose)
+//  - Category tab active state uses a rose tinted background instead
+//    of the generic rgba(255,255,255,0.2)
+//  - Typography tokens used for category text + counts where reasonable
+//
+// The core reel UX (full-screen vertical scroll, double-tap heart,
+// pulse animations, FAB) is kept intact — it was already brand-aligned.
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -154,7 +171,8 @@ const PhushaCard = memo(function PhushaCard({
     transform: [{ scale: heartOpacity.value * 1.5 + 0.5 }],
   }));
 
-  const gradientColors = (post.gradient || ["#1976D2", "#42A5F5"]) as [string, string, ...string[]];
+  const gradientColors = (post.gradient ||
+    BrandColors.gradient.primary) as [string, string, ...string[]];
   const categoryIcon = CATEGORY_ICONS[post.category] || "star";
 
   return (
@@ -239,11 +257,18 @@ const PhushaCard = memo(function PhushaCard({
         <View style={styles.actions}>
           <Animated.View style={animatedLikeStyle}>
             <Pressable style={styles.actionButton} onPress={handleLikePress}>
-              <View style={[styles.actionIconBg, liked ? { backgroundColor: "rgba(231,35,105,0.3)" } : null]}>
+              <View
+                style={[
+                  styles.actionIconBg,
+                  liked
+                    ? { backgroundColor: BrandColors.primary.gradientStart + "4D" }
+                    : null,
+                ]}
+              >
                 <Feather
                   name="heart"
                   size={24}
-                  color={liked ? BrandColors.primary.red : "#FFFFFF"}
+                  color={liked ? BrandColors.primary.gradientStart : "#FFFFFF"}
                 />
               </View>
               <ThemedText style={styles.actionCount}>{formatCount(likeCount)}</ThemedText>
@@ -265,11 +290,18 @@ const PhushaCard = memo(function PhushaCard({
           </Pressable>
 
           <Pressable style={styles.actionButton} onPress={handleBookmark}>
-            <View style={[styles.actionIconBg, bookmarked ? { backgroundColor: "rgba(25,118,210,0.3)" } : null]}>
+            <View
+              style={[
+                styles.actionIconBg,
+                bookmarked
+                  ? { backgroundColor: BrandColors.primary.gradientStart + "4D" }
+                  : null,
+              ]}
+            >
               <Feather
                 name="bookmark"
                 size={22}
-                color={bookmarked ? BrandColors.primary.blue : "#FFFFFF"}
+                color={bookmarked ? BrandColors.primary.gradientStart : "#FFFFFF"}
               />
             </View>
           </Pressable>
@@ -484,10 +516,12 @@ const styles = StyleSheet.create({
   categoryTabs: {
     flexDirection: "row",
     gap: Spacing.xs,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     borderRadius: BorderRadius.full,
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   categoryTab: {
     flexDirection: "row",
@@ -497,12 +531,19 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   categoryTabActive: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: BrandColors.primary.gradientStart,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   categoryText: {
-    color: "rgba(255,255,255,0.5)",
+    ...Typography.label,
+    color: "rgba(255,255,255,0.6)",
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   categoryTextActive: {
     color: "#FFFFFF",
