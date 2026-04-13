@@ -1,21 +1,29 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
-  FlatList,
   TextInput,
   Pressable,
   StyleSheet,
   Alert,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
-import { Button } from "@/components/Button";
+import { GradientButton } from "@/components/GradientButton";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { EmergencyContact } from "@/lib/types";
 import {
   getEmergencyContacts,
@@ -23,18 +31,34 @@ import {
   removeEmergencyContact,
   generateId,
 } from "@/lib/storage";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// typeui-clean rework — emergency contacts as a calm, brand-aligned hub:
+//   1. Rose gradient header band with shield badge + clear copy
+//   2. Inline expanding "Add contact" form with LoginScreen-style inputs
+//      (rose focus borders, Typography tokens), wrapped in
+//      KeyboardAwareScrollView so the keyboard doesn't cover the form
+//   3. Contact rows with monogram avatars in rose tint, slide-in
+//      FadeInDown entries, swipe-free remove via a confirm Alert
+//   4. Empty state with rose-tinted users icon and friendly copy
+//   5. Drops the BrandColors.primary.blue active state on relationship
+//      pills — switches to canonical rose gradient
+//   6. Auto-format SA phone numbers (strip non-digits, max 10 chars)
 
 const RELATIONSHIPS = ["Family", "Friend", "Partner", "Colleague", "Other"];
 
 export default function EmergencyContactsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newRelationship, setNewRelationship] = useState("");
+  const [nameFocused, setNameFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   const loadContacts = useCallback(async () => {
     const savedContacts = await getEmergencyContacts();
@@ -47,13 +71,38 @@ export default function EmergencyContactsScreen() {
     }, [loadContacts])
   );
 
+  const triggerHaptic = (
+    type: "selection" | "success" | "error" | "medium" = "selection"
+  ) => {
+    if (Platform.OS === "web") return;
+    try {
+      if (type === "success") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (type === "error") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else if (type === "medium") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else {
+        Haptics.selectionAsync();
+      }
+    } catch {}
+  };
+
+  const resetForm = () => {
+    setIsAdding(false);
+    setNewName("");
+    setNewPhone("");
+    setNewRelationship("");
+  };
+
   const handleAddContact = async () => {
     if (!newName.trim() || !newPhone.trim() || !newRelationship) {
-      Alert.alert("Error", "Please fill in all fields");
+      triggerHaptic("error");
+      Alert.alert("Missing details", "Please fill in name, phone, and relationship.");
       return;
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    triggerHaptic("success");
 
     const contact: EmergencyContact = {
       id: generateId(),
@@ -64,23 +113,20 @@ export default function EmergencyContactsScreen() {
 
     await addEmergencyContact(contact);
     setContacts((prev) => [...prev, contact]);
-    setIsAdding(false);
-    setNewName("");
-    setNewPhone("");
-    setNewRelationship("");
+    resetForm();
   };
 
   const handleRemoveContact = (contact: EmergencyContact) => {
     Alert.alert(
-      "Remove Contact",
-      `Are you sure you want to remove ${contact.name}?`,
+      "Remove contact",
+      `Remove ${contact.name} from your emergency list?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            triggerHaptic("medium");
             await removeEmergencyContact(contact.id);
             setContacts((prev) => prev.filter((c) => c.id !== contact.id));
           },
@@ -89,280 +135,600 @@ export default function EmergencyContactsScreen() {
     );
   };
 
-  const renderContact = ({ item }: { item: EmergencyContact }) => (
-    <View style={[styles.contactCard, { backgroundColor: theme.backgroundDefault }]}>
-      <View style={styles.contactIcon}>
-        <Feather name="user" size={20} color={BrandColors.primary.red} />
-      </View>
-      <View style={styles.contactInfo}>
-        <ThemedText style={styles.contactName}>{item.name}</ThemedText>
-        <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          {item.relationship} - {item.phone}
-        </ThemedText>
-      </View>
-      <Pressable
-        style={styles.removeButton}
-        onPress={() => handleRemoveContact(item)}
-      >
-        <Feather name="trash-2" size={18} color={BrandColors.primary.red} />
-      </Pressable>
-    </View>
-  );
+  const handleStartAdding = () => {
+    triggerHaptic("selection");
+    setIsAdding(true);
+  };
+
+  const formatPhone = (text: string) => {
+    setNewPhone(text.replace(/[^\d+\s]/g, "").slice(0, 13));
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <View style={styles.headerInfo}>
-        <View style={[styles.infoCard, { backgroundColor: theme.backgroundDefault }]}>
-          <Feather name="shield" size={20} color={BrandColors.primary.red} />
-          <ThemedText type="small" style={{ color: theme.textSecondary, flex: 1, marginLeft: Spacing.sm }}>
-            Emergency contacts will be notified when you use the SOS button or
-            share your trip.
-          </ThemedText>
-        </View>
-      </View>
-
-      {isAdding ? (
-        <View style={[styles.addForm, { backgroundColor: theme.backgroundDefault }]}>
-          <ThemedText style={styles.formTitle}>Add New Contact</ThemedText>
-
-          <View style={styles.formField}>
-            <ThemedText type="small" style={styles.fieldLabel}>Name</ThemedText>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundRoot, color: theme.text, borderColor: theme.border }]}
-              placeholder="Contact name"
-              placeholderTextColor={theme.textSecondary}
-              value={newName}
-              onChangeText={setNewName}
-            />
-          </View>
-
-          <View style={styles.formField}>
-            <ThemedText type="small" style={styles.fieldLabel}>Phone Number</ThemedText>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundRoot, color: theme.text, borderColor: theme.border }]}
-              placeholder="e.g., 071 234 5678"
-              placeholderTextColor={theme.textSecondary}
-              value={newPhone}
-              onChangeText={setNewPhone}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.formField}>
-            <ThemedText type="small" style={styles.fieldLabel}>Relationship</ThemedText>
-            <View style={styles.relationshipGrid}>
-              {RELATIONSHIPS.map((rel) => (
-                <Pressable
-                  key={rel}
-                  style={[
-                    styles.relationshipButton,
-                    {
-                      backgroundColor:
-                        newRelationship === rel
-                          ? BrandColors.primary.blue
-                          : theme.backgroundRoot,
-                      borderColor:
-                        newRelationship === rel
-                          ? BrandColors.primary.blue
-                          : theme.border,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setNewRelationship(rel);
-                  }}
-                >
-                  <ThemedText
-                    style={[
-                      styles.relationshipText,
-                      { color: newRelationship === rel ? "#FFFFFF" : theme.text },
-                    ]}
-                  >
-                    {rel}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.formActions}>
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
+        ]}
+      >
+        {/* Rose gradient header — brand surface with back button */}
+        <View
+          style={[
+            styles.heroWrap,
+            { paddingTop: insets.top + Spacing.lg },
+          ]}
+        >
+          <Animated.View entering={FadeIn.duration(300)}>
             <Pressable
-              style={styles.cancelButton}
-              onPress={() => {
-                setIsAdding(false);
-                setNewName("");
-                setNewPhone("");
-                setNewRelationship("");
-              }}
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              <ThemedText style={{ color: theme.textSecondary }}>Cancel</ThemedText>
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
             </Pressable>
-            <Button
-              onPress={handleAddContact}
-              disabled={!newName.trim() || !newPhone.trim() || !newRelationship}
-              style={{ flex: 1 }}
-            >
-              Add Contact
-            </Button>
-          </View>
-        </View>
-      ) : null}
+          </Animated.View>
 
-      <FlatList
-        data={contacts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderContact}
-        contentContainerStyle={{
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
-        }}
-        ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Feather name="users" size={48} color={theme.textSecondary} />
-            <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-              No emergency contacts yet
+          <Animated.View
+            entering={FadeIn.duration(400).delay(100)}
+            style={styles.heroBadgeWrap}
+          >
+            <View style={styles.heroBadge}>
+              <Feather name="shield" size={32} color={BrandColors.primary.gradientStart} />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={styles.heroText}
+          >
+            <ThemedText style={styles.heroTitle}>Emergency contacts</ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              These people get an instant SMS with your live location when you trigger SOS.
             </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary, textAlign: "center" }}>
-              Add contacts who should be notified in case of emergency.
-            </ThemedText>
-          </View>
-        }
-        ListFooterComponent={
-          !isAdding ? (
-            <Pressable
-              style={[styles.addButton, { backgroundColor: theme.backgroundDefault }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setIsAdding(true);
-              }}
+          </Animated.View>
+        </View>
+
+        {/* Floating content card */}
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(200)}
+          style={[
+            styles.contentCard,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+        >
+          {/* Add form (inline) */}
+          {isAdding ? (
+            <Animated.View
+              entering={FadeInDown.duration(300)}
+              style={[
+                styles.formCard,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
             >
-              <Feather name="plus" size={20} color={BrandColors.primary.blue} />
-              <ThemedText style={[styles.addButtonText, { color: BrandColors.primary.blue }]}>
-                Add Emergency Contact
+              <View style={styles.formHeader}>
+                <ThemedText style={styles.formTitle}>New contact</ThemedText>
+                <Pressable
+                  onPress={resetForm}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Feather name="x" size={20} color={theme.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                FULL NAME
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: nameFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
+                placeholder="e.g. Mama Thandi"
+                placeholderTextColor={theme.textSecondary}
+                value={newName}
+                onChangeText={setNewName}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+              />
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                PHONE NUMBER
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: phoneFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
+                placeholder="071 234 5678"
+                placeholderTextColor={theme.textSecondary}
+                value={newPhone}
+                onChangeText={formatPhone}
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
+                keyboardType="phone-pad"
+              />
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
+                RELATIONSHIP
+              </ThemedText>
+              <View style={styles.relationshipGrid}>
+                {RELATIONSHIPS.map((rel) => {
+                  const active = newRelationship === rel;
+                  return (
+                    <Pressable
+                      key={rel}
+                      onPress={() => {
+                        triggerHaptic("selection");
+                        setNewRelationship(rel);
+                      }}
+                      style={({ pressed }) => [
+                        styles.relationshipPill,
+                        {
+                          backgroundColor: active
+                            ? BrandColors.primary.gradientStart + "15"
+                            : theme.backgroundDefault,
+                          borderColor: active
+                            ? BrandColors.primary.gradientStart
+                            : theme.border,
+                        },
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.relationshipText,
+                          {
+                            color: active
+                              ? BrandColors.primary.gradientStart
+                              : theme.text,
+                            fontWeight: active ? "700" : "500",
+                          },
+                        ]}
+                      >
+                        {rel}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.formCta}>
+                <GradientButton
+                  onPress={handleAddContact}
+                  disabled={!newName.trim() || !newPhone.trim() || !newRelationship}
+                  size="large"
+                  icon="check"
+                  iconPosition="right"
+                >
+                  Save contact
+                </GradientButton>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {/* Contact list */}
+          {contacts.length === 0 && !isAdding ? (
+            <Animated.View
+              entering={FadeIn.duration(400)}
+              style={styles.emptyState}
+            >
+              <View
+                style={[
+                  styles.emptyIcon,
+                  { backgroundColor: BrandColors.primary.gradientStart + "12" },
+                ]}
+              >
+                <Feather
+                  name="users"
+                  size={28}
+                  color={BrandColors.primary.gradientStart}
+                />
+              </View>
+              <ThemedText style={styles.emptyTitle}>No contacts yet</ThemedText>
+              <ThemedText
+                style={[styles.emptyHint, { color: theme.textSecondary }]}
+              >
+                Add the people you trust most. They'll be the first to know if you need help.
+              </ThemedText>
+            </Animated.View>
+          ) : null}
+
+          {contacts.length > 0 ? (
+            <View style={styles.contactList}>
+              <ThemedText
+                style={[styles.listLabel, { color: theme.textSecondary }]}
+              >
+                YOUR CONTACTS · {contacts.length}
+              </ThemedText>
+              {contacts.map((contact, index) => {
+                const monogram =
+                  contact.name?.trim()?.charAt(0)?.toUpperCase() || "?";
+                return (
+                  <Animated.View
+                    key={contact.id}
+                    entering={FadeInDown.duration(300).delay(
+                      Math.min(index * 40, 200)
+                    )}
+                  >
+                    <View
+                      style={[
+                        styles.contactCard,
+                        {
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.contactAvatar}>
+                        <ThemedText style={styles.contactMonogram}>
+                          {monogram}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.contactInfo}>
+                        <ThemedText style={styles.contactName} numberOfLines={1}>
+                          {contact.name}
+                        </ThemedText>
+                        <View style={styles.contactMeta}>
+                          <View
+                            style={[
+                              styles.relationshipChip,
+                              {
+                                backgroundColor:
+                                  BrandColors.primary.gradientStart + "12",
+                              },
+                            ]}
+                          >
+                            <ThemedText style={styles.relationshipChipText}>
+                              {contact.relationship}
+                            </ThemedText>
+                          </View>
+                          <ThemedText
+                            style={[
+                              styles.contactPhone,
+                              { color: theme.textSecondary },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {contact.phone}
+                          </ThemedText>
+                        </View>
+                      </View>
+                      <Pressable
+                        onPress={() => handleRemoveContact(contact)}
+                        hitSlop={10}
+                        style={({ pressed }) => [
+                          styles.removeButton,
+                          {
+                            backgroundColor: pressed
+                              ? BrandColors.status.emergency + "12"
+                              : "transparent",
+                          },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${contact.name}`}
+                      >
+                        <Feather
+                          name="trash-2"
+                          size={16}
+                          color={BrandColors.status.emergency}
+                        />
+                      </Pressable>
+                    </View>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {/* Add CTA — bottom anchor when not adding */}
+          {!isAdding ? (
+            <Pressable
+              onPress={handleStartAdding}
+              style={({ pressed }) => [
+                styles.addCtaButton,
+                {
+                  borderColor: BrandColors.primary.gradientStart,
+                  backgroundColor: BrandColors.primary.gradientStart + "08",
+                },
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Add emergency contact"
+            >
+              <Feather
+                name="plus-circle"
+                size={18}
+                color={BrandColors.primary.gradientStart}
+              />
+              <ThemedText
+                style={[
+                  styles.addCtaText,
+                  { color: BrandColors.primary.gradientStart },
+                ]}
+              >
+                Add emergency contact
               </ThemedText>
             </Pressable>
-          ) : null
-        }
-      />
+          ) : null}
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
 
+const HERO_HEIGHT = 280;
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  headerInfo: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+  scroll: {
+    flex: 1,
   },
-  infoCard: {
-    flexDirection: "row",
+  scrollContent: {
+    flexGrow: 1,
+  },
+
+  // Hero
+  heroWrap: {
+    backgroundColor: BrandColors.primary.gradientStart,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-  },
-  addForm: {
-    margin: Spacing.lg,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
     marginBottom: Spacing.lg,
   },
-  formField: {
-    marginBottom: Spacing.md,
+  heroBadgeWrap: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
   },
-  fieldLabel: {
-    fontWeight: "500",
+  heroBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroText: {
+    alignItems: "center",
+  },
+  heroTitle: {
+    ...Typography.h2,
+    color: "#FFFFFF",
+    textAlign: "center",
     marginBottom: Spacing.xs,
   },
-  input: {
-    height: 48,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    fontSize: 16,
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
+    textAlign: "center",
+    maxWidth: 320,
+  },
+
+  // Content card (floats over hero bottom)
+  contentCard: {
+    flex: 1,
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // Form
+  formCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
+    marginBottom: Spacing.xl,
+  },
+  formHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  formTitle: {
+    ...Typography.h4,
+  },
+  fieldLabel: {
+    ...Typography.label,
+    letterSpacing: 1.2,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  input: {
+    height: 52,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.lg,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    borderWidth: 1.5,
   },
   relationshipGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  relationshipButton: {
+  relationshipPill: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   relationshipText: {
-    fontSize: 13,
-    fontWeight: "500",
+    ...Typography.small,
   },
-  formActions: {
-    flexDirection: "row",
-    alignItems: "center",
+  formCta: {
     marginTop: Spacing.lg,
-    gap: Spacing.md,
   },
-  cancelButton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing["3xl"],
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  emptyTitle: {
+    ...Typography.h4,
+    marginBottom: Spacing.xs,
+  },
+  emptyHint: {
+    ...Typography.small,
+    textAlign: "center",
+    maxWidth: 280,
+  },
+
+  // Contact list
+  contactList: {
+    marginBottom: Spacing.lg,
+  },
+  listLabel: {
+    ...Typography.label,
+    letterSpacing: 1.2,
+    fontSize: 11,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.xs,
   },
   contactCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
   },
-  contactIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(211, 47, 47, 0.1)",
+  contactAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: BrandColors.primary.gradientStart,
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
   },
+  contactMonogram: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
   contactInfo: {
     flex: 1,
+    minWidth: 0,
   },
   contactName: {
-    fontWeight: "600",
-    marginBottom: 2,
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  contactMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  relationshipChip: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  relationshipChipText: {
+    ...Typography.label,
+    color: BrandColors.primary.gradientStart,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    fontWeight: "700",
+  },
+  contactPhone: {
+    ...Typography.small,
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+    flexShrink: 1,
   },
   removeButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: Spacing.sm,
   },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing["5xl"],
-    paddingHorizontal: Spacing.lg,
-  },
-  emptyText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  addButton: {
+
+  // Add CTA (dashed-look outline)
+  addCtaButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-    marginTop: Spacing.lg,
     gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginTop: Spacing.md,
   },
-  addButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
+  addCtaText: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
