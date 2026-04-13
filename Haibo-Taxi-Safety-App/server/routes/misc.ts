@@ -5,6 +5,7 @@ import {
   explorerProgress, fareSurveys, stopContributions,
   photoContributions, explorerLeaderboard,
   associations, notifications, referralCodes, referralSignups,
+  referralRewards,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
@@ -326,29 +327,176 @@ router.get("/notifications", authMiddleware, async (req: AuthRequest, res: Respo
 });
 
 // ============ REFERRALS ============
+//
+// Device-scoped referral system. All endpoints identify the user by deviceId
+// (not JWT), matching the client's expo-constants-based device identity.
 
-// GET /api/referral/:deviceId - Get or create referral code
-router.get("/referral/:deviceId", async (req, res: Response) => {
+interface RewardTierDef {
+  signups: number;
+  type: "wallet_credit" | "tshirt" | "accessory_pack";
+  description: string;
+}
+
+const REWARD_TIERS: RewardTierDef[] = [
+  { signups: 3, type: "wallet_credit", description: "R20 wallet credit" },
+  { signups: 5, type: "tshirt", description: "Haibo T-shirt" },
+  { signups: 10, type: "wallet_credit", description: "R50 wallet credit" },
+  { signups: 20, type: "accessory_pack", description: "Haibo accessory pack" },
+  { signups: 50, type: "wallet_credit", description: "R200 wallet credit" },
+];
+
+async function getOrCreateReferralCode(deviceId: string) {
+  const existing = await db.select().from(referralCodes)
+    .where(eq(referralCodes.deviceId, deviceId))
+    .limit(1);
+  if (existing.length > 0) return existing[0];
+
+  const code = generateReferralCode();
+  const [row] = await db.insert(referralCodes).values({ deviceId, code }).returning();
+  return row;
+}
+
+// GET /api/referral/code/:deviceId — Get or create a referral code for this device
+router.get("/referral/code/:deviceId", async (req, res: Response) => {
   try {
-    const existing = await db.select().from(referralCodes)
-      .where(eq(referralCodes.deviceId, req.params.deviceId))
-      .limit(1);
+    const row = await getOrCreateReferralCode(req.params.deviceId);
+    const shareBase = process.env.REFERRAL_SHARE_BASE_URL || "https://haibo.africa/r";
+    res.json({
+      referralCode: row.code,
+      shareLink: `${shareBase}/${row.code}`,
+    });
+  } catch (error: any) {
+    console.error("Get referral code error:", error);
+    res.status(500).json({ error: "Failed to get referral code" });
+  }
+});
 
-    if (existing.length > 0) {
-      res.json(existing[0]);
+// GET /api/referral/stats/:deviceId — Aggregate signups + reward tier progress
+router.get("/referral/stats/:deviceId", async (req, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+
+    const [signupCountRow] = await db
+      .select({ c: count() })
+      .from(referralSignups)
+      .where(eq(referralSignups.referrerDeviceId, deviceId));
+    const totalSignups = Number(signupCountRow?.c || 0);
+
+    const [completedRow] = await db
+      .select({ c: count() })
+      .from(referralSignups)
+      .where(and(
+        eq(referralSignups.referrerDeviceId, deviceId),
+        eq(referralSignups.hasCompletedRide, true),
+      ));
+    const completedRides = Number(completedRow?.c || 0);
+
+    const allTiers = REWARD_TIERS.map((tier) => ({
+      signups: tier.signups,
+      type: tier.type,
+      description: tier.description,
+      unlocked: totalSignups >= tier.signups,
+    }));
+
+    const nextTierDef = REWARD_TIERS.find((t) => t.signups > totalSignups);
+    const nextTier = nextTierDef
+      ? {
+          signups: nextTierDef.signups,
+          description: nextTierDef.description,
+          progress: Math.min(1, totalSignups / nextTierDef.signups),
+          remaining: nextTierDef.signups - totalSignups,
+        }
+      : null;
+
+    res.json({ totalSignups, completedRides, nextTier, allTiers });
+  } catch (error: any) {
+    console.error("Get referral stats error:", error);
+    res.status(500).json({ error: "Failed to get referral stats" });
+  }
+});
+
+// GET /api/referral/signups/:deviceId — List signups this user referred
+router.get("/referral/signups/:deviceId", async (req, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: referralSignups.id,
+        referredDeviceId: referralSignups.referredDeviceId,
+        status: referralSignups.status,
+        hasCompletedRide: referralSignups.hasCompletedRide,
+        createdAt: referralSignups.createdAt,
+      })
+      .from(referralSignups)
+      .where(eq(referralSignups.referrerDeviceId, req.params.deviceId))
+      .orderBy(desc(referralSignups.createdAt))
+      .limit(100);
+
+    res.json(rows);
+  } catch (error: any) {
+    console.error("Get referral signups error:", error);
+    res.status(500).json({ error: "Failed to get referral signups" });
+  }
+});
+
+// POST /api/referral/claim-reward — Claim an unlocked reward tier
+router.post("/referral/claim-reward", async (req, res: Response) => {
+  try {
+    const { deviceId, tier } = req.body as { deviceId?: string; tier?: number };
+
+    if (!deviceId || typeof tier !== "number") {
+      res.status(400).json({ error: "deviceId and tier are required" });
       return;
     }
 
-    const code = generateReferralCode();
-    const [referral] = await db.insert(referralCodes).values({
-      deviceId: req.params.deviceId,
-      code,
+    const tierDef = REWARD_TIERS.find((t) => t.signups === tier);
+    if (!tierDef) {
+      res.status(400).json({ error: "Unknown reward tier" });
+      return;
+    }
+
+    // Verify the user has enough signups to unlock this tier.
+    const [signupCountRow] = await db
+      .select({ c: count() })
+      .from(referralSignups)
+      .where(eq(referralSignups.referrerDeviceId, deviceId));
+    const totalSignups = Number(signupCountRow?.c || 0);
+
+    if (totalSignups < tierDef.signups) {
+      res.status(400).json({
+        error: "Tier not yet unlocked",
+        required: tierDef.signups,
+        current: totalSignups,
+      });
+      return;
+    }
+
+    // Prevent double-claim of the same tier for the same device.
+    const [existing] = await db
+      .select()
+      .from(referralRewards)
+      .where(and(
+        eq(referralRewards.deviceId, deviceId),
+        eq(referralRewards.rewardTier, tierDef.signups),
+      ))
+      .limit(1);
+
+    if (existing) {
+      res.status(409).json({ error: "Reward already claimed", reward: existing });
+      return;
+    }
+
+    const [reward] = await db.insert(referralRewards).values({
+      deviceId,
+      rewardType: tierDef.type,
+      rewardTier: tierDef.signups,
+      description: tierDef.description,
+      status: "pending",
     }).returning();
 
-    res.json(referral);
+    res.status(201).json(reward);
   } catch (error: any) {
-    console.error("Get referral error:", error);
-    res.status(500).json({ error: "Failed to get referral code" });
+    console.error("Claim reward error:", error);
+    res.status(500).json({ error: "Failed to claim reward" });
   }
 });
 
