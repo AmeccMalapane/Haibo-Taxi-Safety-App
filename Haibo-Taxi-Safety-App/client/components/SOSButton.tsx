@@ -11,27 +11,28 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 
-import { BrandColors, Spacing } from "@/constants/theme";
+import { BrandColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface SOSButtonProps {
-  tabBarHeight?: number;
+  /** When true, the button skips its own absolute positioning so a parent
+   *  (e.g. a custom tab bar slot) can place it. */
+  inline?: boolean;
 }
 
-// Memoize the button to prevent unnecessary re-renders during navigation
-export const SOSButton = memo(({ tabBarHeight = 80 }: SOSButtonProps) => {
+// Memoized to prevent re-renders during navigation transitions.
+export const SOSButton = memo(({ inline = false }: SOSButtonProps) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  
+
   const scale = useSharedValue(1);
   const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0.3);
+  const pulseOpacity = useSharedValue(0.35);
 
   useEffect(() => {
-    // Optimization: Start animations on mount and let them run on UI thread
     pulseScale.value = withRepeat(
-      withTiming(1.15, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.18, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
     );
@@ -74,14 +75,9 @@ export const SOSButton = memo(({ tabBarHeight = 80 }: SOSButtonProps) => {
     opacity: pulseOpacity.value,
   }));
 
-  const bottomOffset = tabBarHeight + Spacing.xl;
-
   return (
     <View
-      style={[
-        styles.container,
-        { bottom: bottomOffset },
-      ]}
+      style={inline ? styles.inlineContainer : styles.absoluteContainer}
       pointerEvents="box-none"
     >
       <Animated.View style={[styles.pulse, animatedPulseStyle]} />
@@ -90,7 +86,7 @@ export const SOSButton = memo(({ tabBarHeight = 80 }: SOSButtonProps) => {
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         style={[styles.button, animatedButtonStyle]}
-        accessibilityLabel="SOS Emergency Button"
+        accessibilityLabel="SOS Emergency"
         accessibilityRole="button"
       >
         <Image
@@ -103,38 +99,49 @@ export const SOSButton = memo(({ tabBarHeight = 80 }: SOSButtonProps) => {
   );
 });
 
+const SOS_SIZE = 64;
+
 const styles = StyleSheet.create({
-  container: {
+  // Inline mode — used inside a tab bar slot, parent handles positioning
+  inlineContainer: {
+    width: SOS_SIZE,
+    height: SOS_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Legacy absolute mode — kept so the component can still float standalone
+  absoluteContainer: {
     position: "absolute",
-    right: Spacing.lg,
+    bottom: 100,
+    alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 999,
   },
   pulse: {
     position: "absolute",
-    width: Spacing.sosButtonSize,
-    height: Spacing.sosButtonSize,
-    borderRadius: Spacing.sosButtonSize / 2,
-    backgroundColor: BrandColors.primary.red,
+    width: SOS_SIZE,
+    height: SOS_SIZE,
+    borderRadius: SOS_SIZE / 2,
+    backgroundColor: BrandColors.primary.gradientStart,
   },
   button: {
-    width: Spacing.sosButtonSize,
-    height: Spacing.sosButtonSize,
-    borderRadius: Spacing.sosButtonSize / 2,
-    backgroundColor: BrandColors.primary.red,
+    width: SOS_SIZE,
+    height: SOS_SIZE,
+    borderRadius: SOS_SIZE / 2,
+    backgroundColor: BrandColors.primary.gradientStart,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: BrandColors.primary.redDark,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 2,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 3,
     borderColor: "#FFFFFF",
   },
   icon: {
-    width: Spacing.iconSizeLarge * 1.4,
-    height: Spacing.iconSizeLarge * 1.4,
+    width: 36,
+    height: 36,
   },
 });

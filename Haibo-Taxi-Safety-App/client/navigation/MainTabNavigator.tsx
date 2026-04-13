@@ -1,5 +1,11 @@
 import React, { memo } from "react";
-import { View, StyleSheet, Platform, Dimensions, Image } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Platform,
+  Pressable,
+  GestureResponderEvent,
+} from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -13,8 +19,24 @@ import { BrandColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { SOSButton } from "@/components/SOSButton";
 
+// 5-tab layout with the central Haibo SOS button:
+//   1. Home    — taxi map, rank finder
+//   2. Wallet  — Haibo Pay
+//   3. SOS     — center, raised, brand mark, navigates to Emergency
+//   4. Menu    — services hub
+//   5. Profile — account
+//
+// The center slot uses a custom tabBarButton that renders SOSButton in
+// inline mode and lifts it above the bar via negative top offset, so the
+// rose-red button "pops" through the floating pill bar — same pattern as
+// Uber Eats / Cash App center actions. The non-Home tabs use the existing
+// EmptyScreen + listener.tabPress.preventDefault trick to navigate to
+// stack screens that live in the root stack instead of inside MainTabs.
+
 export type MainTabParamList = {
   HomeTab: undefined;
+  WalletTab: undefined;
+  SOSTab: undefined;
   MenuTab: undefined;
   ProfileTab: undefined;
 };
@@ -25,36 +47,44 @@ function EmptyScreen() {
   return <View style={{ flex: 1 }} />;
 }
 
-// Memoized Icon component to prevent re-renders of the whole tab bar
-const TabIcon = memo(({ name, focused, color, isHome }: { name: any, focused: boolean, color: string, isHome?: boolean }) => (
-  <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
-    {isHome && focused ? (
-      <Image
-        source={require("../../assets/images/icon.png")}
-        style={styles.homeIcon}
-        resizeMode="contain"
-      />
-    ) : (
-      <Feather name={name} size={24} color={focused ? "#FFFFFF" : color} />
-    )}
-  </View>
-));
+const TabIcon = memo(
+  ({
+    name,
+    focused,
+    color,
+  }: {
+    name: keyof typeof Feather.glyphMap;
+    focused: boolean;
+    color: string;
+  }) => (
+    <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
+      <Feather name={name} size={22} color={focused ? "#FFFFFF" : color} />
+    </View>
+  )
+);
+
+// Center slot — renders SOSButton lifted above the tab bar.
+function SOSTabButton({ onPress }: { onPress?: (e: GestureResponderEvent) => void }) {
+  return (
+    <View style={styles.sosSlot} pointerEvents="box-none">
+      <SOSButton inline />
+    </View>
+  );
+}
 
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const tabBarHeight = 70;
 
   return (
     <View style={styles.container}>
       <Tab.Navigator
         initialRouteName="HomeTab"
         screenOptions={{
-          tabBarActiveTintColor: BrandColors.primary.red,
+          tabBarActiveTintColor: BrandColors.primary.gradientStart,
           tabBarInactiveTintColor: theme.textSecondary,
           tabBarShowLabel: false,
-          // Optimization: Lazy loading for tabs
           lazy: true,
           tabBarStyle: {
             position: "absolute",
@@ -62,35 +92,83 @@ export default function MainTabNavigator() {
             left: 16,
             right: 16,
             height: 70,
-            backgroundColor: Platform.OS === 'ios' ? "transparent" : theme.backgroundSecondary,
+            backgroundColor:
+              Platform.OS === "ios" ? "transparent" : theme.backgroundSecondary,
             borderRadius: 35,
             borderTopWidth: 0,
             elevation: 8,
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
+            shadowOpacity: 0.12,
+            shadowRadius: 12,
             paddingHorizontal: 8,
-            // Optimization: hardware acceleration
+            // Allow the SOS button to overflow the bar's top edge
+            overflow: "visible",
             transform: [{ translateZ: 0 }] as any,
+          },
+          tabBarItemStyle: {
+            // Allow SOS slot's lifted button to overflow upward
+            overflow: "visible",
           },
           tabBarBackground: () =>
             Platform.OS === "ios" ? (
               <BlurView
                 intensity={80}
                 tint={isDark ? "dark" : "light"}
-                style={[StyleSheet.absoluteFill, { borderRadius: 35, overflow: 'hidden' }]}
+                style={[
+                  StyleSheet.absoluteFill,
+                  { borderRadius: 35, overflow: "hidden" },
+                ]}
               />
             ) : null,
           headerShown: false,
-
         }}
       >
         <Tab.Screen
           name="HomeTab"
           component={HomeStackNavigator}
           options={{
-            tabBarIcon: (props) => <TabIcon name="home" isHome {...props} />,
+            tabBarIcon: (props) => <TabIcon name="map" {...props} />,
+            tabBarAccessibilityLabel: "Home and map",
+          }}
+        />
+
+        <Tab.Screen
+          name="WalletTab"
+          component={EmptyScreen}
+          options={{
+            tabBarIcon: (props) => <TabIcon name="credit-card" {...props} />,
+            tabBarAccessibilityLabel: "Haibo Pay wallet",
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate("Wallet");
+            },
+          }}
+        />
+
+        <Tab.Screen
+          name="SOSTab"
+          component={EmptyScreen}
+          options={{
+            tabBarIcon: () => null,
+            tabBarButton: (props) => (
+              <Pressable
+                onPress={props.onPress}
+                style={styles.sosTouchTarget}
+                accessibilityRole="button"
+                accessibilityLabel="Emergency SOS"
+              >
+                <SOSTabButton onPress={props.onPress} />
+              </Pressable>
+            ),
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate("Emergency");
+            },
           }}
         />
 
@@ -98,7 +176,8 @@ export default function MainTabNavigator() {
           name="MenuTab"
           component={EmptyScreen}
           options={{
-            tabBarIcon: (props) => <TabIcon name="menu" {...props} />,
+            tabBarIcon: (props) => <TabIcon name="grid" {...props} />,
+            tabBarAccessibilityLabel: "Menu and services",
           }}
           listeners={{
             tabPress: (e) => {
@@ -113,6 +192,7 @@ export default function MainTabNavigator() {
           component={EmptyScreen}
           options={{
             tabBarIcon: (props) => <TabIcon name="user" {...props} />,
+            tabBarAccessibilityLabel: "Profile",
           }}
           listeners={{
             tabPress: (e) => {
@@ -122,7 +202,6 @@ export default function MainTabNavigator() {
           }}
         />
       </Tab.Navigator>
-      <SOSButton tabBarHeight={tabBarHeight + insets.bottom} />
     </View>
   );
 }
@@ -132,22 +211,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   activeIconContainer: {
-    backgroundColor: BrandColors.primary.red,
-    shadowColor: BrandColors.primary.red,
+    backgroundColor: BrandColors.primary.gradientStart,
+    shadowColor: BrandColors.primary.gradientStart,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  homeIcon: {
-    width: 28,
-    height: 28,
+  sosTouchTarget: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sosSlot: {
+    // Lift the button above the tab bar so it pops over the rounded pill.
+    // -22 puts the button center roughly even with the tab bar's top edge.
+    marginTop: -22,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
