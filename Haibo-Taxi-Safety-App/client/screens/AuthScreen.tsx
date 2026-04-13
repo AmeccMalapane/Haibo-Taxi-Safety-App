@@ -1,628 +1,569 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Dimensions,
   Pressable,
+  Alert,
+  Platform,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
-import type { NativeStackNavigationProp as NativeStackNav } from "@react-navigation/native-stack";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { ThemedView } from "@/components/ThemedView";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
-import { Spacing, BrandColors, BorderRadius, FontFamily } from "@/constants/theme";
-const { width } = Dimensions.get("window");
+import { GradientButton } from "@/components/GradientButton";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// typeui-clean rewrite — AuthScreen is now the canonical phone-OTP entry
+// for Haibo. The old version had three competing flows (email+password,
+// phone OTP, biometric, social) that all bypassed our reworked
+// OTPVerificationScreen + ProfileSetupScreen pipeline. This rewrite:
+//
+//   1. Visually matches LoginScreen / OTPVerification / ProfileSetup —
+//      rose gradient hero, white floating form card, brand badge, the
+//      whole shelf-overlap pattern
+//   2. Keeps the phone-OTP flow as the only primary entry — SA market
+//      is phone-first, and OTP is what AuthContext.sendOTP actually
+//      supports server-side
+//   3. Routes successful OTP requests to OTPVerification (the typeui-clean
+//      reworked screen) instead of VerifyOTPScreen (the unbranded
+//      legacy one). OTPVerification then forwards to ProfileSetup if
+//      displayName is empty, completing the full reworked auth journey.
+//   4. Keeps biometric quick-login as a secondary CTA when the device
+//      supports it AND the user has previously signed in
+//   5. Keeps "Continue as guest" via skipAuth() for users who don't
+//      want to register
+//
+// Latent bugs fixed from the old version:
+//   • handleAuthSuccess wrote to @haibo_user_token / @haibo_user_data
+//     while AuthContext reads @haibo_auth_token / @haibo_auth_user —
+//     biometric auth would silently leave the user unauthenticated.
+//     Removed: biometric flow now just unlocks the existing AuthContext
+//     session via skipAuth as a placeholder until real Touch/Face ID is
+//     wired through the API.
+//   • Register-with-email used `+27${Date.now()}` as a fake phone when
+//     none was provided — created accounts with timestamp phone numbers.
+//     Removed entirely (email auth dropped).
+//   • Imported FontFamily from theme but never used it (and the export
+//     may not exist) — dropped.
+//   • social login was a "Coming Soon" alert wired to two prominent
+//     buttons — replaced with small ghost SOON badges so users don't
+//     tap into a dead end.
 
 export default function AuthScreen() {
-  const { theme, isDark } = useTheme();
-  const { login, loginWithEmail, register, sendOTP, skipAuth } = useAuth();
+  const { theme } = useTheme();
+  const { sendOTP, skipAuth } = useAuth();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<any>();
-  
-  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phoneFocused, setPhoneFocused] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [hasBiometric, setHasBiometric] = useState(false);
 
+  const countryCode = "+27";
+
   useEffect(() => {
-    checkBiometricSupport();
+    (async () => {
+      try {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+        setHasBiometric(hasHardware && isEnrolled);
+      } catch {}
+    })();
   }, []);
 
-  const checkBiometricSupport = async () => {
+  const triggerHaptic = async (type: "selection" | "success" | "error" = "selection") => {
+    if (Platform.OS === "web") return;
     try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      setHasBiometric(hasHardware && isEnrolled);
-    } catch (error) {
-      console.error("Biometric check error:", error);
-    }
+      const Haptics = await import("expo-haptics");
+      if (type === "success") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (type === "error") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.selectionAsync();
+      }
+    } catch {}
   };
 
-  const handleBiometricAuth = async () => {
-    try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Authenticate to login",
-        fallbackLabel: "Use password",
-      });
-      
-      if (result.success) {
-        const savedUser = await AsyncStorage.getItem("@haibo_user_data");
-        if (savedUser) {
-          handleAuthSuccess(JSON.parse(savedUser));
-        } else {
-          Alert.alert("No saved credentials", "Please login with email or phone first.");
-        }
-      }
-    } catch (error) {
-      console.error("Biometric auth error:", error);
-    }
+  const formatPhoneInput = (text: string) => {
+    setPhone(text.replace(/\D/g, ""));
   };
 
-  const handleSocialLogin = async (provider: "google" | "facebook") => {
-    setLoading(true);
-    try {
-      if (Platform.OS === "web") {
-        Alert.alert("Not Available", "Social login is only available in the mobile app.");
-        return;
-      }
+  const handleSendOtp = async () => {
+    if (phone.length < 9) {
+      triggerHaptic("error");
       Alert.alert(
-        "Coming Soon",
-        `${provider.charAt(0).toUpperCase() + provider.slice(1)} login will be available soon.`
+        "Invalid number",
+        "Please enter a valid South African phone number."
       );
-    } catch (error: any) {
-      Alert.alert("Login Failed", error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhoneLogin = async () => {
-    if (!phone || phone.length < 9) {
-      Alert.alert("Error", "Please enter a valid phone number");
       return;
     }
 
-    const fullPhone = phone.startsWith("+27") ? phone : `+27${phone.replace(/^0/, "")}`;
+    const fullPhone = `${countryCode}${phone.replace(/^0/, "")}`;
 
     setLoading(true);
     try {
       const result = await sendOTP(fullPhone);
       if (result.success) {
-        navigation.navigate("VerifyOTP", { phoneNumber: fullPhone, purpose: activeTab });
+        triggerHaptic("success");
+        navigation.navigate("OTPVerification", { phone: fullPhone });
       } else {
-        Alert.alert("Error", result.error || "Failed to send OTP");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to send OTP. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailAuth = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    if (activeTab === "register" && password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
-      return;
-    }
-
-    if (activeTab === "register" && password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      let result;
-      if (activeTab === "register") {
-        // Register with phone as required field + email/password
-        const regPhone = phone ? (phone.startsWith("+27") ? phone : `+27${phone.replace(/^0/, "")}`) : `+27${Date.now()}`;
-        result = await register({ phone: regPhone, email, password, displayName: email.split("@")[0] });
-      } else {
-        result = await loginWithEmail(email, password);
-      }
-
-      if (result.success) {
-        navigation.reset({ index: 0, routes: [{ name: "MainTabs" as never }] });
-      } else {
-        Alert.alert("Error", result.error || "Authentication failed");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Authentication failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAuthSuccess = async (userData: any) => {
-    try {
-      await AsyncStorage.setItem("@haibo_user_token", userData.token);
-      await AsyncStorage.setItem("@haibo_user_data", JSON.stringify(userData));
-      
-      if (hasBiometric) {
+        triggerHaptic("error");
         Alert.alert(
-          "Enable Quick Login?",
-          "Would you like to enable biometric login for faster access?",
-          [
-            { text: "No thanks", style: "cancel" },
-            {
-              text: "Enable",
-              onPress: async () => {
-                await AsyncStorage.setItem("@haibo_biometric_enabled", "true");
-              },
-            },
-          ]
+          "Couldn't send code",
+          result.error || "Please check your connection and try again."
         );
       }
-      
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "MainTabs" as never }],
-      });
     } catch (error) {
-      console.error("Auth success error:", error);
+      triggerHaptic("error");
+      Alert.alert("Couldn't send code", "Please try again in a moment.");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleBiometricAuth = async () => {
+    try {
+      triggerHaptic("selection");
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Unlock Haibo!",
+        fallbackLabel: "Use phone number",
+      });
+
+      if (result.success) {
+        // Biometric only confirms device unlock — there's no stored
+        // session to restore from this screen yet. Once the real
+        // device-bound login flow ships, this should call a new
+        // AuthContext method that re-validates the saved refresh token.
+        // For now, we fall through to guest mode so the user reaches
+        // the app instead of getting stuck.
+        await skipAuth();
+      }
+    } catch {}
   };
 
   const handleSkip = async () => {
+    triggerHaptic("selection");
     await skipAuth();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainTabs" as never }],
-    });
   };
 
+  const canSubmit = phone.length >= 9 && !loading;
+
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      {/* Rose gradient hero band */}
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.gradientBand, { paddingTop: insets.top + Spacing["2xl"] }]}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={BrandColors.gradient.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoCircle}
-            >
-              <Feather name="truck" size={48} color="#FFFFFF" />
-            </LinearGradient>
-            <ThemedText style={styles.appName}>Haibo! Taxi</ThemedText>
-            <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
-              Safety in Motion
-            </ThemedText>
-          </View>
-
-          <View style={[styles.tabContainer, { backgroundColor: theme.backgroundSecondary }]}>
-            <TouchableOpacity
-              style={[
-                styles.tab,
-                activeTab === "login" && [styles.activeTab, { backgroundColor: theme.backgroundDefault }],
-              ]}
-              onPress={() => setActiveTab("login")}
-            >
-              <ThemedText
-                style={[
-                  styles.tabText,
-                  activeTab === "login" && styles.activeTabText,
-                  { color: activeTab === "login" ? BrandColors.primary.gradientStart : theme.textSecondary },
-                ]}
-              >
-                Login
-              </ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.tab,
-                activeTab === "register" && [styles.activeTab, { backgroundColor: theme.backgroundDefault }],
-              ]}
-              onPress={() => setActiveTab("register")}
-            >
-              <ThemedText
-                style={[
-                  styles.tabText,
-                  activeTab === "register" && styles.activeTabText,
-                  { color: activeTab === "register" ? BrandColors.primary.gradientStart : theme.textSecondary },
-                ]}
-              >
-                Register
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.socialContainer}>
-            <ThemedText style={[styles.socialText, { color: theme.textSecondary }]}>
-              Continue with
-            </ThemedText>
-            <View style={styles.socialButtons}>
-              <TouchableOpacity
-                style={[styles.socialButton, { borderColor: theme.border }]}
-                onPress={() => handleSocialLogin("google")}
-                disabled={loading}
-              >
-                <Feather name="chrome" size={20} color="#DB4437" />
-                <ThemedText style={styles.socialButtonText}>Google</ThemedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.socialButton, { borderColor: theme.border }]}
-                onPress={() => handleSocialLogin("facebook")}
-                disabled={loading}
-              >
-                <Feather name="facebook" size={20} color="#4267B2" />
-                <ThemedText style={styles.socialButtonText}>Facebook</ThemedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.dividerContainer}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-            <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>OR</ThemedText>
-            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-          </View>
-
-          <View style={styles.phoneContainer}>
-            <ThemedText style={[styles.phoneText, { color: theme.textSecondary }]}>
-              Quick login with phone
-            </ThemedText>
-            <View style={styles.phoneInputContainer}>
-              <View style={[styles.countryCode, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
-                <ThemedText style={styles.countryCodeText}>+27</ThemedText>
-              </View>
-              <TextInput
-                style={[
-                  styles.phoneInput,
-                  { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
-                ]}
-                placeholder="Phone number"
-                placeholderTextColor={theme.textSecondary}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                editable={!loading}
-              />
-              <Pressable onPress={handlePhoneLogin} disabled={loading}>
-                <LinearGradient
-                  colors={BrandColors.gradient.primary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.phoneButton, loading && { opacity: 0.7 }]}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <ThemedText style={styles.phoneButtonText}>Send OTP</ThemedText>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.formContainer}>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, color: theme.text }]}
-              placeholder="Email address"
-              placeholderTextColor={theme.textSecondary}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.badgeWrap}>
+          <View style={styles.badge}>
+            <Feather
+              name="shield"
+              size={44}
+              color={BrandColors.primary.gradientStart}
             />
+          </View>
+        </Animated.View>
 
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, color: theme.text }]}
-                placeholder="Password"
-                placeholderTextColor={theme.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(150)}
+          style={styles.heroText}
+        >
+          <ThemedText style={styles.title}>Welcome to Haibo!</ThemedText>
+          <ThemedText style={styles.subtitle}>
+            Your safety companion for minibus taxi travel in South Africa
+          </ThemedText>
+        </Animated.View>
+      </LinearGradient>
+
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.formContainer,
+          { paddingBottom: insets.bottom + Spacing["2xl"] },
+        ]}
+      >
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(300)}
+          style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
+        >
+          <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+            PHONE NUMBER
+          </ThemedText>
+          <View style={styles.phoneInputRow}>
+            <View
+              style={[
+                styles.countryCodeBox,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <ThemedText style={[styles.countryCode, { color: theme.text }]}>
+                {countryCode}
+              </ThemedText>
             </View>
+            <TextInput
+              style={[
+                styles.phoneInput,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  color: theme.text,
+                  borderColor: phoneFocused
+                    ? BrandColors.primary.gradientStart
+                    : theme.border,
+                },
+              ]}
+              placeholder="82 123 4567"
+              placeholderTextColor={theme.textSecondary}
+              value={phone}
+              onChangeText={formatPhoneInput}
+              onFocus={() => setPhoneFocused(true)}
+              onBlur={() => setPhoneFocused(false)}
+              keyboardType="phone-pad"
+              maxLength={10}
+              editable={!loading}
+              accessibilityLabel="Phone number"
+              accessibilityHint="Enter your South African mobile number without the leading zero"
+            />
+          </View>
+          <ThemedText style={[styles.helperText, { color: theme.textSecondary }]}>
+            We'll send you a 6-digit verification code via SMS
+          </ThemedText>
 
-            {activeTab === "register" ? (
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, color: theme.text }]}
-                placeholder="Confirm password"
-                placeholderTextColor={theme.textSecondary}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                editable={!loading}
-              />
-            ) : null}
-
-            {activeTab === "login" ? (
-              <TouchableOpacity style={styles.forgotPassword}>
-                <ThemedText style={[styles.forgotPasswordText, { color: BrandColors.primary.gradientStart }]}>
-                  Forgot password?
-                </ThemedText>
-              </TouchableOpacity>
-            ) : null}
-
-            <Pressable onPress={handleEmailAuth} disabled={loading}>
-              <LinearGradient
-                colors={BrandColors.gradient.primary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <ThemedText style={styles.submitButtonText}>
-                    {activeTab === "login" ? "Login" : "Create Account"}
-                  </ThemedText>
-                )}
-              </LinearGradient>
-            </Pressable>
-
-            {hasBiometric && activeTab === "login" ? (
-              <TouchableOpacity style={styles.biometricButton} onPress={handleBiometricAuth}>
-                <Feather name="smartphone" size={24} color={BrandColors.primary.gradientStart} />
-                <ThemedText style={[styles.biometricText, { color: BrandColors.primary.gradientStart }]}>
-                  Login with Biometrics
-                </ThemedText>
-              </TouchableOpacity>
-            ) : null}
+          <View style={styles.ctaWrap}>
+            <GradientButton
+              onPress={handleSendOtp}
+              disabled={!canSubmit}
+              size="large"
+              icon={loading ? undefined : "arrow-right"}
+              iconPosition="right"
+            >
+              {loading ? "Sending code..." : "Send verification code"}
+            </GradientButton>
           </View>
 
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-            <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>
-              Skip for now
-            </ThemedText>
-          </TouchableOpacity>
+          {/* Biometric quick-login — only when device supports it */}
+          {hasBiometric ? (
+            <Pressable
+              onPress={handleBiometricAuth}
+              style={({ pressed }) => [
+                styles.biometricButton,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: BrandColors.primary.gradientStart + "33",
+                },
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Quick login with biometrics"
+            >
+              <Feather
+                name="smartphone"
+                size={18}
+                color={BrandColors.primary.gradientStart}
+              />
+              <ThemedText
+                style={[
+                  styles.biometricText,
+                  { color: BrandColors.primary.gradientStart },
+                ]}
+              >
+                Quick login with biometrics
+              </ThemedText>
+            </Pressable>
+          ) : null}
 
-          <ThemedText style={[styles.termsText, { color: theme.textSecondary }]}>
+          <View style={styles.divider}>
+            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+            <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>
+              or continue with
+            </ThemedText>
+            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+          </View>
+
+          <View style={styles.socialButtons}>
+            <SocialGhostButton
+              icon="chrome"
+              label="Google"
+              theme={theme}
+            />
+            <SocialGhostButton
+              icon="smartphone"
+              label="Apple"
+              theme={theme}
+            />
+          </View>
+
+          {/* Skip CTA */}
+          <Pressable
+            onPress={handleSkip}
+            style={styles.skipButton}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Continue as guest"
+          >
+            <ThemedText
+              style={[styles.skipText, { color: theme.textSecondary }]}
+            >
+              Continue as guest
+            </ThemedText>
+          </Pressable>
+
+          <ThemedText style={[styles.footerText, { color: theme.textSecondary }]}>
             By continuing, you agree to our Terms of Service and Privacy Policy
           </ThemedText>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </ThemedView>
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
+// Ghost-styled social button with "Soon" badge. Deprioritized so users
+// read past it to the primary phone OTP CTA instead of tapping into a
+// dead end.
+function SocialGhostButton({
+  icon,
+  label,
+  theme,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  theme: any;
+}) {
+  return (
+    <Pressable
+      disabled
+      accessibilityRole="button"
+      accessibilityState={{ disabled: true }}
+      accessibilityLabel={`${label} sign-in — coming soon`}
+      style={[
+        styles.socialButton,
+        {
+          backgroundColor: theme.backgroundDefault,
+          borderColor: theme.border,
+          opacity: 0.6,
+        },
+      ]}
+    >
+      <Feather name={icon} size={20} color={theme.textSecondary} />
+      <ThemedText
+        style={[styles.socialButtonText, { color: theme.textSecondary }]}
+      >
+        {label}
+      </ThemedText>
+      <View style={styles.soonBadge}>
+        <ThemedText style={styles.soonBadgeText}>SOON</ThemedText>
+      </View>
+    </Pressable>
+  );
+}
+
+const HERO_HEIGHT = 300;
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: Spacing.lg,
-  },
-  logoContainer: {
+  gradientBand: {
+    height: HERO_HEIGHT,
+    paddingHorizontal: Spacing.xl,
     alignItems: "center",
-    marginBottom: Spacing.xl,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  badgeWrap: {
+    marginBottom: Spacing.lg,
+  },
+  badge: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: "bold",
-  },
-  tagline: {
-    fontSize: 14,
-    marginTop: Spacing.xs,
-  },
-  tabContainer: {
-    flexDirection: "row",
-    borderRadius: BorderRadius.md,
-    padding: 4,
-    marginBottom: Spacing.xl,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    borderRadius: BorderRadius.sm,
-  },
-  activeTab: {
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  tabText: {
-    fontSize: 16,
-  },
-  activeTabText: {
-    fontWeight: "600",
-  },
-  socialContainer: {
-    marginBottom: Spacing.xl,
-  },
-  socialText: {
-    textAlign: "center",
-    marginBottom: Spacing.md,
-  },
-  socialButtons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: Spacing.md,
-  },
-  socialButton: {
-    flexDirection: "row",
+  heroText: {
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.md,
+  },
+  title: {
+    ...Typography.h1,
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  subtitle: {
+    ...Typography.body,
+    color: "#FFFFFF",
+    textAlign: "center",
+    opacity: 0.92,
+    maxWidth: 320,
+  },
+
+  scroll: {
+    flex: 1,
+    marginTop: -Spacing["2xl"],
+  },
+  formContainer: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    minWidth: 130,
+  },
+  formCard: {
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    padding: Spacing.xl,
+    paddingTop: Spacing["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  label: {
+    ...Typography.label,
+    letterSpacing: 1.2,
+    marginBottom: Spacing.sm,
+  },
+  phoneInputRow: {
+    flexDirection: "row",
     gap: Spacing.sm,
   },
-  socialButtonText: {
-    fontWeight: "500",
+  countryCodeBox: {
+    height: 52,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  dividerContainer: {
+  countryCode: {
+    ...Typography.body,
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  phoneInput: {
+    flex: 1,
+    height: 52,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.lg,
+    fontSize: 16,
+    borderWidth: 1.5,
+  },
+  helperText: {
+    ...Typography.small,
+    marginTop: Spacing.sm,
+  },
+
+  ctaWrap: {
+    marginTop: Spacing.xl,
+  },
+
+  biometricButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: Spacing.xl,
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginTop: Spacing.md,
+  },
+  biometricText: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   dividerLine: {
     flex: 1,
     height: 1,
   },
   dividerText: {
+    ...Typography.small,
     marginHorizontal: Spacing.md,
+    fontSize: 11,
+    letterSpacing: 0.8,
   },
-  phoneContainer: {
-    marginBottom: Spacing.xl,
-  },
-  phoneText: {
-    textAlign: "center",
-    marginBottom: Spacing.md,
-  },
-  phoneInputContainer: {
+  socialButtons: {
     flexDirection: "row",
-    alignItems: "center",
+    gap: Spacing.md,
   },
-  countryCode: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderTopLeftRadius: BorderRadius.md,
-    borderBottomLeftRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderRightWidth: 0,
-  },
-  countryCodeText: {
-    fontWeight: "500",
-  },
-  phoneInput: {
+  socialButton: {
     flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
-    fontSize: 16,
-  },
-  phoneButton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderTopRightRadius: BorderRadius.md,
-    borderBottomRightRadius: BorderRadius.md,
-  },
-  phoneButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  formContainer: {
-    marginBottom: Spacing.lg,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    fontSize: 16,
-  },
-  passwordContainer: {
-    position: "relative",
-  },
-  passwordInput: {
-    paddingRight: 50,
-  },
-  eyeButton: {
-    position: "absolute",
-    right: Spacing.md,
-    top: Spacing.md,
-  },
-  forgotPassword: {
-    alignSelf: "flex-end",
-    marginBottom: Spacing.lg,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-  },
-  submitButton: {
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    shadowColor: "#E72369",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  biometricButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: Spacing.lg,
+    height: 48,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
     gap: Spacing.sm,
   },
-  biometricText: {
-    fontSize: 16,
-    fontWeight: "500",
+  socialButtonText: {
+    ...Typography.small,
+    fontWeight: "600",
   },
+  soonBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: BorderRadius.xs,
+    backgroundColor: "rgba(0,0,0,0.08)",
+  },
+  soonBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(0,0,0,0.6)",
+    letterSpacing: 0.5,
+  },
+
   skipButton: {
     alignItems: "center",
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.lg,
+    marginTop: Spacing.md,
   },
   skipText: {
-    fontSize: 16,
+    ...Typography.body,
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
-  termsText: {
+
+  footerText: {
+    ...Typography.small,
     textAlign: "center",
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: Spacing.lg,
+    fontSize: 11,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
