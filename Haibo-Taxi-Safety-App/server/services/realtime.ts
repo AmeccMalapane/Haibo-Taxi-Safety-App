@@ -19,13 +19,29 @@ interface DriverLocation {
 // In-memory store of active driver locations (for real-time map)
 const activeDrivers = new Map<string, DriverLocation>();
 
+// Per-user last-event timestamps for throttling
+const lastLocationUpdate = new Map<string, number>();
+const lastSosTrigger = new Map<string, number>();
+const LOCATION_MIN_INTERVAL_MS = 2000; // 1 update per 2s per driver
+const SOS_MIN_INTERVAL_MS = 60_000; // 1 SOS per minute per user
+
+function isValidLatLng(lat: unknown, lon: unknown): lat is number {
+  return (
+    typeof lat === "number" && Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+    typeof lon === "number" && Number.isFinite(lon) && lon >= -180 && lon <= 180
+  );
+}
+
 /**
  * Initialize Socket.IO on the existing HTTP server.
  */
 export function initRealtime(httpServer: HttpServer): Server {
+  const isProduction = process.env.NODE_ENV === "production";
+  const wsAllowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) || [];
+
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.ALLOWED_ORIGINS?.split(",") || ["*"],
+      origin: isProduction ? wsAllowedOrigins : true,
       credentials: true,
     },
     path: "/socket.io",
@@ -67,6 +83,18 @@ export function initRealtime(httpServer: HttpServer): Server {
       heading?: number;
       accuracy?: number;
     }) => {
+      if (!data || !isValidLatLng(data.latitude, data.longitude)) {
+        socket.emit("error", { event: "location:update", reason: "Invalid coordinates" });
+        return;
+      }
+
+      const now = Date.now();
+      const last = lastLocationUpdate.get(user.userId) || 0;
+      if (now - last < LOCATION_MIN_INTERVAL_MS) {
+        return; // silently drop — throttle at 1 update per 2s per driver
+      }
+      lastLocationUpdate.set(user.userId, now);
+
       const location: DriverLocation = {
         userId: user.userId,
         latitude: data.latitude,
@@ -82,7 +110,7 @@ export function initRealtime(httpServer: HttpServer): Server {
       // Broadcast to all connected clients watching the map
       socket.broadcast.to("map:watchers").emit("driver:moved", location);
 
-      // Persist to database (batched — every update for now, throttle later)
+      // Persist to database
       try {
         await db.insert(locationUpdates).values({
           userId: user.userId,
@@ -124,9 +152,22 @@ export function initRealtime(httpServer: HttpServer): Server {
       longitude: number;
       message?: string;
     }) => {
-      console.log(`[SOS] Alert from ${user.userId} at ${data.latitude},${data.longitude}`);
+      if (!data || !isValidLatLng(data.latitude, data.longitude)) {
+        socket.emit("error", { event: "sos:trigger", reason: "Invalid coordinates" });
+        return;
+      }
 
-      // Broadcast SOS to all admins and drivers
+      const now = Date.now();
+      const last = lastSosTrigger.get(user.userId) || 0;
+      if (now - last < SOS_MIN_INTERVAL_MS) {
+        socket.emit("error", { event: "sos:trigger", reason: "SOS rate limit" });
+        return;
+      }
+      lastSosTrigger.set(user.userId, now);
+
+      console.log(`[SOS] WS alert from ${user.userId} at ${data.latitude},${data.longitude}`);
+
+      // Notify the drivers room immediately for visibility
       io?.to("drivers").emit("sos:alert", {
         userId: user.userId,
         phone: user.phone,
@@ -136,17 +177,13 @@ export function initRealtime(httpServer: HttpServer): Server {
         timestamp: new Date().toISOString(),
       });
 
-      // Also emit to admin room
-      const adminSockets = await io?.in("admins").fetchSockets();
-      if (adminSockets && adminSockets.length > 0) {
-        io?.to("admins").emit("sos:alert", {
-          userId: user.userId,
-          phone: user.phone,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          message: data.message,
-          timestamp: new Date().toISOString(),
-        });
+      // Route through the service so admins get push, SMS fires to emergency contact,
+      // and the event is persisted to the sos_alerts audit table.
+      try {
+        const { sendSOSAlert } = await import("./notifications");
+        await sendSOSAlert(user.userId, data.latitude, data.longitude, data.message, "websocket");
+      } catch (err) {
+        console.error("[SOS] WS-to-service dispatch failed:", err);
       }
     });
 
@@ -181,6 +218,8 @@ export function initRealtime(httpServer: HttpServer): Server {
     // --- Disconnect ---
     socket.on("disconnect", () => {
       activeDrivers.delete(user.userId);
+      lastLocationUpdate.delete(user.userId);
+      lastSosTrigger.delete(user.userId);
       console.log(`[WS] Disconnected: ${user.userId}`);
     });
   });

@@ -2,11 +2,14 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db";
 import { users, otpCodes } from "../../shared/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { generateToken, generateRefreshToken, authMiddleware, AuthRequest } from "../middleware/auth";
-import { authRateLimit, sensitiveRateLimit } from "../middleware/rateLimit";
+import { authRateLimit, sensitiveRateLimit, otpSendPhoneRateLimit } from "../middleware/rateLimit";
 import { sendOtpSms } from "../services/sms";
 import { generateOTP, generateReferralCode } from "../utils/helpers";
+
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_TTL_MS = 10 * 60 * 1000;
 
 const router = Router();
 
@@ -143,28 +146,34 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/send-otp
-router.post("/send-otp", authRateLimit, async (req: Request, res: Response) => {
+router.post("/send-otp", authRateLimit, otpSendPhoneRateLimit, async (req: Request, res: Response) => {
   try {
     const { phone } = req.body;
 
-    if (!phone) {
+    if (!phone || typeof phone !== "string") {
       res.status(400).json({ error: "Phone number is required" });
       return;
     }
 
+    // Invalidate any prior unverified OTPs for this phone — only one active code at a time.
+    await db.update(otpCodes)
+      .set({ verified: true, attempts: MAX_OTP_ATTEMPTS })
+      .where(and(eq(otpCodes.phone, phone), eq(otpCodes.verified, false)));
+
     const code = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
     await db.insert(otpCodes).values({
       phone,
       code,
       expiresAt,
+      attempts: 0,
     });
 
     // Send OTP via Azure Communication Services SMS
     await sendOtpSms(phone, code);
 
-    res.json({ message: "OTP sent successfully", expiresIn: 600 });
+    res.json({ message: "OTP sent successfully", expiresIn: OTP_TTL_MS / 1000 });
   } catch (error: any) {
     console.error("Send OTP error:", error);
     res.status(500).json({ error: "Failed to send OTP" });
@@ -181,26 +190,43 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
       return;
     }
 
-    const otpRecords = await db
+    // Look up the most recent active OTP for this phone (not yet verified, not expired, under attempt cap).
+    const activeOtps = await db
       .select()
       .from(otpCodes)
       .where(
         and(
           eq(otpCodes.phone, phone),
-          eq(otpCodes.code, code),
           eq(otpCodes.verified, false),
           gt(otpCodes.expiresAt, new Date())
         )
       )
       .limit(1);
 
-    if (otpRecords.length === 0) {
+    if (activeOtps.length === 0) {
       res.status(400).json({ error: "Invalid or expired OTP" });
       return;
     }
 
+    const activeOtp = activeOtps[0];
+
+    if ((activeOtp.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+      // Burn the OTP so further guesses are impossible.
+      await db.update(otpCodes).set({ verified: true }).where(eq(otpCodes.id, activeOtp.id));
+      res.status(429).json({ error: "Too many failed attempts. Request a new OTP." });
+      return;
+    }
+
+    if (activeOtp.code !== code) {
+      await db.update(otpCodes)
+        .set({ attempts: sql`${otpCodes.attempts} + 1` })
+        .where(eq(otpCodes.id, activeOtp.id));
+      res.status(400).json({ error: "Invalid OTP" });
+      return;
+    }
+
     // Mark OTP as verified
-    await db.update(otpCodes).set({ verified: true }).where(eq(otpCodes.id, otpRecords[0].id));
+    await db.update(otpCodes).set({ verified: true }).where(eq(otpCodes.id, activeOtp.id));
 
     // Check if user exists, if not create
     let userResult = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
@@ -306,13 +332,14 @@ router.post("/reset-password", sensitiveRateLimit, async (req: Request, res: Res
         and(
           eq(otpCodes.phone, phone),
           eq(otpCodes.code, code),
-          eq(otpCodes.verified, true)
+          eq(otpCodes.verified, true),
+          gt(otpCodes.createdAt, new Date(Date.now() - OTP_TTL_MS))
         )
       )
       .limit(1);
 
     if (otpRecords.length === 0) {
-      res.status(400).json({ error: "Invalid or unverified OTP. Please verify your OTP first." });
+      res.status(400).json({ error: "Invalid or expired OTP. Please verify your OTP first." });
       return;
     }
 

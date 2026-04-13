@@ -95,7 +95,7 @@ router.post("/location-update", authMiddleware, async (req: AuthRequest, res: Re
 });
 
 // GET /api/drivers/:id - Get driver profile
-router.get("/:id", async (req, res: Response) => {
+router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(driverProfiles).where(eq(driverProfiles.id, req.params.id)).limit(1);
     if (result.length === 0) {

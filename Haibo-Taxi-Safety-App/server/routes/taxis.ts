@@ -90,12 +90,19 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/taxis/:id - Get taxi details
+// GET /api/taxis/:id - Get taxi details (owner or admin only)
 router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(taxis).where(eq(taxis.id, req.params.id)).limit(1);
     if (result.length === 0) {
       res.status(404).json({ error: "Taxi not found" });
+      return;
+    }
+
+    const isOwner = result[0].ownerId === req.user!.userId;
+    const isAdmin = req.user!.role === "admin";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: "Not authorized" });
       return;
     }
 
@@ -106,9 +113,22 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT /api/taxis/:id - Update taxi
+// PUT /api/taxis/:id - Update taxi (owner or admin only)
 router.put("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const existing = await db.select().from(taxis).where(eq(taxis.id, req.params.id)).limit(1);
+    if (existing.length === 0) {
+      res.status(404).json({ error: "Taxi not found" });
+      return;
+    }
+
+    const isOwner = existing[0].ownerId === req.user!.userId;
+    const isAdmin = req.user!.role === "admin";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: "You do not own this taxi" });
+      return;
+    }
+
     const { status, color, primaryRoute, seatingCapacity, insuranceNumber, insuranceExpiry } = req.body;
 
     const updateData: any = { updatedAt: new Date() };
@@ -120,11 +140,6 @@ router.put("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
     if (insuranceExpiry !== undefined) updateData.insuranceExpiry = new Date(insuranceExpiry);
 
     const [updated] = await db.update(taxis).set(updateData).where(eq(taxis.id, req.params.id)).returning();
-
-    if (!updated) {
-      res.status(404).json({ error: "Taxi not found" });
-      return;
-    }
 
     res.json(updated);
   } catch (error: any) {

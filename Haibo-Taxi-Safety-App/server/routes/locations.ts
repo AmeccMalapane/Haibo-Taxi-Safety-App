@@ -10,8 +10,8 @@ import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
 
-// GET /api/locations - List all taxi locations/ranks
-router.get("/", async (req, res: Response) => {
+// GET /api/locations - List all taxi locations/ranks (public — pre-login browsing)
+router.get("/", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const { type, search } = req.query as any;
@@ -40,8 +40,8 @@ router.get("/", async (req, res: Response) => {
   }
 });
 
-// GET /api/locations/nearby - Find nearby taxi ranks
-router.get("/nearby", async (req, res: Response) => {
+// GET /api/locations/nearby - Find nearby taxi ranks (public — pre-login browsing)
+router.get("/nearby", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { latitude, longitude, radius } = req.query as any;
     const lat = parseFloat(latitude);
@@ -108,7 +108,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/locations/:id - Get location details with images and signals
-router.get("/:id", async (req, res: Response) => {
+router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const location = await db.select().from(taxiLocations).where(eq(taxiLocations.id, req.params.id)).limit(1);
     if (location.length === 0) {

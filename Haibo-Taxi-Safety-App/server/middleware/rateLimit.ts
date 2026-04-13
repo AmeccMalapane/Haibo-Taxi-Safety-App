@@ -108,3 +108,41 @@ export const sensitiveRateLimit = rateLimit({
   name: "sensitive",
   message: "Too many attempts for this operation, please try again in 1 hour",
 });
+
+/**
+ * Per-phone limit for OTP sends — prevents attackers from burning through OTPs
+ * against a single target phone. Key is `req.body.phone`, falling back to IP.
+ */
+export const otpSendPhoneRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  name: "otp-send-phone",
+  message: "Too many OTP requests for this phone. Please try again in 1 hour.",
+  keyGenerator: (req: Request) =>
+    `phone:${(req.body?.phone as string) || req.ip || "unknown"}`,
+});
+
+/**
+ * Per-endpoint limit for wallet transfers — financial abuse mitigation.
+ */
+export const financialRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  name: "financial",
+  message: "Too many financial operations. Please try again later.",
+});
+
+/**
+ * Per-user limit for SOS triggers — prevents spam while keeping real emergencies
+ * responsive. Keyed by authenticated user id when present, falling back to IP.
+ */
+export const sosRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 3,
+  name: "sos",
+  message: "SOS rate limit reached. If this is a real emergency, call 10111.",
+  keyGenerator: (req: Request) => {
+    const userId = (req as any).user?.userId;
+    return userId ? `user:${userId}` : `ip:${req.ip || "unknown"}`;
+  },
+});

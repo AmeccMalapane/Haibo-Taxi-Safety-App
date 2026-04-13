@@ -1,21 +1,17 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-// --- JWT Configuration ---
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET;
 
 if (!JWT_SECRET) {
   console.error("FATAL: JWT_SECRET environment variable is not set.");
   console.error("Copy .env.example to .env and set a secure random string.");
-  if (process.env.NODE_ENV === "production") {
-    process.exit(1);
-  }
+  process.exit(1);
 }
 
-const FALLBACK_SECRET = "haibo-dev-only-do-not-use-in-production";
-const getSecret = () => JWT_SECRET || FALLBACK_SECRET;
-const getRefreshSecret = () => JWT_REFRESH_SECRET || FALLBACK_SECRET;
+const getSecret = (): string => JWT_SECRET as string;
+const getRefreshSecret = (): string => (JWT_REFRESH_SECRET as string) || (JWT_SECRET as string);
 
 export interface AuthPayload {
   userId: string;

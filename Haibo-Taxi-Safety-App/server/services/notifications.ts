@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { notifications, users, emergencyContacts } from "../../shared/schema";
+import { notifications, users, sosAlerts } from "../../shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendPushNotification, sendMulticastNotification } from "./firebase";
 import { emitToUser, broadcast, getIO } from "./realtime";
@@ -94,15 +94,16 @@ export async function notifyUsers(
 }
 
 /**
- * Send SOS alert to emergency contacts (SMS), admins (push), and command center (WebSocket).
+ * Send SOS alert to emergency contact (SMS), admins (push), and command center (WebSocket).
+ * Every trigger is persisted to sos_alerts for audit / post-incident review.
  */
 export async function sendSOSAlert(
   userId: string,
   latitude: number,
   longitude: number,
-  message?: string
+  message?: string,
+  source: "api" | "websocket" = "api"
 ): Promise<void> {
-  // Get user info
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return;
 
@@ -140,24 +141,33 @@ export async function sendSOSAlert(
     });
   }
 
-  // 3. Send SMS to emergency contacts
-  try {
-    const contacts = await db.select().from(emergencyContacts)
-      .where(eq(emergencyContacts.userId, userId));
-
-    if (contacts.length > 0) {
+  // 3. Send SMS to the user's registered emergency contact (inline on users table)
+  let smsRecipients = 0;
+  if (user.emergencyContactPhone) {
+    try {
       const { sendSms } = await import("./sms");
-      for (const contact of contacts) {
-        try {
-          await sendSms(contact.phone, smsBody);
-          console.log(`[SOS] SMS sent to ${contact.name} (${contact.phone})`);
-        } catch (smsErr) {
-          console.log(`[SOS] SMS to ${contact.phone} failed:`, smsErr);
-        }
-      }
+      await sendSms(user.emergencyContactPhone, smsBody);
+      smsRecipients = 1;
+      console.log(`[SOS] SMS sent to ${user.emergencyContactName || "contact"} (${user.emergencyContactPhone})`);
+    } catch (smsErr) {
+      console.log(`[SOS] SMS to ${user.emergencyContactPhone} failed:`, smsErr);
     }
-  } catch (err) {
-    console.log("[SOS] Emergency contacts lookup failed:", err);
+  }
+
+  // 4. Persist audit record — even if push/SMS fail, we have a record of the trigger
+  try {
+    await db.insert(sosAlerts).values({
+      userId,
+      phone: user.phone,
+      latitude,
+      longitude,
+      message: sosMessage,
+      source,
+      adminRecipients: admins.length,
+      smsRecipients,
+    });
+  } catch (auditErr) {
+    console.error("[SOS] CRITICAL: audit log insert failed:", auditErr);
   }
 
   console.log(`[SOS] Full alert from ${user.phone} at ${latitude},${longitude}`);

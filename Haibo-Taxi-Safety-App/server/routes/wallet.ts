@@ -6,7 +6,7 @@ import {
 } from "../../shared/schema";
 import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
-import { sensitiveRateLimit } from "../middleware/rateLimit";
+import { sensitiveRateLimit, financialRateLimit } from "../middleware/rateLimit";
 import { verifyTransaction } from "../services/paystack";
 import { parsePagination, paginationResponse } from "../utils/helpers";
 
@@ -125,7 +125,7 @@ router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) =>
 });
 
 // POST /api/wallet/transfer - P2P transfer
-router.post("/transfer", authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthRequest, res: Response) => {
   try {
     const { recipientPhone, recipientUsername, amount, message } = req.body;
 

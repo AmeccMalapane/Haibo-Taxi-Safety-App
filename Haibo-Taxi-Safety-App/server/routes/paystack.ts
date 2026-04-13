@@ -8,11 +8,10 @@ import { notifyUser } from "../services/notifications";
 
 const router = Router();
 
-// GET /api/paystack/status — Check if Paystack is configured
-router.get("/status", (req, res: Response) => {
+// GET /api/paystack/status — Check if Paystack is configured (authenticated)
+router.get("/status", authMiddleware, (req: AuthRequest, res: Response) => {
   res.json({
     configured: !!process.env.PAYSTACK_SECRET_KEY,
-    publicKey: process.env.PAYSTACK_PUBLIC_KEY || null,
   });
 });
 

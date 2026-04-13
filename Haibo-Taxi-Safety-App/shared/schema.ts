@@ -34,6 +34,7 @@ export const otpCodes = pgTable("otp_codes", {
   code: text("code").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   verified: boolean("verified").default(false),
+  attempts: integer("attempts").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1199,6 +1200,28 @@ export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalReques
 
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
+
+// ============================================
+// SOS ALERTS - Immutable audit log of emergency triggers
+// ============================================
+export const sosAlerts = pgTable("sos_alerts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  phone: text("phone"),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  message: text("message"),
+  source: text("source").default("api"), // "api" | "websocket"
+  adminRecipients: integer("admin_recipients").default(0),
+  smsRecipients: integer("sms_recipients").default(0),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type SosAlert = typeof sosAlerts.$inferSelect;
 
 // ============================================
 // GROUP RIDE CHATS - Real-time chat messages

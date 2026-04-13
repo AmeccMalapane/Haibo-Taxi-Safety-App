@@ -33,18 +33,25 @@ const PORT = parseInt(process.env.PORT || "8080", 10);
 // --- Global Middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
 
+const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : ["http://localhost:8081", "http://localhost:19006"];
+  : isProduction
+    ? []
+    : ["http://localhost:8081", "http://localhost:19006"];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Permissive for now; tighten in production
+    // No-origin requests are mobile apps / native clients / curl — always allow.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    if (isProduction) {
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+    // Development: permissive so Expo web / LAN debugging works.
+    return callback(null, true);
   },
   credentials: true,
 }));

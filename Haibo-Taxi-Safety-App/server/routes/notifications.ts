@@ -3,6 +3,7 @@ import { db } from "../db";
 import { notifications, users } from "../../shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
+import { sosRateLimit } from "../middleware/rateLimit";
 import { notifyUser, sendSOSAlert } from "../services/notifications";
 
 const router = Router();
@@ -84,16 +85,18 @@ router.put("/read-all", authMiddleware, async (req: AuthRequest, res: Response) 
 });
 
 // POST /api/notifications/sos — Trigger SOS alert (also sends push + real-time)
-router.post("/sos", authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post("/sos", authMiddleware, sosRateLimit, async (req: AuthRequest, res: Response) => {
   try {
     const { latitude, longitude, message } = req.body;
 
-    if (!latitude || !longitude) {
-      res.status(400).json({ error: "Location is required for SOS" });
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      res.status(400).json({ error: "Valid location (latitude, longitude) is required for SOS" });
       return;
     }
 
-    await sendSOSAlert(req.user!.userId, latitude, longitude, message);
+    await sendSOSAlert(req.user!.userId, lat, lon, message);
 
     res.json({ message: "SOS alert sent", timestamp: new Date().toISOString() });
   } catch (error: any) {

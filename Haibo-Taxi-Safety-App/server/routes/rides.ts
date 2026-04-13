@@ -8,7 +8,7 @@ import { parsePagination, paginationResponse } from "../utils/helpers";
 const router = Router();
 
 // GET /api/rides - List group rides
-router.get("/", async (req, res: Response) => {
+router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const { rideType, status } = req.query as any;
@@ -121,7 +121,7 @@ router.post("/book", authMiddleware, async (req: AuthRequest, res: Response) => 
 });
 
 // GET /api/rides/:id - Get ride details with participants
-router.get("/:id", async (req, res: Response) => {
+router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(groupRides).where(eq(groupRides.id, req.params.id)).limit(1);
     if (result.length === 0) {

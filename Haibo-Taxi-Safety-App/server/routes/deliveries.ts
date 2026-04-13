@@ -73,7 +73,7 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/deliveries/:id - Get delivery details
+// GET /api/deliveries/:id - Get delivery details (sender, driver, or admin)
 router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(deliveries).where(eq(deliveries.id, req.params.id)).limit(1);
@@ -82,23 +82,51 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const delivery = result[0];
+    const isSender = delivery.senderId === req.user!.userId;
+    const isAdmin = req.user!.role === "admin";
+    const isDriver = req.user!.role === "driver";
+    if (!isSender && !isAdmin && !isDriver) {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+
     const tracking = await db.select().from(deliveryTracking)
       .where(eq(deliveryTracking.deliveryId, req.params.id))
       .orderBy(desc(deliveryTracking.timestamp));
 
-    res.json({ ...result[0], tracking });
+    res.json({ ...delivery, tracking });
   } catch (error: any) {
     console.error("Get delivery error:", error);
     res.status(500).json({ error: "Failed to fetch delivery" });
   }
 });
 
-// PUT /api/deliveries/:id/status - Update delivery status
+// PUT /api/deliveries/:id/status - Update delivery status (sender, assigned driver, or admin)
 router.put("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { status } = req.body;
-    const updateData: any = { status };
+    const existing = await db.select().from(deliveries).where(eq(deliveries.id, req.params.id)).limit(1);
+    if (existing.length === 0) {
+      res.status(404).json({ error: "Delivery not found" });
+      return;
+    }
 
+    const delivery = existing[0];
+    const isSender = delivery.senderId === req.user!.userId;
+    const isAdmin = req.user!.role === "admin";
+    const isDriver = req.user!.role === "driver";
+    if (!isSender && !isAdmin && !isDriver) {
+      res.status(403).json({ error: "Not authorized to update this delivery" });
+      return;
+    }
+
+    const { status } = req.body;
+    if (!status || typeof status !== "string") {
+      res.status(400).json({ error: "Status is required" });
+      return;
+    }
+
+    const updateData: any = { status };
     if (status === "accepted") updateData.acceptedAt = new Date();
     if (status === "delivered") updateData.deliveredAt = new Date();
 
@@ -155,7 +183,7 @@ router.post("/packages", authMiddleware, async (req: AuthRequest, res: Response)
 });
 
 // GET /api/packages/track/:trackingNumber - Track a package
-router.get("/packages/track/:trackingNumber", async (req, res: Response) => {
+router.get("/packages/track/:trackingNumber", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(packages)
       .where(eq(packages.trackingNumber, req.params.trackingNumber))
@@ -177,8 +205,8 @@ router.get("/packages/track/:trackingNumber", async (req, res: Response) => {
   }
 });
 
-// GET /api/courier-hubs - List courier hubs
-router.get("/courier-hubs", async (req, res: Response) => {
+// GET /api/courier-hubs - List courier hubs (public — pre-login hub discovery)
+router.get("/courier-hubs", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const hubs = await db.select().from(courierHubs).where(eq(courierHubs.isActive, true));
     res.json({ data: hubs });

@@ -7,6 +7,19 @@ dist/
 .env
 .env.local
 .env.production
+.env.*.local
 *.log
 .DS_Store
 __pycache__/
+
+# Secrets & credentials — NEVER commit
+google-services.json
+GoogleService-Info.plist
+*.keystore
+*.jks
+*.p8
+*.p12
+*.pem
+firebase-adminsdk*.json
+service-account*.json
+AZURE_CREDENTIALS.json

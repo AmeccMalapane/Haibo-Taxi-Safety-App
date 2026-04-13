@@ -7,8 +7,8 @@ import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
 
-// GET /api/community/posts - List community posts/reels
-router.get("/posts", async (req, res: Response) => {
+// GET /api/community/posts - List community posts/reels (public social wall)
+router.get("/posts", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const { category } = req.query as any;
@@ -69,7 +69,7 @@ router.post("/posts", authMiddleware, async (req: AuthRequest, res: Response) =>
 });
 
 // GET /api/community/posts/:id - Get a single post
-router.get("/posts/:id", async (req, res: Response) => {
+router.get("/posts/:id", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(reels).where(eq(reels.id, req.params.id)).limit(1);
     if (result.length === 0) {
