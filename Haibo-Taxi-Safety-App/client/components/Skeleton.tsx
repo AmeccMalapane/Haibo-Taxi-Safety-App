@@ -16,26 +16,47 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-function Shimmer({ style }: { style?: any }) {
+/**
+ * Low-level skeleton primitive. Use this to build custom shapes when the
+ * compound variants below don't fit (e.g. a location pill, a hero title).
+ *
+ * `tone="light"` renders a translucent white shimmer for use on top of the
+ * brand gradient or any dark background — the default tone uses the theme's
+ * neutral background which disappears on dark surfaces.
+ */
+export function SkeletonBlock({
+  style,
+  tone = "default",
+}: {
+  style?: any;
+  tone?: "default" | "light";
+}) {
   const { theme } = useTheme();
-  const opacity = useSharedValue(0.3);
+  const opacity = useSharedValue(tone === "light" ? 0.18 : 0.3);
 
   useEffect(() => {
     opacity.value = withRepeat(
-      withTiming(0.7, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(tone === "light" ? 0.38 : 0.7, {
+        duration: 1000,
+        easing: Easing.inOut(Easing.ease),
+      }),
       -1,
       true
     );
-  }, []);
+  }, [tone]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const bg = tone === "light" ? "#FFFFFF" : theme.backgroundSecondary;
 
   return (
     <Animated.View
-      style={[{ backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.sm }, style, animatedStyle]}
+      style={[{ backgroundColor: bg, borderRadius: BorderRadius.sm }, style, animatedStyle]}
     />
   );
 }
+
+// Back-compat alias for internal use.
+const Shimmer = SkeletonBlock;
 
 /** Full-width card skeleton */
 export function CardSkeleton() {
