@@ -146,3 +146,20 @@ export const sosRateLimit = rateLimit({
     return userId ? `user:${userId}` : `ip:${req.ip || "unknown"}`;
   },
 });
+
+/**
+ * Guest SOS rate limit — tighter than authenticated, keyed by IP+deviceId.
+ * Guests are unauthenticated so the attack surface is wider; we need
+ * stricter caps without blocking a genuine emergency burst.
+ */
+export const sosGuestRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 2,
+  name: "sos-guest",
+  message: "SOS rate limit reached. If this is a real emergency, call 10111.",
+  keyGenerator: (req: Request) => {
+    const deviceId = (req.body?.deviceId as string) || "";
+    const ip = req.ip || "unknown";
+    return deviceId ? `guest:${ip}:${deviceId}` : `guest:${ip}`;
+  },
+});

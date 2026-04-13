@@ -93,23 +93,71 @@ export async function notifyUsers(
   return await sendMulticastNotification(tokens, title, body, stringData);
 }
 
+export type SOSSource = "api" | "websocket" | "guest_api";
+
+export interface SOSAlertInput {
+  latitude: number;
+  longitude: number;
+  message?: string;
+  source?: SOSSource;
+
+  // Authenticated path: provide userId; service looks up the user row.
+  userId?: string;
+
+  // Guest path: provide what the user gave us at SOS time. All optional.
+  guestPhone?: string;
+  guestDisplayName?: string;
+  guestEmergencyContact?: string;
+  guestDeviceId?: string;
+}
+
 /**
  * Send SOS alert to emergency contact (SMS), admins (push), and command center (WebSocket).
  * Every trigger is persisted to sos_alerts for audit / post-incident review.
+ *
+ * Supports both authenticated users (via `userId`) and anonymous guests
+ * (via `guestPhone` / `guestDeviceId` / `guestEmergencyContact`). In both cases,
+ * admins get push + WebSocket alerts and the event is logged to the audit table.
  */
-export async function sendSOSAlert(
-  userId: string,
-  latitude: number,
-  longitude: number,
-  message?: string,
-  source: "api" | "websocket" = "api"
-): Promise<void> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user) return;
+export async function sendSOSAlert(input: SOSAlertInput): Promise<void> {
+  const {
+    latitude,
+    longitude,
+    message,
+    source = "api",
+    userId,
+    guestPhone,
+    guestDisplayName,
+    guestEmergencyContact,
+    guestDeviceId,
+  } = input;
+
+  // Resolve the reporter context.
+  let reporterUserId: string | null = null;
+  let reporterPhone: string | null = null;
+  let reporterDisplayName: string | null = null;
+  let reporterEmergencyContact: string | null = null;
+
+  if (userId) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) {
+      console.warn(`[SOS] Unknown userId ${userId} — dropping alert`);
+      return;
+    }
+    reporterUserId = user.id;
+    reporterPhone = user.phone;
+    reporterDisplayName = user.displayName;
+    reporterEmergencyContact = user.emergencyContactPhone;
+  } else {
+    reporterPhone = guestPhone || null;
+    reporterDisplayName = guestDisplayName || null;
+    reporterEmergencyContact = guestEmergencyContact || null;
+  }
 
   const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-  const sosMessage = message || `${user.displayName || user.phone} triggered an SOS alert!`;
-  const smsBody = `HAIBO SOS ALERT: ${user.displayName || "A passenger"} needs help! Location: ${mapsLink}`;
+  const who = reporterDisplayName || reporterPhone || (guestDeviceId ? `Guest ${guestDeviceId.slice(0, 8)}` : "A passenger");
+  const sosMessage = message || `${who} triggered an SOS alert!`;
+  const smsBody = `HAIBO SOS ALERT: ${reporterDisplayName || "A passenger"} needs help! Location: ${mapsLink}`;
 
   // 1. Notify all admins via push
   const admins = await db.select({ id: users.id })
@@ -120,9 +168,15 @@ export async function sendSOSAlert(
     await notifyUsers(
       admins.map((a) => a.id),
       "sos",
-      "SOS Alert",
+      source === "guest_api" ? "SOS Alert (Guest)" : "SOS Alert",
       sosMessage,
-      { latitude: String(latitude), longitude: String(longitude), userId, mapsLink }
+      {
+        latitude: String(latitude),
+        longitude: String(longitude),
+        userId: reporterUserId || "",
+        deviceId: guestDeviceId || "",
+        mapsLink,
+      }
     );
   }
 
@@ -130,35 +184,38 @@ export async function sendSOSAlert(
   const io = getIO();
   if (io) {
     io.to("admins").emit("sos:alert", {
-      userId,
-      phone: user.phone,
-      displayName: user.displayName,
+      userId: reporterUserId,
+      deviceId: guestDeviceId || null,
+      phone: reporterPhone,
+      displayName: reporterDisplayName,
       latitude,
       longitude,
       message: sosMessage,
       mapsLink,
+      source,
+      isGuest: !reporterUserId,
       timestamp: new Date().toISOString(),
     });
   }
 
-  // 3. Send SMS to the user's registered emergency contact (inline on users table)
+  // 3. Send SMS to the registered emergency contact when we have one
   let smsRecipients = 0;
-  if (user.emergencyContactPhone) {
+  if (reporterEmergencyContact) {
     try {
       const { sendSms } = await import("./sms");
-      await sendSms(user.emergencyContactPhone, smsBody);
+      await sendSms(reporterEmergencyContact, smsBody);
       smsRecipients = 1;
-      console.log(`[SOS] SMS sent to ${user.emergencyContactName || "contact"} (${user.emergencyContactPhone})`);
+      console.log(`[SOS] SMS sent to emergency contact ${reporterEmergencyContact}`);
     } catch (smsErr) {
-      console.log(`[SOS] SMS to ${user.emergencyContactPhone} failed:`, smsErr);
+      console.log(`[SOS] SMS to ${reporterEmergencyContact} failed:`, smsErr);
     }
   }
 
   // 4. Persist audit record — even if push/SMS fail, we have a record of the trigger
   try {
     await db.insert(sosAlerts).values({
-      userId,
-      phone: user.phone,
+      userId: reporterUserId,
+      phone: reporterPhone,
       latitude,
       longitude,
       message: sosMessage,
@@ -170,5 +227,5 @@ export async function sendSOSAlert(
     console.error("[SOS] CRITICAL: audit log insert failed:", auditErr);
   }
 
-  console.log(`[SOS] Full alert from ${user.phone} at ${latitude},${longitude}`);
+  console.log(`[SOS] ${source} alert from ${reporterPhone || guestDeviceId || "unknown"} at ${latitude},${longitude}`);
 }

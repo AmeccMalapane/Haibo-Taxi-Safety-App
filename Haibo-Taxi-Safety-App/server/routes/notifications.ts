@@ -3,7 +3,7 @@ import { db } from "../db";
 import { notifications, users } from "../../shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
-import { sosRateLimit } from "../middleware/rateLimit";
+import { sosRateLimit, sosGuestRateLimit } from "../middleware/rateLimit";
 import { notifyUser, sendSOSAlert } from "../services/notifications";
 
 const router = Router();
@@ -84,23 +84,72 @@ router.put("/read-all", authMiddleware, async (req: AuthRequest, res: Response) 
   }
 });
 
-// POST /api/notifications/sos — Trigger SOS alert (also sends push + real-time)
+function validateSosCoords(latitude: unknown, longitude: unknown): { lat: number; lon: number } | null {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+// POST /api/notifications/sos — Authenticated SOS (real-time + push + audit)
 router.post("/sos", authMiddleware, sosRateLimit, async (req: AuthRequest, res: Response) => {
   try {
-    const { latitude, longitude, message } = req.body;
-
-    const lat = Number(latitude);
-    const lon = Number(longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    const coords = validateSosCoords(req.body.latitude, req.body.longitude);
+    if (!coords) {
       res.status(400).json({ error: "Valid location (latitude, longitude) is required for SOS" });
       return;
     }
 
-    await sendSOSAlert(req.user!.userId, lat, lon, message);
+    await sendSOSAlert({
+      userId: req.user!.userId,
+      latitude: coords.lat,
+      longitude: coords.lon,
+      message: req.body.message,
+      source: "api",
+    });
 
     res.json({ message: "SOS alert sent", timestamp: new Date().toISOString() });
   } catch (error: any) {
     console.error("SOS alert error:", error);
+    res.status(500).json({ error: "Failed to send SOS alert" });
+  }
+});
+
+// POST /api/notifications/sos/guest — Anonymous SOS for pre-login users.
+// A safety app MUST let unauthenticated users in danger trigger an alert.
+// Tight rate-limited by IP+deviceId; everything else is identical to the
+// authenticated path (admins notified, WebSocket broadcast, audit row).
+router.post("/sos/guest", sosGuestRateLimit, async (req, res: Response) => {
+  try {
+    const coords = validateSosCoords(req.body.latitude, req.body.longitude);
+    if (!coords) {
+      res.status(400).json({ error: "Valid location (latitude, longitude) is required for SOS" });
+      return;
+    }
+
+    const { deviceId, phone, displayName, emergencyContactPhone, message } = req.body as {
+      deviceId?: string;
+      phone?: string;
+      displayName?: string;
+      emergencyContactPhone?: string;
+      message?: string;
+    };
+
+    await sendSOSAlert({
+      latitude: coords.lat,
+      longitude: coords.lon,
+      message,
+      source: "guest_api",
+      guestPhone: phone,
+      guestDisplayName: displayName,
+      guestEmergencyContact: emergencyContactPhone,
+      guestDeviceId: deviceId,
+    });
+
+    res.json({ message: "SOS alert sent", timestamp: new Date().toISOString() });
+  } catch (error: any) {
+    console.error("Guest SOS alert error:", error);
     res.status(500).json({ error: "Failed to send SOS alert" });
   }
 });

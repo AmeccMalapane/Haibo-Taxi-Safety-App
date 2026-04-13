@@ -181,7 +181,13 @@ export function initRealtime(httpServer: HttpServer): Server {
       // and the event is persisted to the sos_alerts audit table.
       try {
         const { sendSOSAlert } = await import("./notifications");
-        await sendSOSAlert(user.userId, data.latitude, data.longitude, data.message, "websocket");
+        await sendSOSAlert({
+          userId: user.userId,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          message: data.message,
+          source: "websocket",
+        });
       } catch (err) {
         console.error("[SOS] WS-to-service dispatch failed:", err);
       }

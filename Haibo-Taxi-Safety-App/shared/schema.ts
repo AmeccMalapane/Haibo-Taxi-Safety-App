@@ -1208,12 +1208,13 @@ export const sosAlerts = pgTable("sos_alerts", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  // Nullable because guest SOS events (source='guest_api') have no authenticated user.
+  userId: varchar("user_id"),
   phone: text("phone"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   message: text("message"),
-  source: text("source").default("api"), // "api" | "websocket"
+  source: text("source").default("api"), // "api" | "websocket" | "guest_api"
   adminRecipients: integer("admin_recipients").default(0),
   smsRecipients: integer("sms_recipients").default(0),
   resolvedAt: timestamp("resolved_at"),

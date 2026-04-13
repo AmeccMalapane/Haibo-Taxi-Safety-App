@@ -25,6 +25,7 @@ import { EmergencyContact } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { triggerSOS } from "@/lib/socket";
+import { getDeviceId } from "@/lib/deviceId";
 
 export default function EmergencyScreen() {
   const insets = useSafeAreaInsets();
@@ -92,19 +93,49 @@ export default function EmergencyScreen() {
         lat = location.coords.latitude;
         lng = location.coords.longitude;
       }
-      // 1. WebSocket SOS (instant — reaches command center live)
-      triggerSOS(lat, lng, "Emergency SOS from Haibo app");
-      // 2. API SOS (persists to DB + push notifications to admins)
-      if (isAuthenticated && getApiUrl()) {
-        try {
-          await apiRequest("/api/notifications/sos", {
-            method: "POST",
-            body: JSON.stringify({ latitude: lat, longitude: lng, message: "Emergency SOS from Haibo app" }),
-          });
-        } catch (e) { console.log("[SOS] API call failed:", e); }
+
+      const sosMessage = "Emergency SOS from Haibo app";
+
+      if (isAuthenticated) {
+        // Authenticated path: real-time WebSocket + authenticated REST.
+        triggerSOS(lat, lng, sosMessage);
+        if (getApiUrl()) {
+          try {
+            await apiRequest("/api/notifications/sos", {
+              method: "POST",
+              body: JSON.stringify({ latitude: lat, longitude: lng, message: sosMessage }),
+            });
+          } catch (e) {
+            console.log("[SOS] Authenticated API call failed:", e);
+          }
+        }
+      } else {
+        // Guest path: no Socket.IO (requires token), hit the public REST endpoint
+        // so admins still get notified and the event is audited.
+        if (getApiUrl()) {
+          try {
+            const deviceId = await getDeviceId();
+            const firstContact = contacts[0];
+            await apiRequest("/api/notifications/sos/guest", {
+              method: "POST",
+              body: JSON.stringify({
+                latitude: lat,
+                longitude: lng,
+                message: sosMessage,
+                deviceId,
+                emergencyContactPhone: firstContact?.phone,
+                displayName: firstContact?.name ? `Guest (contact: ${firstContact.name})` : undefined,
+              }),
+            });
+          } catch (e) {
+            console.log("[SOS] Guest API call failed:", e);
+          }
+        }
       }
-      console.log(`[SOS] Alert sent: ${lat},${lng}`);
-    } catch (err) { console.error("[SOS] Failed:", err); }
+      console.log(`[SOS] Alert sent (${isAuthenticated ? "auth" : "guest"}): ${lat},${lng}`);
+    } catch (err) {
+      console.error("[SOS] Failed:", err);
+    }
   };
 
   const animatedPulseStyle = useAnimatedStyle(() => ({
