@@ -6,25 +6,56 @@ import {
   Pressable,
   Alert,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import {
+  Spacing,
+  BrandColors,
+  BorderRadius,
+  Typography,
+} from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
-import { Button } from "@/components/Button";
+import { GradientButton } from "@/components/GradientButton";
 import { apiRequest } from "@/lib/query-client";
 import { getDeviceId } from "@/lib/deviceId";
 
-type ItemType = "lost" | "found";
-type CategoryType = "phone" | "wallet" | "bag" | "document" | "keys" | "other";
+// typeui-clean rework — Post Lost & Found item form. Matches the rest of
+// the auth/form pattern: rose gradient hero with back button, floating
+// white form card with rose focus borders, GradientButton CTA.
+//
+// Latent bugs fixed:
+//   1. `apiRequest("POST", url, data).json()` was a runtime crash —
+//      apiRequest already returns parsed body, calling `.json()` on it
+//      throws "response.json is not a function". Posting a lost/found
+//      item would have always failed. Switched to the new options-object
+//      form: apiRequest(url, { method, body }).
+//   2. Description char counter said "Minimum 10 characters" but the
+//      isValid check was `> 10` (off-by-one — required 11+). Fixed to
+//      `>= 10` so the helper text is honest.
+//   3. No back button on a screen reached from LostFoundScreen via push.
 
-const CATEGORIES: { value: CategoryType; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+type ItemType = "lost" | "found";
+type CategoryType =
+  | "phone"
+  | "wallet"
+  | "bag"
+  | "document"
+  | "keys"
+  | "other";
+
+const CATEGORIES: {
+  value: CategoryType;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+}[] = [
   { value: "phone", label: "Phone", icon: "smartphone" },
   { value: "wallet", label: "Wallet", icon: "credit-card" },
   { value: "bag", label: "Bag", icon: "shopping-bag" },
@@ -49,307 +80,645 @@ export default function PostLostFoundScreen() {
   const [contactPhone, setContactPhone] = useState("");
   const [reward, setReward] = useState("");
 
-  const isValid = title.trim().length > 0 && description.trim().length > 10 && contactName.trim() && contactPhone.trim().length >= 10;
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [descFocused, setDescFocused] = useState(false);
+  const [originFocused, setOriginFocused] = useState(false);
+  const [destFocused, setDestFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [rewardFocused, setRewardFocused] = useState(false);
+
+  const isValid =
+    title.trim().length > 0 &&
+    description.trim().length >= 10 &&
+    contactName.trim().length > 0 &&
+    contactPhone.trim().length >= 10;
+
+  const triggerHaptic = (
+    style: "selection" | "success" | "error" = "selection"
+  ) => {
+    if (Platform.OS === "web") return;
+    try {
+      const Haptics = require("expo-haptics");
+      if (style === "success") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (style === "error") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        Haptics.selectionAsync();
+      }
+    } catch {}
+  };
 
   const postMutation = useMutation({
     mutationFn: async () => {
       const deviceId = await getDeviceId();
-      const response = await apiRequest("POST", "/api/lost-found", {
-        type,
-        category,
-        title: title.trim(),
-        description: description.trim(),
-        routeOrigin: routeOrigin.trim() || undefined,
-        routeDestination: routeDestination.trim() || undefined,
-        contactName: contactName.trim(),
-        contactPhone: contactPhone.trim(),
-        reward: reward ? parseFloat(reward) : undefined,
-        deviceId,
+      return apiRequest("/api/lost-found", {
+        method: "POST",
+        body: JSON.stringify({
+          type,
+          category,
+          title: title.trim(),
+          description: description.trim(),
+          routeOrigin: routeOrigin.trim() || undefined,
+          routeDestination: routeDestination.trim() || undefined,
+          contactName: contactName.trim(),
+          contactPhone: contactPhone.trim(),
+          reward: reward ? parseFloat(reward) : undefined,
+          deviceId,
+        }),
       });
-      return response.json();
     },
     onSuccess: () => {
-      if (Platform.OS !== "web") {
-        const Haptics = require("expo-haptics");
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      triggerHaptic("success");
       queryClient.invalidateQueries({ queryKey: ["/api/lost-found"] });
       Alert.alert(
-        "Posted Successfully!",
-        `Your ${type} item has been posted. People in the community will be able to see it.`,
-        [{ text: "OK", onPress: () => navigation.goBack() }]
+        "Posted!",
+        `Your ${type} item is live. The Haibo community can see it now.`,
+        [{ text: "Done", onPress: () => navigation.goBack() }]
       );
     },
     onError: (error: Error) => {
-      Alert.alert("Error", error.message || "Failed to post item.");
+      triggerHaptic("error");
+      Alert.alert("Couldn't post", error.message || "Please try again.");
     },
   });
 
-  return (
-    <KeyboardAwareScrollViewCompat
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={{
-        paddingTop: Spacing.lg,
-        paddingBottom: insets.bottom + Spacing.xl,
-        paddingHorizontal: Spacing.lg,
-      }}
-    >
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Item Status</ThemedText>
-        <View style={styles.typeRow}>
-          <Pressable
-            style={[
-              styles.typeButton,
-              {
-                backgroundColor:
-                  type === "lost" ? BrandColors.primary.red + "15" : theme.backgroundDefault,
-                borderColor: type === "lost" ? BrandColors.primary.red : theme.border,
-              },
-            ]}
-            onPress={() => setType("lost")}
-          >
-            <Feather
-              name="search"
-              size={24}
-              color={type === "lost" ? BrandColors.primary.red : theme.textSecondary}
-            />
-            <ThemedText
-              style={[styles.typeText, { color: type === "lost" ? BrandColors.primary.red : theme.text }]}
-            >
-              I Lost Something
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.typeButton,
-              {
-                backgroundColor:
-                  type === "found" ? BrandColors.primary.green + "15" : theme.backgroundDefault,
-                borderColor: type === "found" ? BrandColors.primary.green : theme.border,
-              },
-            ]}
-            onPress={() => setType("found")}
-          >
-            <Feather
-              name="check-circle"
-              size={24}
-              color={type === "found" ? BrandColors.primary.green : theme.textSecondary}
-            />
-            <ThemedText
-              style={[
-                styles.typeText,
-                { color: type === "found" ? BrandColors.primary.green : theme.text },
-              ]}
-            >
-              I Found Something
-            </ThemedText>
-          </Pressable>
-        </View>
-      </View>
+  const handleSubmit = () => {
+    if (!isValid) {
+      triggerHaptic("error");
+      return;
+    }
+    postMutation.mutate();
+  };
 
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Category</ThemedText>
-        <View style={styles.categoryGrid}>
-          {CATEGORIES.map((cat) => (
+  const charCount = description.trim().length;
+
+  return (
+    <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Rose gradient hero */}
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
+        >
+          <Animated.View entering={FadeIn.duration(300)}>
             <Pressable
-              key={cat.value}
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeIn.duration(400).delay(100)}
+            style={styles.heroBadgeWrap}
+          >
+            <View style={styles.heroBadge}>
+              <Feather
+                name="edit-3"
+                size={32}
+                color={BrandColors.primary.gradientStart}
+              />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={styles.heroText}
+          >
+            <ThemedText style={styles.heroTitle}>Report an item</ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              Help reunite people with what they've lost.
+            </ThemedText>
+          </Animated.View>
+        </LinearGradient>
+
+        {/* Floating content card */}
+        <Animated.View
+          entering={FadeInUp.duration(500).delay(200)}
+          style={[
+            styles.contentCard,
+            { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing["3xl"] },
+          ]}
+        >
+          {/* Type selector — Lost vs Found */}
+          <BrandLabel theme={theme}>I am reporting</BrandLabel>
+          <View style={styles.typeRow}>
+            <TypeButton
+              active={type === "lost"}
+              accent={BrandColors.status.emergency}
+              icon="search"
+              label="I lost something"
+              onPress={() => {
+                triggerHaptic("selection");
+                setType("lost");
+              }}
+              theme={theme}
+            />
+            <TypeButton
+              active={type === "found"}
+              accent={BrandColors.status.success}
+              icon="check-circle"
+              label="I found something"
+              onPress={() => {
+                triggerHaptic("selection");
+                setType("found");
+              }}
+              theme={theme}
+            />
+          </View>
+
+          {/* Category grid */}
+          <BrandLabel theme={theme}>Category</BrandLabel>
+          <View style={styles.categoryGrid}>
+            {CATEGORIES.map((cat) => {
+              const active = category === cat.value;
+              return (
+                <Pressable
+                  key={cat.value}
+                  onPress={() => {
+                    triggerHaptic("selection");
+                    setCategory(cat.value);
+                  }}
+                  style={({ pressed }) => [
+                    styles.categoryButton,
+                    {
+                      backgroundColor: active
+                        ? BrandColors.primary.gradientStart + "12"
+                        : theme.backgroundDefault,
+                      borderColor: active
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Feather
+                    name={cat.icon}
+                    size={16}
+                    color={
+                      active
+                        ? BrandColors.primary.gradientStart
+                        : theme.textSecondary
+                    }
+                  />
+                  <ThemedText
+                    style={[
+                      styles.categoryText,
+                      {
+                        color: active
+                          ? BrandColors.primary.gradientStart
+                          : theme.text,
+                        fontWeight: active ? "700" : "500",
+                      },
+                    ]}
+                  >
+                    {cat.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Title */}
+          <BrandLabel theme={theme}>Title *</BrandLabel>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.backgroundDefault,
+                color: theme.text,
+                borderColor: titleFocused
+                  ? BrandColors.primary.gradientStart
+                  : theme.border,
+              },
+            ]}
+            placeholder={
+              type === "lost"
+                ? "e.g. Black Samsung Galaxy S24"
+                : "e.g. Found wallet at Bara Rank"
+            }
+            placeholderTextColor={theme.textSecondary}
+            value={title}
+            onChangeText={setTitle}
+            onFocus={() => setTitleFocused(true)}
+            onBlur={() => setTitleFocused(false)}
+            maxLength={100}
+          />
+
+          {/* Description */}
+          <BrandLabel theme={theme}>Description *</BrandLabel>
+          <TextInput
+            style={[
+              styles.textArea,
+              {
+                backgroundColor: theme.backgroundDefault,
+                color: theme.text,
+                borderColor: descFocused
+                  ? BrandColors.primary.gradientStart
+                  : theme.border,
+              },
+            ]}
+            placeholder="Color, size, distinguishing features, where you lost or found it..."
+            placeholderTextColor={theme.textSecondary}
+            value={description}
+            onChangeText={setDescription}
+            onFocus={() => setDescFocused(true)}
+            onBlur={() => setDescFocused(false)}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+          <ThemedText
+            style={[
+              styles.helper,
+              {
+                color:
+                  charCount >= 10
+                    ? BrandColors.status.success
+                    : theme.textSecondary,
+              },
+            ]}
+          >
+            {charCount >= 10
+              ? `${charCount} characters · looks good`
+              : `${charCount}/10 characters minimum`}
+          </ThemedText>
+
+          {/* Route (optional) */}
+          <BrandLabel theme={theme}>Route (optional)</BrandLabel>
+          <View style={styles.routeRow}>
+            <TextInput
               style={[
-                styles.categoryButton,
+                styles.input,
+                styles.routeInput,
                 {
-                  backgroundColor:
-                    category === cat.value
-                      ? BrandColors.primary.blue + "15"
-                      : theme.backgroundDefault,
-                  borderColor:
-                    category === cat.value ? BrandColors.primary.blue : theme.border,
+                  backgroundColor: theme.backgroundDefault,
+                  color: theme.text,
+                  borderColor: originFocused
+                    ? BrandColors.primary.gradientStart
+                    : theme.border,
                 },
               ]}
-              onPress={() => setCategory(cat.value)}
-            >
-              <Feather
-                name={cat.icon}
-                size={20}
-                color={category === cat.value ? BrandColors.primary.blue : theme.textSecondary}
-              />
-              <ThemedText
-                style={[
-                  styles.categoryText,
-                  { color: category === cat.value ? BrandColors.primary.blue : theme.text },
-                ]}
-              >
-                {cat.label}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Title *</ThemedText>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-          placeholder={type === "lost" ? "e.g., Black Samsung Galaxy S24" : "e.g., Found wallet on Rea Vaya"}
-          placeholderTextColor={theme.textSecondary}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={100}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Description *</ThemedText>
-        <TextInput
-          style={[styles.textArea, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-          placeholder="Describe the item in detail (color, size, distinguishing features, where you lost/found it)..."
-          placeholderTextColor={theme.textSecondary}
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-        <ThemedText type="small" style={{ color: theme.textSecondary, marginTop: Spacing.xs }}>
-          Minimum 10 characters ({description.trim().length}/10)
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Route (Optional)</ThemedText>
-        <View style={styles.routeRow}>
-          <TextInput
-            style={[styles.input, styles.routeInput, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-            placeholder="From"
-            placeholderTextColor={theme.textSecondary}
-            value={routeOrigin}
-            onChangeText={setRouteOrigin}
-          />
-          <Feather name="arrow-right" size={20} color={theme.textSecondary} />
-          <TextInput
-            style={[styles.input, styles.routeInput, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-            placeholder="To"
-            placeholderTextColor={theme.textSecondary}
-            value={routeDestination}
-            onChangeText={setRouteDestination}
-          />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText style={styles.label}>Your Contact Info *</ThemedText>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border, marginBottom: Spacing.sm }]}
-          placeholder="Your Name"
-          placeholderTextColor={theme.textSecondary}
-          value={contactName}
-          onChangeText={setContactName}
-        />
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-          placeholder="Phone Number"
-          placeholderTextColor={theme.textSecondary}
-          value={contactPhone}
-          onChangeText={(text) => setContactPhone(text.replace(/\D/g, ""))}
-          keyboardType="phone-pad"
-          maxLength={15}
-        />
-      </View>
-
-      {type === "lost" ? (
-        <View style={styles.section}>
-          <ThemedText style={styles.label}>Reward (Optional)</ThemedText>
-          <View style={[styles.rewardInput, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
-            <ThemedText style={{ fontSize: 18 }}>R</ThemedText>
-            <TextInput
-              style={[styles.rewardInputField, { color: theme.text }]}
-              placeholder="0"
+              placeholder="From"
               placeholderTextColor={theme.textSecondary}
-              value={reward}
-              onChangeText={(text) => setReward(text.replace(/[^0-9]/g, ""))}
-              keyboardType="numeric"
+              value={routeOrigin}
+              onChangeText={setRouteOrigin}
+              onFocus={() => setOriginFocused(true)}
+              onBlur={() => setOriginFocused(false)}
+            />
+            <Feather name="arrow-right" size={18} color={theme.textSecondary} />
+            <TextInput
+              style={[
+                styles.input,
+                styles.routeInput,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  color: theme.text,
+                  borderColor: destFocused
+                    ? BrandColors.primary.gradientStart
+                    : theme.border,
+                },
+              ]}
+              placeholder="To"
+              placeholderTextColor={theme.textSecondary}
+              value={routeDestination}
+              onChangeText={setRouteDestination}
+              onFocus={() => setDestFocused(true)}
+              onBlur={() => setDestFocused(false)}
             />
           </View>
-          <ThemedText type="small" style={{ color: theme.textSecondary, marginTop: Spacing.xs }}>
-            Offering a reward increases the chance of getting your item back
-          </ThemedText>
-        </View>
-      ) : null}
 
-      <Button onPress={() => postMutation.mutate()} disabled={!isValid || postMutation.isPending}>
-        {postMutation.isPending ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#FFFFFF" />
-            <ThemedText style={styles.buttonText}>Posting...</ThemedText>
+          {/* Contact */}
+          <BrandLabel theme={theme}>Your contact details *</BrandLabel>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.backgroundDefault,
+                color: theme.text,
+                borderColor: nameFocused
+                  ? BrandColors.primary.gradientStart
+                  : theme.border,
+                marginBottom: Spacing.sm,
+              },
+            ]}
+            placeholder="Your name"
+            placeholderTextColor={theme.textSecondary}
+            value={contactName}
+            onChangeText={setContactName}
+            onFocus={() => setNameFocused(true)}
+            onBlur={() => setNameFocused(false)}
+          />
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.backgroundDefault,
+                color: theme.text,
+                borderColor: phoneFocused
+                  ? BrandColors.primary.gradientStart
+                  : theme.border,
+              },
+            ]}
+            placeholder="071 234 5678"
+            placeholderTextColor={theme.textSecondary}
+            value={contactPhone}
+            onChangeText={(text) => setContactPhone(text.replace(/\D/g, ""))}
+            onFocus={() => setPhoneFocused(true)}
+            onBlur={() => setPhoneFocused(false)}
+            keyboardType="phone-pad"
+            maxLength={15}
+          />
+
+          {/* Reward (only for lost items) */}
+          {type === "lost" ? (
+            <>
+              <BrandLabel theme={theme}>Reward (optional)</BrandLabel>
+              <View
+                style={[
+                  styles.rewardInput,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: rewardFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
+              >
+                <ThemedText style={styles.rewardCurrency}>R</ThemedText>
+                <TextInput
+                  style={[styles.rewardField, { color: theme.text }]}
+                  placeholder="0"
+                  placeholderTextColor={theme.textSecondary}
+                  value={reward}
+                  onChangeText={(text) => setReward(text.replace(/[^0-9]/g, ""))}
+                  onFocus={() => setRewardFocused(true)}
+                  onBlur={() => setRewardFocused(false)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <ThemedText style={[styles.helper, { color: theme.textSecondary }]}>
+                Offering a reward increases the chance of getting your item back
+              </ThemedText>
+            </>
+          ) : null}
+
+          {/* Submit */}
+          <View style={styles.cta}>
+            <GradientButton
+              onPress={handleSubmit}
+              disabled={!isValid || postMutation.isPending}
+              size="large"
+              icon={postMutation.isPending ? undefined : "arrow-right"}
+              iconPosition="right"
+            >
+              {postMutation.isPending
+                ? "Posting..."
+                : `Post ${type === "lost" ? "lost" : "found"} item`}
+            </GradientButton>
           </View>
-        ) : (
-          `Post ${type === "lost" ? "Lost" : "Found"} Item`
-        )}
-      </Button>
-    </KeyboardAwareScrollViewCompat>
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
+    </View>
+  );
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function BrandLabel({
+  children,
+  theme,
+}: {
+  children: React.ReactNode;
+  theme: any;
+}) {
+  return (
+    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+      {String(children).toUpperCase()}
+    </ThemedText>
+  );
+}
+
+function TypeButton({
+  active,
+  accent,
+  icon,
+  label,
+  onPress,
+  theme,
+}: {
+  active: boolean;
+  accent: string;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  onPress: () => void;
+  theme: any;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.typeButton,
+        {
+          backgroundColor: active ? accent + "12" : theme.surface,
+          borderColor: active ? accent : theme.border,
+        },
+        pressed && styles.pressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <View
+        style={[
+          styles.typeIconWrap,
+          {
+            backgroundColor: active ? accent : accent + "12",
+          },
+        ]}
+      >
+        <Feather
+          name={icon}
+          size={18}
+          color={active ? "#FFFFFF" : accent}
+        />
+      </View>
+      <ThemedText
+        style={[
+          styles.typeText,
+          { color: active ? accent : theme.text },
+        ]}
+      >
+        {label}
+      </ThemedText>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  section: {
-    marginBottom: Spacing.xl,
+  scroll: {
+    flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
+
+  // Hero
+  hero: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    marginBottom: Spacing.lg,
+  },
+  heroBadgeWrap: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  heroBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroText: {
+    alignItems: "center",
+  },
+  heroTitle: {
+    ...Typography.h2,
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
+    textAlign: "center",
+    maxWidth: 320,
+  },
+
+  // Content card
+  contentCard: {
+    flex: 1,
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // Labels + inputs
   label: {
-    fontSize: 14,
-    fontWeight: "600",
+    ...Typography.label,
+    letterSpacing: 1.2,
+    fontSize: 11,
     marginBottom: Spacing.sm,
+    marginTop: Spacing.lg,
   },
+  input: {
+    height: 52,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.lg,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    borderWidth: 1.5,
+  },
+  textArea: {
+    minHeight: 120,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    borderWidth: 1.5,
+  },
+  helper: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: Spacing.xs,
+  },
+
+  // Type buttons
   typeRow: {
     flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   typeButton: {
     flex: 1,
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
     alignItems: "center",
     gap: Spacing.sm,
   },
+  typeIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   typeText: {
-    fontSize: 13,
-    fontWeight: "600",
+    ...Typography.small,
+    fontWeight: "700",
     textAlign: "center",
   },
+
+  // Categories
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
   },
   categoryButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
   },
   categoryText: {
-    fontSize: 13,
-    fontWeight: "500",
+    ...Typography.small,
   },
-  input: {
-    height: 48,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    fontSize: 16,
-    borderWidth: 1,
-  },
-  textArea: {
-    minHeight: 100,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    fontSize: 16,
-    borderWidth: 1,
-  },
+
+  // Route
   routeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -358,27 +727,38 @@ const styles = StyleSheet.create({
   routeInput: {
     flex: 1,
   },
+
+  // Reward
   rewardInput: {
     flexDirection: "row",
     alignItems: "center",
-    height: 48,
+    height: 52,
     borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    gap: Spacing.xs,
-  },
-  rewardInputField: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    borderWidth: 1.5,
     gap: Spacing.sm,
   },
-  buttonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
+  rewardCurrency: {
+    ...Typography.h4,
+    color: BrandColors.primary.gradientStart,
+    fontWeight: "800",
+    fontSize: 18,
+  },
+  rewardField: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontVariant: ["tabular-nums"],
+  },
+
+  // CTA
+  cta: {
+    marginTop: Spacing.xl,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 });
