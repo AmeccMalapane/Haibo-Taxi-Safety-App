@@ -108,6 +108,10 @@ export default function VendorOnboardingScreen() {
   const [description, setDescription] = useState("");
   const [businessImageUrl, setBusinessImageUrl] = useState("");
   const [imageUploading, setImageUploading] = useState(false);
+  // When true, the welcome-back state renders the edit form pre-filled
+  // with the existing profile values so the vendor can fix typos or
+  // swap their photo without losing their vendorRef or status.
+  const [editing, setEditing] = useState(false);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [rankFocused, setRankFocused] = useState(false);
@@ -144,6 +148,60 @@ export default function VendorOnboardingScreen() {
       Alert.alert("Couldn't register", error.message || "Please try again.");
     },
   });
+
+  // Edit flow — reuses the same form state. Calls PUT /me (server enforces
+  // that only mutable fields come through, vendorRef + status stay locked).
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/vendor-profile/me", {
+        method: "PUT",
+        body: JSON.stringify({
+          businessName: businessName.trim(),
+          rankLocation: rankLocation.trim() || null,
+          description: description.trim() || null,
+          businessImageUrl: businessImageUrl || null,
+        }),
+      });
+    },
+    onSuccess: () => {
+      triggerHaptic("success");
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor-profile/me"] });
+      setEditing(false);
+    },
+    onError: (error: Error) => {
+      triggerHaptic("error");
+      Alert.alert("Couldn't save changes", error.message || "Please try again.");
+    },
+  });
+
+  const handleStartEdit = () => {
+    if (!existing) return;
+    // Seed the form state from the existing profile so the user sees
+    // their current values rather than empty fields.
+    setBusinessName(existing.businessName);
+    setRankLocation(existing.rankLocation || "");
+    setDescription(existing.description || "");
+    setBusinessImageUrl(existing.businessImageUrl || "");
+    setEditing(true);
+    triggerHaptic("selection");
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setBusinessName("");
+    setRankLocation("");
+    setDescription("");
+    setBusinessImageUrl("");
+    triggerHaptic("selection");
+  };
+
+  const handleSaveEdit = () => {
+    if (businessName.trim().length < 3) {
+      triggerHaptic("error");
+      return;
+    }
+    updateMutation.mutate();
+  };
 
   const triggerHaptic = (
     style: "selection" | "success" | "error" = "selection"
@@ -390,45 +448,251 @@ export default function VendorOnboardingScreen() {
               />
             </View>
 
-            <View style={styles.cta}>
-              <GradientButton
-                onPress={async () => {
-                  try {
-                    const url = createVendorPayLink(existing.vendorRef);
-                    await Share.share({
-                      message: `Pay ${existing.businessName} on Haibo:\n${url}\n\nOr type the code: ${existing.vendorRef}`,
-                      title: `Pay ${existing.businessName}`,
-                    });
-                  } catch (e) {
-                    // user cancelled — no-op
-                  }
-                }}
-                size="large"
-                icon="share-2"
-                iconPosition="right"
-              >
-                Share payment link
-              </GradientButton>
-            </View>
+            {/* Edit form — inline, only when editing is true */}
+            {editing ? (
+              <View style={styles.editBlock}>
+                <BrandLabel theme={theme}>Business name *</BrandLabel>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      color: theme.text,
+                      borderColor: nameFocused
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                    },
+                  ]}
+                  placeholder="e.g. Mama's Snacks"
+                  placeholderTextColor={theme.textSecondary}
+                  value={businessName}
+                  onChangeText={setBusinessName}
+                  onFocus={() => setNameFocused(true)}
+                  onBlur={() => setNameFocused(false)}
+                  maxLength={80}
+                />
 
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={({ pressed }) => [
-                styles.backLink,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Back to wallet"
-            >
-              <ThemedText
-                style={[
-                  styles.backLinkText,
-                  { color: BrandColors.primary.gradientStart },
-                ]}
-              >
-                Back to wallet
-              </ThemedText>
-            </Pressable>
+                <BrandLabel theme={theme}>Taxi rank / location</BrandLabel>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      color: theme.text,
+                      borderColor: rankFocused
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                    },
+                  ]}
+                  placeholder="e.g. Bara Rank"
+                  placeholderTextColor={theme.textSecondary}
+                  value={rankLocation}
+                  onChangeText={setRankLocation}
+                  onFocus={() => setRankFocused(true)}
+                  onBlur={() => setRankFocused(false)}
+                  maxLength={120}
+                />
+
+                <BrandLabel theme={theme}>What do you sell?</BrandLabel>
+                <TextInput
+                  style={[
+                    styles.textArea,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      color: theme.text,
+                      borderColor: descFocused
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                    },
+                  ]}
+                  placeholder="Chips, sweets, cold drinks…"
+                  placeholderTextColor={theme.textSecondary}
+                  value={description}
+                  onChangeText={setDescription}
+                  onFocus={() => setDescFocused(true)}
+                  onBlur={() => setDescFocused(false)}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  maxLength={280}
+                />
+
+                <BrandLabel theme={theme}>Business photo</BrandLabel>
+                {businessImageUrl ? (
+                  <View style={styles.uploadedWrap}>
+                    <Image
+                      source={{ uri: businessImageUrl }}
+                      style={styles.uploadedImage}
+                      resizeMode="cover"
+                    />
+                    <Pressable
+                      onPress={handleClearImage}
+                      style={({ pressed }) => [
+                        styles.clearImageBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove business photo"
+                    >
+                      <Feather name="x" size={14} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handlePickImage}
+                    disabled={imageUploading}
+                    style={({ pressed }) => [
+                      styles.uploadButton,
+                      {
+                        backgroundColor: theme.backgroundDefault,
+                        borderColor: theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Upload business photo"
+                  >
+                    <View
+                      style={[
+                        styles.uploadIconWrap,
+                        {
+                          backgroundColor:
+                            BrandColors.primary.gradientStart + "12",
+                        },
+                      ]}
+                    >
+                      <Feather
+                        name={imageUploading ? "loader" : "camera"}
+                        size={18}
+                        color={BrandColors.primary.gradientStart}
+                      />
+                    </View>
+                    <ThemedText
+                      style={[
+                        styles.uploadButtonText,
+                        { color: theme.text },
+                      ]}
+                    >
+                      {imageUploading ? "Uploading…" : "Add a photo of your stall"}
+                    </ThemedText>
+                  </Pressable>
+                )}
+
+                <View style={styles.cta}>
+                  <GradientButton
+                    onPress={handleSaveEdit}
+                    disabled={
+                      businessName.trim().length < 3 ||
+                      updateMutation.isPending ||
+                      imageUploading
+                    }
+                    size="large"
+                    icon={updateMutation.isPending ? undefined : "check"}
+                    iconPosition="right"
+                  >
+                    {updateMutation.isPending ? "Saving…" : "Save changes"}
+                  </GradientButton>
+                </View>
+
+                <Pressable
+                  onPress={handleCancelEdit}
+                  disabled={updateMutation.isPending}
+                  style={({ pressed }) => [
+                    styles.backLink,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel edit"
+                >
+                  <ThemedText
+                    style={[
+                      styles.backLinkText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    Cancel
+                  </ThemedText>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <View style={styles.cta}>
+                  <GradientButton
+                    onPress={async () => {
+                      try {
+                        const url = createVendorPayLink(existing.vendorRef);
+                        await Share.share({
+                          message: `Pay ${existing.businessName} on Haibo:\n${url}\n\nOr type the code: ${existing.vendorRef}`,
+                          title: `Pay ${existing.businessName}`,
+                        });
+                      } catch (e) {
+                        // user cancelled — no-op
+                      }
+                    }}
+                    size="large"
+                    icon="share-2"
+                    iconPosition="right"
+                  >
+                    Share payment link
+                  </GradientButton>
+                </View>
+
+                {/* Edit + back actions — only surface edit for non-
+                    suspended vendors. Suspended profiles are read-only
+                    from the vendor's side until an admin restores. */}
+                <View style={styles.actionLinkRow}>
+                  {existing.status !== "suspended" ? (
+                    <Pressable
+                      onPress={handleStartEdit}
+                      style={({ pressed }) => [
+                        styles.actionLink,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit profile"
+                    >
+                      <Feather
+                        name="edit-2"
+                        size={14}
+                        color={BrandColors.primary.gradientStart}
+                      />
+                      <ThemedText
+                        style={[
+                          styles.actionLinkText,
+                          { color: BrandColors.primary.gradientStart },
+                        ]}
+                      >
+                        Edit profile
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+
+                  <Pressable
+                    onPress={() => navigation.goBack()}
+                    style={({ pressed }) => [
+                      styles.actionLink,
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to wallet"
+                  >
+                    <Feather
+                      name="arrow-left"
+                      size={14}
+                      color={theme.textSecondary}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.actionLinkText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Back to wallet
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </Animated.View>
         </KeyboardAwareScrollViewCompat>
       </View>
@@ -1027,6 +1291,28 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     ...Typography.link,
+    fontWeight: "600",
+  },
+
+  // Edit form + action links (welcome-back state)
+  editBlock: {
+    marginTop: Spacing.xl,
+  },
+  actionLinkRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: Spacing.xl,
+    marginTop: Spacing.md,
+  },
+  actionLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: Spacing.md,
+  },
+  actionLinkText: {
+    ...Typography.link,
+    fontSize: 13,
     fontWeight: "600",
   },
 
