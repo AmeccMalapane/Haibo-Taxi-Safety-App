@@ -227,6 +227,34 @@ export const admin = {
   },
 
   /**
+   * Driver KYC queue. `verified`: "true" | "false" | "all" (default all).
+   * Response includes pendingCount for dashboard badging.
+   */
+  async getDrivers(params: { verified?: "true" | "false" | "all"; limit?: number; offset?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.verified && params.verified !== "all") qs.set("verified", params.verified);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/drivers${q}`);
+  },
+
+  async getDriverDetail(driverId: string) {
+    return request(`/api/admin/drivers/${driverId}`);
+  },
+
+  async verifyDriver(driverId: string) {
+    return request(`/api/admin/drivers/${driverId}/verify`, { method: "PUT" });
+  },
+
+  async unverifyDriver(driverId: string, reason?: string) {
+    return request(`/api/admin/drivers/${driverId}/unverify`, {
+      method: "PUT",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  /**
    * Audit log — append-only record of admin writes. Supports optional
    * action/resource filters and cursor-style limit/offset pagination.
    */

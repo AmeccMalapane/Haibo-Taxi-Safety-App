@@ -2,17 +2,19 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth } from "../api/client";
 import { Button } from "../components/Button";
-import { colors, radius, shadows, spacing } from "../lib/brand";
+import {
+  colors,
+  radius,
+  shadows,
+  spacing,
+  gradients,
+  fonts,
+  transitions,
+} from "../lib/brand";
 
 type Mode = "email" | "phone";
 type PhoneStep = "enter" | "verify";
 
-/**
- * Mobile app is phone-first, so admins provisioned via the phone-OTP flow
- * need a matching entry point here. Email+password still works for admins
- * that were seeded with a password. The role gate (auth check for
- * user.role === "admin") is identical for both paths.
- */
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,11 +24,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Email form
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Phone form
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter");
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -111,22 +111,90 @@ export function LoginPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: colors.bg,
+        // Rose tint radial background anchored at top-right — matches the
+        // mobile app's AuthScreen hero band treatment but adapted for a
+        // desktop viewport.
+        background: `
+          radial-gradient(ellipse at top right, ${colors.roseAccent} 0%, transparent 55%),
+          radial-gradient(ellipse at bottom left, rgba(26, 26, 46, 0.06) 0%, transparent 50%),
+          ${colors.bg}
+        `,
+        padding: spacing.xl,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
+      {/* Subtle decorative glow in the background */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: "-20%",
+          right: "-10%",
+          width: 480,
+          height: 480,
+          borderRadius: "50%",
+          background: gradients.primary,
+          opacity: 0.08,
+          filter: "blur(80px)",
+          pointerEvents: "none",
+        }}
+      />
+
       <div
         style={{
           background: colors.surface,
           borderRadius: radius.xl,
-          padding: spacing["2xl"],
-          width: 420,
-          boxShadow: shadows.lg,
+          padding: `${spacing["2xl"]}px ${spacing["2xl"]}px`,
+          width: 440,
+          maxWidth: "100%",
+          boxShadow: shadows.xl,
+          position: "relative",
+          zIndex: 1,
+          border: `1px solid ${colors.border}`,
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: spacing.xl }}>
-          <div style={{ fontSize: 32, fontWeight: 800, color: colors.rose }}>Haibo!</div>
-          <div style={{ fontSize: 14, color: colors.textSecondary, marginTop: 4 }}>
-            Command Center
+        {/* Hero — logo + brand name + welcome copy */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          <img
+            src="/logo.svg"
+            alt="Haibo!"
+            width={64}
+            height={64}
+            style={{
+              marginBottom: spacing.md,
+              filter: "drop-shadow(0 8px 24px rgba(200, 30, 94, 0.35))",
+            }}
+          />
+          <h1
+            style={{
+              fontFamily: fonts.heading,
+              fontSize: 28,
+              fontWeight: 700,
+              color: colors.text,
+              letterSpacing: -0.5,
+              margin: 0,
+              lineHeight: 1.1,
+            }}
+          >
+            Welcome back
+          </h1>
+          <div
+            style={{
+              fontSize: 14,
+              color: colors.textSecondary,
+              marginTop: spacing.xs,
+            }}
+          >
+            Sign in to the Haibo Command Center
           </div>
         </div>
 
@@ -136,7 +204,7 @@ export function LoginPage() {
           aria-label="Sign-in method"
           style={{
             display: "flex",
-            gap: spacing.xs,
+            gap: 4,
             padding: 4,
             background: colors.bg,
             borderRadius: radius.full,
@@ -148,6 +216,7 @@ export function LoginPage() {
             return (
               <button
                 key={m}
+                type="button"
                 role="tab"
                 aria-selected={active}
                 onClick={() => switchMode(m)}
@@ -160,9 +229,10 @@ export function LoginPage() {
                   color: active ? colors.rose : colors.textSecondary,
                   fontSize: 13,
                   fontWeight: 600,
+                  fontFamily: fonts.sans,
                   cursor: "pointer",
                   boxShadow: active ? shadows.sm : "none",
-                  transition: "background 0.15s, color 0.15s",
+                  transition: transitions.medium,
                 }}
               >
                 {m === "email" ? "Email" : "Phone OTP"}
@@ -180,6 +250,7 @@ export function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              placeholder="you@example.com"
             />
 
             <FieldLabel>PASSWORD</FieldLabel>
@@ -189,11 +260,17 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              placeholder="••••••••"
             />
 
             {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
-            <Button type="submit" size="lg" loading={loading} style={{ width: "100%", marginTop: spacing.md }}>
+            <Button
+              type="submit"
+              size="lg"
+              loading={loading}
+              style={{ width: "100%", marginTop: spacing.md }}
+            >
               Sign in
             </Button>
           </form>
@@ -235,7 +312,13 @@ export function LoginPage() {
               required
               autoComplete="one-time-code"
               maxLength={6}
-              style={{ letterSpacing: 4, textAlign: "center", fontSize: 18, fontWeight: 600 }}
+              style={{
+                letterSpacing: 8,
+                textAlign: "center",
+                fontSize: 22,
+                fontWeight: 700,
+                fontFamily: fonts.mono,
+              }}
             />
 
             {error ? <ErrorBanner>{error}</ErrorBanner> : null}
@@ -265,28 +348,53 @@ export function LoginPage() {
                 color: colors.textSecondary,
                 fontSize: 13,
                 cursor: "pointer",
+                padding: spacing.sm,
+                borderRadius: radius.sm,
+                fontFamily: fonts.sans,
+                transition: transitions.color,
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = colors.rose)}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = colors.textSecondary)
+              }
             >
               Use a different number
             </button>
           </form>
         )}
+
+        {/* Footer — admin-only notice */}
+        <div
+          style={{
+            marginTop: spacing.xl,
+            paddingTop: spacing.lg,
+            borderTop: `1px solid ${colors.border}`,
+            textAlign: "center",
+            fontSize: 11,
+            color: colors.textTertiary,
+            letterSpacing: 0.3,
+          }}
+        >
+          Admin accounts only · Activity is logged
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Local presentational helpers (scoped — not exported) ──────────────────
+// ─── Local presentational helpers ──────────────────────────────────────────
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontSize: 12,
-        fontWeight: 600,
+        fontSize: 11,
+        fontWeight: 700,
         color: colors.textSecondary,
         marginBottom: spacing.xs,
         marginTop: spacing.md,
+        letterSpacing: 0.5,
+        fontFamily: fonts.sans,
       }}
     >
       {children}
@@ -296,18 +404,31 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const { style, ...rest } = props;
+  const [focused, setFocused] = React.useState(false);
   return (
     <input
       {...rest}
+      onFocus={(e) => {
+        setFocused(true);
+        rest.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        rest.onBlur?.(e);
+      }}
       style={{
         width: "100%",
         padding: `${spacing.md}px ${spacing.lg}px`,
         borderRadius: radius.md,
-        border: `1px solid ${colors.border}`,
+        border: `1.5px solid ${focused ? colors.rose : colors.border}`,
         fontSize: 15,
         outline: "none",
         boxSizing: "border-box",
-        fontFamily: "inherit",
+        fontFamily: fonts.sans,
+        color: colors.text,
+        background: colors.surface,
+        transition: transitions.medium,
+        boxShadow: focused ? `0 0 0 3px ${colors.roseAccent}` : "none",
         ...style,
       }}
     />
@@ -325,6 +446,8 @@ function ErrorBanner({ children }: { children: React.ReactNode }) {
         background: colors.dangerSoft,
         color: colors.danger,
         fontSize: 13,
+        fontWeight: 500,
+        border: `1px solid ${colors.danger}20`,
       }}
     >
       {children}

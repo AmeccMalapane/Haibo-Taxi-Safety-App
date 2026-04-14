@@ -19,6 +19,8 @@ import { WithdrawalsPage } from "./pages/WithdrawalsPage";
 import { SOSAlertsPage } from "./pages/SOSAlertsPage";
 import { PasopPage } from "./pages/PasopPage";
 import { UserWalletPage } from "./pages/UserWalletPage";
+import { DriversPage } from "./pages/DriversPage";
+import { DriverDetailPage } from "./pages/DriverDetailPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -79,6 +81,8 @@ export default function App() {
           <Route path="/moderation/jobs" element={<JobsModerationPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/:userId/wallet" element={<UserWalletPage />} />
+          <Route path="/drivers" element={<DriversPage />} />
+          <Route path="/drivers/:driverId" element={<DriverDetailPage />} />
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />

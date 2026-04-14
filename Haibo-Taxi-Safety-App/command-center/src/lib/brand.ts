@@ -118,6 +118,23 @@ export const shadows = {
 } as const;
 
 /**
+ * Transition tokens — keep hover/focus/state changes consistent across the
+ * app. Fast for micro-interactions, medium for layout shifts, slow for
+ * page-level morphs. All use an ease-out curve so elements "settle" into
+ * their final state rather than bouncing.
+ */
+export const transitions = {
+  fast: "all 0.12s cubic-bezier(0.2, 0.8, 0.4, 1)",
+  medium: "all 0.22s cubic-bezier(0.2, 0.8, 0.4, 1)",
+  slow: "all 0.35s cubic-bezier(0.2, 0.8, 0.4, 1)",
+  // Specific-property variants for cases where animating `all` would be
+  // too aggressive (e.g., buttons that already have their own internal
+  // style transitions). Use when you want precision.
+  transform: "transform 0.12s cubic-bezier(0.2, 0.8, 0.4, 1)",
+  color: "color 0.15s, background 0.15s, border-color 0.15s",
+} as const;
+
+/**
  * Font family stacks — Space Grotesk for headings, Inter for body.
  * Matches mobile `Fonts.web` in theme.ts.
  */

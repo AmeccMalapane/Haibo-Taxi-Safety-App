@@ -34,6 +34,12 @@ export function DashboardPage() {
     queryFn: () => admin.getSOSAlerts({ status: "unresolved", limit: 1 }),
     refetchInterval: 20_000,
   });
+  // Pending driver KYC count — limit=1 keeps the payload tiny; we only
+  // need pendingCount from the response for the badge.
+  const driversQ = useQuery({
+    queryKey: ["admin", "drivers", "pending-count"],
+    queryFn: () => admin.getDrivers({ verified: "false", limit: 1 }),
+  });
 
   // Realtime: SOS alerts page the operator with a hard toast; complaint:new
   // and withdrawal:requested invalidate the metrics query so the dashboard
@@ -138,7 +144,15 @@ export function DashboardPage() {
             />
             <StatCard label="Total users" value={metrics?.totalUsers ?? 0} />
             <StatCard label="Active vehicles" value={metrics?.activeVehicles ?? 0} />
-            <StatCard label="Registered drivers" value={metrics?.totalDrivers ?? 0} />
+            <StatCard
+              label="Registered drivers"
+              value={metrics?.totalDrivers ?? 0}
+              sub={
+                (driversQ.data?.pendingCount ?? 0) > 0
+                  ? `${driversQ.data.pendingCount} pending KYC`
+                  : "all verified"
+              }
+            />
             <StatCard
               label="Pending complaints"
               value={metrics?.pendingComplaints ?? 0}

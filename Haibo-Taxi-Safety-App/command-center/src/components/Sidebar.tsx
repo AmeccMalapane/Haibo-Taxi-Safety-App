@@ -13,10 +13,11 @@ import {
   Briefcase,
   ScrollText,
   Radar,
+  BadgeCheck,
   LogOut,
   LucideIcon,
 } from "lucide-react";
-import { colors, spacing } from "../lib/brand";
+import { colors, radius, spacing, shadows, gradients, transitions } from "../lib/brand";
 import { auth } from "../api/client";
 import { closeSocket } from "../lib/socket";
 
@@ -35,8 +36,9 @@ const navItems: NavItem[] = [
   { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
 
-  // Moderation — content review
+  // Moderation — content + person review
   { to: "/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
+  { to: "/drivers", label: "Driver KYC", Icon: BadgeCheck, section: "Moderation" },
   { to: "/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
   { to: "/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
   { to: "/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
@@ -110,7 +112,16 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav style={{ padding: `${spacing.lg}px 0`, flex: 1, overflowY: "auto" }}>
+      <nav
+        style={{
+          padding: `${spacing.md}px ${spacing.md}px`,
+          flex: 1,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
         {navItems.map((item, idx) => {
           const { to, label, Icon, section } = item;
           const prevSection = idx > 0 ? navItems[idx - 1].section : undefined;
@@ -120,10 +131,10 @@ export function Sidebar() {
               {showSectionHeader ? (
                 <div
                   style={{
-                    padding: `${spacing.md}px ${spacing.xl}px ${spacing.xs}px`,
+                    padding: `${spacing.lg}px ${spacing.md}px ${spacing.xs}px`,
                     fontSize: 10,
                     fontWeight: 700,
-                    letterSpacing: 1,
+                    letterSpacing: 1.2,
                     textTransform: "uppercase",
                     color: colors.sidebarFgFaint,
                   }}
@@ -134,18 +145,21 @@ export function Sidebar() {
               <NavLink
                 to={to}
                 end={to === "/"}
+                className="cc-nav-link"
                 style={({ isActive }) => ({
                   display: "flex",
                   alignItems: "center",
                   gap: spacing.md,
-                  padding: `${spacing.sm}px ${spacing.xl}px`,
+                  padding: `${spacing.sm}px ${spacing.md}px`,
+                  borderRadius: radius.md,
                   textDecoration: "none",
-                  background: isActive ? colors.roseAccent : "transparent",
-                  color: isActive ? colors.rose : colors.sidebarFgDim,
+                  background: isActive ? gradients.primary : "transparent",
+                  color: isActive ? "#FFFFFF" : colors.sidebarFgDim,
                   fontSize: 14,
                   fontWeight: isActive ? 600 : 500,
-                  borderLeft: `3px solid ${isActive ? colors.rose : "transparent"}`,
-                  transition: "background 0.15s, color 0.15s",
+                  boxShadow: isActive ? shadows.brandSm : "none",
+                  transition: transitions.medium,
+                  position: "relative",
                 })}
               >
                 <Icon size={18} strokeWidth={2} />
@@ -154,6 +168,20 @@ export function Sidebar() {
             </React.Fragment>
           );
         })}
+
+        {/* Hover state for inactive nav links — not possible inline. */}
+        <style>{`
+          .cc-nav-link:hover {
+            background: rgba(255, 255, 255, 0.06) !important;
+            color: #FFFFFF !important;
+          }
+          .cc-nav-link.active:hover,
+          .cc-nav-link[aria-current="page"]:hover {
+            /* Active link already has the gradient — keep it */
+            background: ${gradients.primary} !important;
+            color: #FFFFFF !important;
+          }
+        `}</style>
       </nav>
 
       <div

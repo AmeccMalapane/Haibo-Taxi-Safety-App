@@ -5,7 +5,7 @@ import {
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
-  sosAlerts,
+  sosAlerts, driverRatings,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
@@ -986,6 +986,238 @@ router.post(
     } catch (error: any) {
       console.error("Adjust wallet error:", error);
       res.status(500).json({ error: "Failed to adjust wallet" });
+    }
+  }
+);
+
+// ============ DRIVER KYC ============
+// List, inspect, and verify/unverify driver_profiles. This is handled
+// outside MODERATION_RESOURCES because driver KYC has richer context
+// than a plain status queue — we want license expiry warnings, recent
+// ratings, and a joined user record per row.
+
+// GET /api/admin/drivers?verified=true|false&limit=&offset=
+router.get(
+  "/drivers",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { verified, limit: rawLimit, offset: rawOffset } = req.query as {
+        verified?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const baseQuery = db
+        .select({
+          id: driverProfiles.id,
+          userId: driverProfiles.userId,
+          taxiPlateNumber: driverProfiles.taxiPlateNumber,
+          licenseNumber: driverProfiles.licenseNumber,
+          licenseExpiry: driverProfiles.licenseExpiry,
+          insuranceExpiry: driverProfiles.insuranceExpiry,
+          safetyRating: driverProfiles.safetyRating,
+          totalRatings: driverProfiles.totalRatings,
+          totalRides: driverProfiles.totalRides,
+          acceptanceRate: driverProfiles.acceptanceRate,
+          isVerified: driverProfiles.isVerified,
+          vehicleModel: driverProfiles.vehicleModel,
+          vehicleYear: driverProfiles.vehicleYear,
+          vehicleColor: driverProfiles.vehicleColor,
+          lastLocationUpdate: driverProfiles.lastLocationUpdate,
+          createdAt: driverProfiles.createdAt,
+          userPhone: users.phone,
+          userDisplayName: users.displayName,
+        })
+        .from(driverProfiles)
+        .leftJoin(users, eq(driverProfiles.userId, users.id))
+        .orderBy(desc(driverProfiles.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows =
+        verified === "true"
+          ? await baseQuery.where(eq(driverProfiles.isVerified, true))
+          : verified === "false"
+          ? await baseQuery.where(eq(driverProfiles.isVerified, false))
+          : await baseQuery;
+
+      const [pendingResult] = await db
+        .select({ count: count() })
+        .from(driverProfiles)
+        .where(eq(driverProfiles.isVerified, false));
+
+      res.json({
+        data: rows,
+        pendingCount: pendingResult.count,
+      });
+    } catch (error: any) {
+      console.error("List drivers error:", error);
+      res.status(500).json({ error: "Failed to fetch drivers" });
+    }
+  }
+);
+
+// GET /api/admin/drivers/:id — full profile with recent ratings
+router.get(
+  "/drivers/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [row] = await db
+        .select({
+          profile: driverProfiles,
+          user: {
+            id: users.id,
+            phone: users.phone,
+            displayName: users.displayName,
+            email: users.email,
+            role: users.role,
+            createdAt: users.createdAt,
+            isVerified: users.isVerified,
+            homeAddress: users.homeAddress,
+          },
+        })
+        .from(driverProfiles)
+        .leftJoin(users, eq(driverProfiles.userId, users.id))
+        .where(eq(driverProfiles.id, req.params.id))
+        .limit(1);
+
+      if (!row) {
+        res.status(404).json({ error: "Driver profile not found" });
+        return;
+      }
+
+      const ratings = await db
+        .select()
+        .from(driverRatings)
+        .where(eq(driverRatings.driverId, row.profile.userId))
+        .orderBy(desc(driverRatings.createdAt))
+        .limit(20);
+
+      res.json({
+        profile: row.profile,
+        user: row.user,
+        recentRatings: ratings,
+      });
+    } catch (error: any) {
+      console.error("Get driver detail error:", error);
+      res.status(500).json({ error: "Failed to fetch driver" });
+    }
+  }
+);
+
+// PUT /api/admin/drivers/:id/verify — mark driver as KYC-verified
+router.put(
+  "/drivers/:id/verify",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [existing] = await db
+        .select()
+        .from(driverProfiles)
+        .where(eq(driverProfiles.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        res.status(404).json({ error: "Driver profile not found" });
+        return;
+      }
+      if (existing.isVerified) {
+        res.status(400).json({ error: "Driver already verified" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(driverProfiles)
+        .set({ isVerified: true })
+        .where(eq(driverProfiles.id, req.params.id))
+        .returning();
+
+      await recordAdminAction(req, "driver.verify", "driver_profiles", req.params.id, {
+        userId: existing.userId,
+        plateNumber: existing.taxiPlateNumber,
+      });
+
+      try {
+        await notifyUser({
+          userId: existing.userId,
+          type: "system",
+          title: "You're verified on Haibo!",
+          body: `KYC complete — you can now accept commuters with plate ${existing.taxiPlateNumber}.`,
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] driver verify notify failed:", notifyErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Verify driver error:", error);
+      res.status(500).json({ error: "Failed to verify driver" });
+    }
+  }
+);
+
+// PUT /api/admin/drivers/:id/unverify — revoke verification
+// Body optional: { reason?: string } — recorded in the audit log and
+// shown to the driver in the revocation notification.
+router.put(
+  "/drivers/:id/unverify",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { reason } = req.body as { reason?: string };
+
+      const [existing] = await db
+        .select()
+        .from(driverProfiles)
+        .where(eq(driverProfiles.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        res.status(404).json({ error: "Driver profile not found" });
+        return;
+      }
+      if (!existing.isVerified) {
+        res.status(400).json({ error: "Driver is already unverified" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(driverProfiles)
+        .set({ isVerified: false })
+        .where(eq(driverProfiles.id, req.params.id))
+        .returning();
+
+      await recordAdminAction(req, "driver.unverify", "driver_profiles", req.params.id, {
+        userId: existing.userId,
+        plateNumber: existing.taxiPlateNumber,
+        reason: reason || null,
+      });
+
+      try {
+        await notifyUser({
+          userId: existing.userId,
+          type: "system",
+          title: "Verification revoked",
+          body: reason
+            ? `Your Haibo verification has been revoked. Reason: ${reason}`
+            : "Your Haibo verification has been revoked. Contact support for details.",
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] driver unverify notify failed:", notifyErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Unverify driver error:", error);
+      res.status(500).json({ error: "Failed to unverify driver" });
     }
   }
 );
