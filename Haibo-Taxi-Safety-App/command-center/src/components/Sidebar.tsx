@@ -10,6 +10,7 @@ import {
   Video,
   Search,
   Briefcase,
+  ScrollText,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -39,6 +40,9 @@ const navItems: NavItem[] = [
   { to: "/users", label: "Users", Icon: Users, section: "Directory" },
   { to: "/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
   { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
+
+  // System — who did what
+  { to: "/audit-log", label: "Audit log", Icon: ScrollText, section: "System" },
 ];
 
 export function Sidebar() {

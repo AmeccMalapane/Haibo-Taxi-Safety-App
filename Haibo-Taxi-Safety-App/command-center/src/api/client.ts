@@ -67,6 +67,32 @@ export const auth = {
     return data;
   },
 
+  /**
+   * Send a one-time code to a phone number. Server rate-limits per phone
+   * and per IP so brute-forcing is bounded.
+   */
+  async sendOTP(phone: string) {
+    return request("/api/auth/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
+  },
+
+  /**
+   * Verify the OTP and complete sign-in. Returns the same shape as login()
+   * (token + user); the Command Center's LoginPage guards on role so
+   * non-admin phone owners bounce straight back out.
+   */
+  async verifyOTP(phone: string, code: string) {
+    const data = await request("/api/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone, code }),
+    });
+    setToken(data.token);
+    localStorage.setItem("haibo_cc_user", JSON.stringify(data.user));
+    return data;
+  },
+
   async getMe() {
     return request("/api/auth/me");
   },
@@ -152,6 +178,25 @@ export const admin = {
       method: "PUT",
       body: JSON.stringify(patch),
     });
+  },
+
+  /**
+   * Audit log — append-only record of admin writes. Supports optional
+   * action/resource filters and cursor-style limit/offset pagination.
+   */
+  async getAuditLog(params: {
+    action?: string;
+    resource?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const qs = new URLSearchParams();
+    if (params.action) qs.set("action", params.action);
+    if (params.resource) qs.set("resource", params.resource);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/audit-log${q}`);
   },
 };
 

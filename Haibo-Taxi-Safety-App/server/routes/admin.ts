@@ -4,11 +4,12 @@ import {
   users, taxis, driverProfiles, complaints, events,
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
-  reels, lostFoundItems, jobs,
+  reels, lostFoundItems, jobs, adminAuditLog,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
 import { notifyUser } from "../services/notifications";
+import { recordAdminAction } from "../services/audit";
 
 const router = Router();
 
@@ -175,6 +176,11 @@ router.put("/complaints/:id", authMiddleware, requireRole("admin"), async (req: 
       .where(eq(complaints.id, req.params.id))
       .returning();
 
+    await recordAdminAction(req, "complaint.update", "complaints", req.params.id, {
+      status,
+      resolution,
+    });
+
     res.json(updated);
   } catch (error: any) {
     console.error("Update complaint error:", error);
@@ -194,6 +200,8 @@ router.put("/taxis/:id/verify", authMiddleware, requireRole("admin"), async (req
       })
       .where(eq(taxis.id, req.params.id))
       .returning();
+
+    await recordAdminAction(req, "taxi.verify", "taxis", req.params.id);
 
     res.json(updated);
   } catch (error: any) {
@@ -288,6 +296,11 @@ router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), asy
       console.log("[Admin] withdrawal approve notify failed:", notifyErr);
     }
 
+    await recordAdminAction(req, "withdrawal.approve", "withdrawal_requests", req.params.id, {
+      amount: existing.amount,
+      userId: existing.userId,
+    });
+
     res.json(updated);
   } catch (error: any) {
     console.error("Approve withdrawal error:", error);
@@ -353,6 +366,12 @@ router.put("/withdrawals/:id/reject", authMiddleware, requireRole("admin"), asyn
     } catch (notifyErr) {
       console.log("[Admin] withdrawal reject notify failed:", notifyErr);
     }
+
+    await recordAdminAction(req, "withdrawal.reject", "withdrawal_requests", req.params.id, {
+      amount: existing.amount,
+      userId: existing.userId,
+      reason: reason || null,
+    });
 
     res.json(updated);
   } catch (error: any) {
@@ -521,10 +540,61 @@ router.put(
         return;
       }
 
+      await recordAdminAction(req, "moderation.update", resource, id, { patch });
+
       res.json(updated);
     } catch (error: any) {
       console.error(`Moderation update error (${req.params.resource}):`, error);
       res.status(500).json({ error: "Failed to update item" });
+    }
+  }
+);
+
+// ============ AUDIT LOG ============
+
+// GET /api/admin/audit-log — paginated, most-recent first
+router.get(
+  "/audit-log",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { action, resource, limit: rawLimit, offset: rawOffset } = req.query as {
+        action?: string;
+        resource?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const conditions: any[] = [];
+      if (action) conditions.push(eq(adminAuditLog.action, action));
+      if (resource) conditions.push(eq(adminAuditLog.resource, resource));
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const baseQuery = db
+        .select()
+        .from(adminAuditLog)
+        .orderBy(desc(adminAuditLog.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows = whereClause ? await baseQuery.where(whereClause) : await baseQuery;
+
+      const [totalResult] = whereClause
+        ? await db.select({ count: count() }).from(adminAuditLog).where(whereClause)
+        : await db.select({ count: count() }).from(adminAuditLog);
+
+      res.json({
+        data: rows,
+        total: totalResult.count,
+        limit,
+        offset,
+      });
+    } catch (error: any) {
+      console.error("Audit log error:", error);
+      res.status(500).json({ error: "Failed to fetch audit log" });
     }
   }
 );

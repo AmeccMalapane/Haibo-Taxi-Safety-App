@@ -21,6 +21,7 @@ import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
 import { FleetPage } from "./pages/FleetPage";
 import { EventsPage } from "./pages/EventsPage";
+import { AuditLogPage } from "./pages/AuditLogPage";
 import { colors, spacing } from "./lib/brand";
 
 /**
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="/events" element={<EventsPage />} />
+          <Route path="/audit-log" element={<AuditLogPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

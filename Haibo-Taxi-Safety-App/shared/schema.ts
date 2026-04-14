@@ -1245,6 +1245,31 @@ export const groupRideChats = pgTable("group_ride_chats", {
 export type GroupRideChat = typeof groupRideChats.$inferSelect;
 
 // ============================================
+// ADMIN AUDIT LOG - Append-only record of destructive admin actions
+// ============================================
+// Every write performed through the admin API (approving a withdrawal,
+// resolving a complaint, toggling a job feature flag) gets a row here
+// so we can answer "who did what, and when" questions during incident
+// reviews. The table is append-only — there is no update or delete
+// route. `meta` holds the patch or body payload as JSON for context,
+// truncated on the client side if needed.
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id").notNull(),
+  adminPhone: text("admin_phone"),
+  action: text("action").notNull(), // e.g. "withdrawal.approve", "moderation.update"
+  resource: text("resource").notNull(), // e.g. "withdrawal_request", "reels"
+  resourceId: varchar("resource_id"),
+  meta: jsonb("meta"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 
