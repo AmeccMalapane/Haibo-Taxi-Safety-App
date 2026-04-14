@@ -89,41 +89,59 @@ export function UsersPage() {
               <TH>Phone</TH>
               <TH>Name</TH>
               <TH>Role</TH>
-              <TH>Verified</TH>
+              <TH>Status</TH>
               <TH>Balance</TH>
               <TH>Joined</TH>
             </tr>
           </thead>
           <tbody>
-            {users.map((u: any) => (
-              <tr
-                key={u.id}
-                onClick={() => navigate(`/users/${u.id}/wallet`)}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = colors.surfaceAlt)
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-                title="Click to view wallet"
-              >
-                <TD>{u.phone}</TD>
-                <TD>{u.displayName || "—"}</TD>
-                <TD>
-                  <Badge tone={roleTone(u.role)}>{u.role}</Badge>
-                </TD>
-                <TD>{u.isVerified ? "Yes" : "No"}</TD>
-                <TD>
-                  <span style={{ fontVariant: "tabular-nums", fontWeight: 600 }}>
-                    R{Number(u.walletBalance || 0).toFixed(2)}
-                  </span>
-                </TD>
-                <TD>
-                  {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
-                </TD>
-              </tr>
-            ))}
+            {users.map((u: any) => {
+              const suspended = !!u.isSuspended;
+              return (
+                <tr
+                  key={u.id}
+                  onClick={() => navigate(`/users/${u.id}/wallet`)}
+                  style={{
+                    cursor: "pointer",
+                    opacity: suspended ? 0.72 : 1,
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = colors.surfaceAlt)
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                  title={
+                    suspended
+                      ? `Suspended: ${u.suspensionReason || "no reason recorded"}`
+                      : "Click to view wallet"
+                  }
+                >
+                  <TD>{u.phone}</TD>
+                  <TD>{u.displayName || "—"}</TD>
+                  <TD>
+                    <Badge tone={roleTone(u.role)}>{u.role}</Badge>
+                  </TD>
+                  <TD>
+                    {suspended ? (
+                      <Badge tone="danger">suspended</Badge>
+                    ) : u.isVerified ? (
+                      <Badge tone="success">verified</Badge>
+                    ) : (
+                      <Badge>unverified</Badge>
+                    )}
+                  </TD>
+                  <TD>
+                    <span style={{ fontVariant: "tabular-nums", fontWeight: 600 }}>
+                      R{Number(u.walletBalance || 0).toFixed(2)}
+                    </span>
+                  </TD>
+                  <TD>
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                  </TD>
+                </tr>
+              );
+            })}
           </tbody>
         </Table>
       )}

@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { db } from "../db";
+import { users } from "../../shared/schema";
+import { eq } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET;
@@ -40,9 +43,15 @@ export function verifyRefreshToken(token: string): AuthPayload {
 }
 
 /**
- * Require authentication — rejects with 401 if no valid token.
+ * Require authentication — rejects with 401 if no valid token, 403 if the
+ * account is suspended. Async because we do one small PK lookup per call
+ * to catch suspended accounts whose token is still unexpired.
  */
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function authMiddleware(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -52,14 +61,37 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   const token = authHeader.split(" ")[1];
 
+  let decoded: AuthPayload;
   try {
-    const decoded = verifyToken(token);
-    req.user = decoded;
-    next();
+    decoded = verifyToken(token);
   } catch (error) {
     res.status(401).json({ error: "Invalid or expired token" });
     return;
   }
+
+  try {
+    const [row] = await db
+      .select({ isSuspended: users.isSuspended })
+      .from(users)
+      .where(eq(users.id, decoded.userId))
+      .limit(1);
+
+    if (row?.isSuspended) {
+      res.status(403).json({
+        error: "Account suspended",
+        code: "ACCOUNT_SUSPENDED",
+      });
+      return;
+    }
+  } catch (err) {
+    // If the suspension lookup fails (DB hiccup), fail-open rather than
+    // locking everyone out. We still have the valid JWT; a DB outage
+    // shouldn't take down the whole auth layer.
+    console.error("[Auth] suspension check failed:", err);
+  }
+
+  req.user = decoded;
+  next();
 }
 
 /**

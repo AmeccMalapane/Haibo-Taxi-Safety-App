@@ -2,7 +2,15 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Wallet,
+  ShieldAlert,
+  ShieldCheck,
+  Ban,
+} from "lucide-react";
 import { admin } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/Card";
@@ -34,6 +42,10 @@ interface WalletResponse {
     walletBalance: number | null;
     isVerified: boolean | null;
     createdAt: string | null;
+    isSuspended: boolean | null;
+    suspendedAt: string | null;
+    suspendedBy: string | null;
+    suspensionReason: string | null;
   };
   transactions: WalletTxn[];
   totals: {
@@ -73,6 +85,31 @@ export function UserWalletPage() {
   const [amountInput, setAmountInput] = useState("");
   const [reasonInput, setReasonInput] = useState("");
 
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
+
+  const suspendM = useMutation({
+    mutationFn: () => admin.suspendUser(userId!, suspendReason.trim()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "user-wallet", userId] });
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast.success("User suspended — all API access blocked");
+      setShowSuspendModal(false);
+      setSuspendReason("");
+    },
+    onError: (err: any) => toast.error(err?.message || "Suspension failed"),
+  });
+
+  const unsuspendM = useMutation({
+    mutationFn: () => admin.unsuspendUser(userId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "user-wallet", userId] });
+      qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast.success("User reinstated");
+    },
+    onError: (err: any) => toast.error(err?.message || "Reinstate failed"),
+  });
+
   const adjustM = useMutation({
     mutationFn: () =>
       admin.adjustUserWallet(userId!, {
@@ -102,6 +139,8 @@ export function UserWalletPage() {
 
   const { user, transactions, totals } = walletQ.data;
   const balance = Number(user.walletBalance) || 0;
+  const isSuspended = !!user.isSuspended;
+  const isAdmin = user.role === "admin";
   const canSubmit =
     Number(amountInput) > 0 && reasonInput.trim().length >= 4 && !adjustM.isPending;
 
@@ -116,7 +155,7 @@ export function UserWalletPage() {
           </span>
         }
         right={
-          <div style={{ display: "flex", gap: spacing.sm }}>
+          <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
             <Button
               variant="secondary"
               size="sm"
@@ -126,6 +165,35 @@ export function UserWalletPage() {
                 <ArrowLeft size={14} /> Back
               </span>
             </Button>
+            {!isAdmin ? (
+              isSuspended ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm(`Reinstate ${user.displayName || user.phone}? They'll be able to use the app again immediately.`)) {
+                      unsuspendM.mutate();
+                    }
+                  }}
+                  disabled={unsuspendM.isPending}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <ShieldCheck size={14} /> Reinstate
+                  </span>
+                </Button>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setShowSuspendModal(true)}
+                  disabled={suspendM.isPending}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Ban size={14} /> Suspend
+                  </span>
+                </Button>
+              )
+            ) : null}
             <Button
               variant="primary"
               size="sm"
@@ -139,6 +207,60 @@ export function UserWalletPage() {
           </div>
         }
       />
+
+      {/* Suspension banner — renders only when isSuspended */}
+      {isSuspended ? (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: spacing.md,
+            padding: `${spacing.lg}px ${spacing.xl}px`,
+            borderRadius: radius.lg,
+            background: colors.dangerSoft,
+            border: `1px solid ${colors.danger}`,
+            marginBottom: spacing.xl,
+            color: colors.danger,
+          }}
+        >
+          <ShieldAlert size={22} strokeWidth={2.2} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: fonts.heading,
+                fontSize: 16,
+                fontWeight: 700,
+                letterSpacing: -0.2,
+              }}
+            >
+              Account suspended
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                marginTop: 4,
+                lineHeight: 1.5,
+                color: colors.text,
+              }}
+            >
+              {user.suspensionReason || "No reason recorded."}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                marginTop: spacing.xs,
+                color: colors.textTertiary,
+              }}
+            >
+              {user.suspendedAt
+                ? `Since ${new Date(user.suspendedAt).toLocaleString("en-ZA")}`
+                : ""}
+              {user.suspendedBy ? ` · by ${user.suspendedBy.slice(0, 8)}…` : ""}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stat cards — current balance featured, then lifetime totals */}
       <div
@@ -468,6 +590,169 @@ export function UserWalletPage() {
                 {direction === "credit"
                   ? `Credit R${Number(amountInput || 0).toFixed(2)}`
                   : `Debit R${Number(amountInput || 0).toFixed(2)}`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ─── Suspend modal ─────────────────────────────────────── */}
+      {showSuspendModal ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="suspend-title"
+          onClick={() => setShowSuspendModal(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: colors.surface,
+              borderRadius: radius.xl,
+              padding: spacing["2xl"],
+              width: 500,
+              maxWidth: "calc(100vw - 32px)",
+              boxShadow: shadows.lg,
+              borderTop: `4px solid ${colors.danger}`,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: spacing.md,
+                marginBottom: spacing.md,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radius.full,
+                  background: colors.dangerSoft,
+                  color: colors.danger,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Ban size={20} strokeWidth={2.3} />
+              </div>
+              <div>
+                <h2
+                  id="suspend-title"
+                  style={{
+                    margin: 0,
+                    fontFamily: fonts.heading,
+                    fontSize: 22,
+                    fontWeight: 700,
+                    color: colors.text,
+                    letterSpacing: -0.3,
+                  }}
+                >
+                  Suspend this user?
+                </h2>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: colors.textSecondary,
+                    marginTop: 2,
+                  }}
+                >
+                  {user.displayName || user.phone}
+                </div>
+              </div>
+            </div>
+
+            <p
+              style={{
+                fontSize: 13,
+                color: colors.textSecondary,
+                marginBottom: spacing.lg,
+                lineHeight: 1.55,
+              }}
+            >
+              All authed API access will be blocked immediately. Their existing
+              token will start returning <code>403 ACCOUNT_SUSPENDED</code> on
+              the next request. They'll get a push notification with your reason.
+            </p>
+
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: colors.textSecondary,
+                marginBottom: spacing.xs,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              Reason (required)
+            </div>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="e.g. Fraud investigation — duplicate top-ups from stolen card. Ticket #HB-2847"
+              rows={3}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: `${spacing.md}px ${spacing.lg}px`,
+                borderRadius: radius.md,
+                border: `1px solid ${colors.border}`,
+                fontSize: 14,
+                fontFamily: "inherit",
+                resize: "vertical",
+                outline: "none",
+                boxSizing: "border-box",
+                marginBottom: spacing.xs,
+              }}
+            />
+            <div
+              style={{
+                fontSize: 11,
+                color: colors.textTertiary,
+                marginBottom: spacing.lg,
+              }}
+            >
+              Saved verbatim to the audit log and shown to the user in the
+              suspension push notification.
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: spacing.sm,
+              }}
+            >
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowSuspendModal(false);
+                  setSuspendReason("");
+                }}
+                disabled={suspendM.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => suspendM.mutate()}
+                disabled={suspendReason.trim().length < 4 || suspendM.isPending}
+                loading={suspendM.isPending}
+              >
+                Suspend account
               </Button>
             </div>
           </div>

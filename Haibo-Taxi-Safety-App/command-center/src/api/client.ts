@@ -284,6 +284,22 @@ export const admin = {
     });
   },
 
+  /**
+   * Suspend a user — blocks all authed API access until unsuspended.
+   * Reason is required (min 4 chars) and lands in the audit log.
+   * Admins and self-targets are rejected by the server.
+   */
+  async suspendUser(userId: string, reason: string) {
+    return request(`/api/admin/users/${userId}/suspend`, {
+      method: "PUT",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async unsuspendUser(userId: string) {
+    return request(`/api/admin/users/${userId}/unsuspend`, { method: "PUT" });
+  },
+
   /** Read-only list of group rides with optional status filter. */
   async getGroupRides(params: { status?: string; limit?: number; offset?: number } = {}) {
     const qs = new URLSearchParams();

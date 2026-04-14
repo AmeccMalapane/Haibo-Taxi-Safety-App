@@ -119,34 +119,29 @@ router.get("/users", authMiddleware, requireRole("admin"), async (req: AuthReque
   try {
     const { role } = req.query as any;
 
+    const userColumns = {
+      id: users.id,
+      phone: users.phone,
+      email: users.email,
+      displayName: users.displayName,
+      role: users.role,
+      isVerified: users.isVerified,
+      walletBalance: users.walletBalance,
+      createdAt: users.createdAt,
+      lastActiveAt: users.lastActiveAt,
+      isSuspended: users.isSuspended,
+      suspendedAt: users.suspendedAt,
+      suspensionReason: users.suspensionReason,
+    };
+
     let results;
     if (role) {
-      results = await db.select({
-        id: users.id,
-        phone: users.phone,
-        email: users.email,
-        displayName: users.displayName,
-        role: users.role,
-        isVerified: users.isVerified,
-        walletBalance: users.walletBalance,
-        createdAt: users.createdAt,
-        lastActiveAt: users.lastActiveAt,
-      }).from(users)
+      results = await db.select(userColumns).from(users)
         .where(eq(users.role, role))
         .orderBy(desc(users.createdAt))
         .limit(100);
     } else {
-      results = await db.select({
-        id: users.id,
-        phone: users.phone,
-        email: users.email,
-        displayName: users.displayName,
-        role: users.role,
-        isVerified: users.isVerified,
-        walletBalance: users.walletBalance,
-        createdAt: users.createdAt,
-        lastActiveAt: users.lastActiveAt,
-      }).from(users)
+      results = await db.select(userColumns).from(users)
         .orderBy(desc(users.createdAt))
         .limit(100);
     }
@@ -806,6 +801,10 @@ router.get(
           walletBalance: users.walletBalance,
           isVerified: users.isVerified,
           createdAt: users.createdAt,
+          isSuspended: users.isSuspended,
+          suspendedAt: users.suspendedAt,
+          suspendedBy: users.suspendedBy,
+          suspensionReason: users.suspensionReason,
         })
         .from(users)
         .where(eq(users.id, req.params.id))
@@ -1508,6 +1507,150 @@ router.get(
     } catch (error: any) {
       console.error("List deliveries error:", error);
       res.status(500).json({ error: "Failed to fetch deliveries" });
+    }
+  }
+);
+
+// ============ USER SUSPENSION ============
+// Hard suspension: flipping isSuspended to true makes authMiddleware
+// reject every authed API call from that user with 403 until an admin
+// unsuspends them. Guardrails:
+//   • admins cannot be suspended (admin.ts requireRole catches it before
+//     the call even reaches here, but we double-check to prevent abuse
+//     via a compromised admin account)
+//   • operators cannot suspend themselves (prevents accidental lockout)
+//   • reason is required on suspend but optional on unsuspend
+//   • every suspend/unsuspend lands in admin_audit_log for review
+
+// PUT /api/admin/users/:id/suspend
+router.put(
+  "/users/:id/suspend",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { reason } = req.body as { reason?: string };
+
+      if (!reason || reason.trim().length < 4) {
+        res.status(400).json({ error: "reason is required (min 4 chars)" });
+        return;
+      }
+      if (req.params.id === req.user!.userId) {
+        res.status(400).json({ error: "Admins cannot suspend themselves" });
+        return;
+      }
+
+      const [target] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.params.id))
+        .limit(1);
+
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      if (target.role === "admin") {
+        res.status(400).json({ error: "Cannot suspend admin accounts" });
+        return;
+      }
+      if (target.isSuspended) {
+        res.status(400).json({ error: "User is already suspended" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          isSuspended: true,
+          suspendedAt: new Date(),
+          suspendedBy: req.user!.userId,
+          suspensionReason: reason.trim(),
+        })
+        .where(eq(users.id, req.params.id))
+        .returning();
+
+      await recordAdminAction(req, "user.suspend", "users", req.params.id, {
+        targetPhone: target.phone,
+        targetRole: target.role,
+        reason: reason.trim(),
+      });
+
+      // Notify the user as a courtesy — they'll still see this in their
+      // notification shade even after the token starts bouncing because
+      // the push is dispatched before they retry.
+      try {
+        await notifyUser({
+          userId: req.params.id,
+          type: "system",
+          title: "Account suspended",
+          body: `Your Haibo account has been suspended. Reason: ${reason.trim()}`,
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] suspend notify failed:", notifyErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Suspend user error:", error);
+      res.status(500).json({ error: "Failed to suspend user" });
+    }
+  }
+);
+
+// PUT /api/admin/users/:id/unsuspend
+router.put(
+  "/users/:id/unsuspend",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [target] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.params.id))
+        .limit(1);
+
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      if (!target.isSuspended) {
+        res.status(400).json({ error: "User is not suspended" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          isSuspended: false,
+          suspendedAt: null,
+          suspendedBy: null,
+          suspensionReason: null,
+        })
+        .where(eq(users.id, req.params.id))
+        .returning();
+
+      await recordAdminAction(req, "user.unsuspend", "users", req.params.id, {
+        targetPhone: target.phone,
+        previousReason: target.suspensionReason,
+      });
+
+      try {
+        await notifyUser({
+          userId: req.params.id,
+          type: "system",
+          title: "Account restored",
+          body: "Your Haibo account has been reinstated. Welcome back.",
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] unsuspend notify failed:", notifyErr);
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Unsuspend user error:", error);
+      res.status(500).json({ error: "Failed to unsuspend user" });
     }
   }
 );

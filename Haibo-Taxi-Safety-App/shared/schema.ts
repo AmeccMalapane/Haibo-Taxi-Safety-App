@@ -22,6 +22,14 @@ export const users = pgTable("users", {
   referralCount: integer("referral_count").default(0),
   walletBalance: real("wallet_balance").default(0),
   fcmToken: text("fcm_token"), // Firebase Cloud Messaging token for push notifications
+  // Suspension state — when isSuspended is true, authMiddleware blocks
+  // all authed API access with 403 until an admin restores the account.
+  // Sticky + immutable audit fields so we can answer "who suspended who,
+  // when, and why" from the users table alone.
+  isSuspended: boolean("is_suspended").default(false),
+  suspendedAt: timestamp("suspended_at"),
+  suspendedBy: varchar("suspended_by"),
+  suspensionReason: text("suspension_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   lastActiveAt: timestamp("last_active_at").defaultNow(),
 });
