@@ -9,6 +9,7 @@ import {
   Image,
   Platform,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,6 +32,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useEvents } from "@/hooks/useApiData";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { apiRequest } from "@/lib/query-client";
+import { uploadFromUri } from "@/lib/uploads";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // typeui-clean rework — Events as a calm community board:
@@ -99,6 +101,8 @@ export default function EventsScreen() {
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [ticketPrice, setTicketPrice] = useState("");
+  const [eventImageUrl, setEventImageUrl] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
   const [titleFocused, setTitleFocused] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
   const [dateFocused, setDateFocused] = useState(false);
@@ -175,6 +179,7 @@ export default function EventsScreen() {
           organizer: user?.displayName || user?.phone || "Community",
           organizerPhone: user?.phone || undefined,
           ticketPrice: ticketPrice ? parseFloat(ticketPrice) : 0,
+          imageUrl: eventImageUrl || undefined,
         }),
       });
     },
@@ -193,6 +198,7 @@ export default function EventsScreen() {
       setEventDate("");
       setEventLocation("");
       setTicketPrice("");
+      setEventImageUrl("");
     },
     onError: (error: Error) => {
       triggerHaptic("error");
@@ -212,6 +218,48 @@ export default function EventsScreen() {
       return;
     }
     postMutation.mutate();
+  };
+
+  // Pick + upload an event hero image. Uploaded on pick so the
+  // submit button doesn't carry a local URI through the mutation.
+  const handlePickEventImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access to upload an event image.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        // 16:9 hero crop matches how event cards render on the feed.
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      triggerHaptic("selection");
+      setImageUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "events",
+        name: result.assets[0].fileName || undefined,
+      });
+      setEventImageUrl(uploaded.url);
+      triggerHaptic("success");
+    } catch (error: any) {
+      triggerHaptic("error");
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleClearEventImage = () => {
+    triggerHaptic("selection");
+    setEventImageUrl("");
   };
 
   const handleBuyTicket = (event: EventPost) => {
@@ -384,6 +432,71 @@ export default function EventsScreen() {
               <ThemedText
                 style={[styles.fieldLabel, { color: theme.textSecondary }]}
               >
+                HERO IMAGE (OPTIONAL)
+              </ThemedText>
+              {eventImageUrl ? (
+                <View style={styles.eventImagePreviewWrap}>
+                  <Image
+                    source={{ uri: eventImageUrl }}
+                    style={styles.eventImagePreview}
+                    resizeMode="cover"
+                  />
+                  <Pressable
+                    onPress={handleClearEventImage}
+                    style={({ pressed }) => [
+                      styles.eventImageClearBtn,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove event image"
+                  >
+                    <Feather name="x" size={14} color="#FFFFFF" />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={handlePickEventImage}
+                  disabled={imageUploading}
+                  style={({ pressed }) => [
+                    styles.eventUploadButton,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      borderColor: theme.border,
+                    },
+                    pressed && { opacity: 0.85 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upload event image"
+                >
+                  <View
+                    style={[
+                      styles.eventUploadIcon,
+                      {
+                        backgroundColor:
+                          BrandColors.primary.gradientStart + "12",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={imageUploading ? "loader" : "image"}
+                      size={18}
+                      color={BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.eventUploadText,
+                      { color: theme.text },
+                    ]}
+                  >
+                    {imageUploading ? "Uploading…" : "Add a hero image"}
+                  </ThemedText>
+                </Pressable>
+              )}
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
                 DESCRIPTION
               </ThemedText>
               <TextInput
@@ -491,7 +604,8 @@ export default function EventsScreen() {
                     !eventDescription.trim() ||
                     !eventDate.trim() ||
                     !eventLocation.trim() ||
-                    postMutation.isPending
+                    postMutation.isPending ||
+                    imageUploading
                   }
                   size="large"
                   icon={postMutation.isPending ? undefined : "arrow-right"}
@@ -878,6 +992,52 @@ const styles = StyleSheet.create({
     minHeight: 90,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.md,
+  },
+
+  // Event image upload
+  eventUploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+  },
+  eventUploadIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eventUploadText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  eventImagePreviewWrap: {
+    width: "100%",
+    height: 150,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+    position: "relative",
+  },
+  eventImagePreview: {
+    width: "100%",
+    height: "100%",
+  },
+  eventImageClearBtn: {
+    position: "absolute",
+    top: Spacing.sm,
+    right: Spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   formCta: {
     marginTop: Spacing.xl,
