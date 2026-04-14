@@ -15,6 +15,8 @@ import {
   Radar,
   BadgeCheck,
   Megaphone,
+  Users2,
+  Package,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -48,6 +50,8 @@ const navItems: NavItem[] = [
   // Directory — reference
   { to: "/users", label: "Users", Icon: Users, section: "Directory" },
   { to: "/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
+  { to: "/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
+  { to: "/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },
   { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
 
   // System — who did what

@@ -1380,4 +1380,136 @@ async function resolveAudienceCount(
   return 0;
 }
 
+// ============ GROUP RIDES (read-only visibility) ============
+// Surface scheduled + in-progress + completed community rides so ops
+// can see what's happening in the shared-ride network. No mutations —
+// if a ride needs to be cancelled, that's a future moderation pass.
+
+router.get(
+  "/group-rides",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, limit: rawLimit, offset: rawOffset } = req.query as {
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const baseQuery = db
+        .select({
+          id: groupRides.id,
+          title: groupRides.title,
+          description: groupRides.description,
+          pickupLocation: groupRides.pickupLocation,
+          dropoffLocation: groupRides.dropoffLocation,
+          scheduledDate: groupRides.scheduledDate,
+          maxPassengers: groupRides.maxPassengers,
+          costPerPerson: groupRides.costPerPerson,
+          rideType: groupRides.rideType,
+          driverId: groupRides.driverId,
+          driverPlateNumber: groupRides.driverPlateNumber,
+          driverSafetyRating: groupRides.driverSafetyRating,
+          status: groupRides.status,
+          paymentMethod: groupRides.paymentMethod,
+          isVerifiedDriver: groupRides.isVerifiedDriver,
+          createdAt: groupRides.createdAt,
+          startedAt: groupRides.startedAt,
+          completedAt: groupRides.completedAt,
+          organizerId: groupRides.organizerId,
+          organizerPhone: users.phone,
+          organizerName: users.displayName,
+        })
+        .from(groupRides)
+        .leftJoin(users, eq(groupRides.organizerId, users.id))
+        .orderBy(desc(groupRides.scheduledDate))
+        .limit(limit)
+        .offset(offset);
+
+      const rows = status
+        ? await baseQuery.where(eq(groupRides.status, status))
+        : await baseQuery;
+
+      // Live count for each status — powers the tab badges without
+      // needing a second round-trip per tab.
+      const countsRows = await db
+        .select({ status: groupRides.status, count: count() })
+        .from(groupRides)
+        .groupBy(groupRides.status);
+      const counts: Record<string, number> = {};
+      for (const r of countsRows) counts[r.status] = r.count;
+
+      res.json({ data: rows, counts });
+    } catch (error: any) {
+      console.error("List group rides error:", error);
+      res.status(500).json({ error: "Failed to fetch group rides" });
+    }
+  }
+);
+
+// ============ DELIVERIES (read-only visibility) ============
+router.get(
+  "/deliveries",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, limit: rawLimit, offset: rawOffset } = req.query as {
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const baseQuery = db
+        .select({
+          id: deliveries.id,
+          senderId: deliveries.senderId,
+          driverId: deliveries.driverId,
+          driverPhone: deliveries.driverPhone,
+          taxiPlateNumber: deliveries.taxiPlateNumber,
+          description: deliveries.description,
+          pickupRank: deliveries.pickupRank,
+          dropoffRank: deliveries.dropoffRank,
+          amount: deliveries.amount,
+          status: deliveries.status,
+          paymentStatus: deliveries.paymentStatus,
+          confirmationCode: deliveries.confirmationCode,
+          insuranceIncluded: deliveries.insuranceIncluded,
+          insuranceAmount: deliveries.insuranceAmount,
+          createdAt: deliveries.createdAt,
+          acceptedAt: deliveries.acceptedAt,
+          deliveredAt: deliveries.deliveredAt,
+          senderPhone: users.phone,
+          senderName: users.displayName,
+        })
+        .from(deliveries)
+        .leftJoin(users, eq(deliveries.senderId, users.id))
+        .orderBy(desc(deliveries.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows = status
+        ? await baseQuery.where(eq(deliveries.status, status))
+        : await baseQuery;
+
+      const countsRows = await db
+        .select({ status: deliveries.status, count: count() })
+        .from(deliveries)
+        .groupBy(deliveries.status);
+      const counts: Record<string, number> = {};
+      for (const r of countsRows) counts[r.status] = r.count;
+
+      res.json({ data: rows, counts });
+    } catch (error: any) {
+      console.error("List deliveries error:", error);
+      res.status(500).json({ error: "Failed to fetch deliveries" });
+    }
+  }
+);
+
 export default router;

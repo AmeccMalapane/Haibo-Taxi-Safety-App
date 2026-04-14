@@ -22,6 +22,8 @@ import { UserWalletPage } from "./pages/UserWalletPage";
 import { DriversPage } from "./pages/DriversPage";
 import { DriverDetailPage } from "./pages/DriverDetailPage";
 import { BroadcastPage } from "./pages/BroadcastPage";
+import { GroupRidesPage } from "./pages/GroupRidesPage";
+import { DeliveriesPage } from "./pages/DeliveriesPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -86,6 +88,8 @@ export default function App() {
           <Route path="/drivers" element={<DriversPage />} />
           <Route path="/drivers/:driverId" element={<DriverDetailPage />} />
           <Route path="/fleet" element={<FleetPage />} />
+          <Route path="/group-rides" element={<GroupRidesPage />} />
+          <Route path="/deliveries" element={<DeliveriesPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />
         </Route>
