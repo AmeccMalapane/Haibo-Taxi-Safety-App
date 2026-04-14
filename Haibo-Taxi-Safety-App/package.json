@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@azure/communication-sms": "^1.2.0-beta.4",
+    "@azure/storage-blob": "^12.31.0",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
@@ -69,6 +70,7 @@
     "jsonwebtoken": "^9.0.0",
     "mapbox-gl": "^2.15.0",
     "morgan": "^1.10.1",
+    "multer": "^2.1.1",
     "pg": "^8.19.0",
     "qrcode": "^1.5.4",
     "react": "18.2.0",
@@ -99,6 +101,7 @@
     "@types/helmet": "^0.0.48",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.16.0",
     "@types/qrcode": "^1.5.6",

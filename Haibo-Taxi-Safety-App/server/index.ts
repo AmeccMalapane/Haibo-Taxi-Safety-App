@@ -28,6 +28,8 @@ import notificationRoutes from "./routes/notifications";
 import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
 import vendorRoutes from "./routes/vendor";
+import uploadRoutes from "./routes/uploads";
+import { getLocalUploadDir, getLocalUrlPrefix, isAzureConfigured } from "./services/storage";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -103,6 +105,20 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/paystack", paystackRoutes);
 app.use("/api/pasop", pasopRoutes);
 app.use("/api/vendor-profile", vendorRoutes);
+app.use("/api/uploads", uploadRoutes);
+
+// Serve locally-stored uploads when the Azure Blob backend is NOT
+// configured. Only registers in local-dev mode so production deploys
+// never accidentally serve disk files off the API host.
+if (!isAzureConfigured()) {
+  app.use(
+    getLocalUrlPrefix(),
+    express.static(getLocalUploadDir(), {
+      maxAge: "1y",
+      immutable: true,
+    })
+  );
+}
 
 // --- 404 handler ---
 app.use((req, res) => {
