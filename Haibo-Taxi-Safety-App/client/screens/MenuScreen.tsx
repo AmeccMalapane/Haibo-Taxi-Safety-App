@@ -179,6 +179,7 @@ export default function MenuScreen() {
   const handleSettings = () => navigation.navigate("Settings");
   const handleRating = () => navigation.navigate("Rating");
   const handleDriverDashboard = () => navigation.navigate("DriverDashboard");
+  const handleDriverOnboarding = () => navigation.navigate("DriverOnboarding");
 
   const isDriver = user?.avatarType === "driver";
 
@@ -411,7 +412,17 @@ export default function MenuScreen() {
                   onPress={handleDriverDashboard}
                 />
               </>
-            ) : null}
+            ) : (
+              <>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <MenuItem
+                  icon="truck"
+                  label="Become a driver"
+                  hint="Register your taxi to accept Haibo Pay"
+                  onPress={handleDriverOnboarding}
+                />
+              </>
+            )}
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="settings"

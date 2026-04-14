@@ -43,6 +43,7 @@ import CommunityScreen from "@/screens/CommunityScreen";
 import PushaScreen from "@/screens/PushaScreen";
 import TaxiFareScreen from "@/screens/TaxiFareScreen";
 import DriverDashboardScreen from "@/screens/DriverDashboardScreen";
+import DriverOnboardingScreen from "@/screens/DriverOnboardingScreen";
 import VendorOnboardingScreen from "@/screens/VendorOnboardingScreen";
 import PayVendorScreen from "@/screens/PayVendorScreen";
 import PasopFeedScreen from "@/screens/PasopFeedScreen";
@@ -95,6 +96,7 @@ export type RootStackParamList = {
   Pusha: undefined;
   TaxiFare: undefined;
   DriverDashboard: undefined;
+  DriverOnboarding: undefined;
   VendorOnboarding: undefined;
   PayVendor: undefined;
   PasopFeed: undefined;
@@ -434,6 +436,14 @@ export default function RootStackNavigator() {
         name="DriverDashboard"
         component={DriverDashboardScreen}
         options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="DriverOnboarding"
+        component={DriverOnboardingScreen}
+        options={{
+          presentation: "card",
           headerShown: false,
         }}
       />
