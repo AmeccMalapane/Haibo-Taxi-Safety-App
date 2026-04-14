@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   Share,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -103,10 +104,12 @@ export default function VendorOnboardingScreen() {
   const [businessName, setBusinessName] = useState("");
   const [rankLocation, setRankLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [businessImageUrl, setBusinessImageUrl] = useState("");
 
   const [nameFocused, setNameFocused] = useState(false);
   const [rankFocused, setRankFocused] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
+  const [imageFocused, setImageFocused] = useState(false);
 
   // Load existing profile if any — shows the "welcome back" state instead
   // of the form when the user is already registered.
@@ -119,6 +122,11 @@ export default function VendorOnboardingScreen() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const rawImage = businessImageUrl.trim();
+      // Only pass through clean http(s) URLs — a malformed value would
+      // silently render a broken image across the directory.
+      const cleanImage =
+        rawImage && /^https?:\/\//i.test(rawImage) ? rawImage : undefined;
       return apiRequest("/api/vendor-profile", {
         method: "POST",
         body: JSON.stringify({
@@ -126,6 +134,7 @@ export default function VendorOnboardingScreen() {
           businessName: businessName.trim(),
           rankLocation: rankLocation.trim() || undefined,
           description: description.trim() || undefined,
+          businessImageUrl: cleanImage,
         }),
       });
     },
@@ -239,6 +248,18 @@ export default function VendorOnboardingScreen() {
               },
             ]}
           >
+            {/* Business image preview — only if vendor provided a URL */}
+            {existing.businessImageUrl ? (
+              <View style={styles.existingImageWrap}>
+                <Image
+                  source={{ uri: existing.businessImageUrl }}
+                  style={styles.existingImage}
+                  resizeMode="cover"
+                  accessibilityLabel={`${existing.businessName} photo`}
+                />
+              </View>
+            ) : null}
+
             {/* Vendor ref card — the thing they show customers */}
             <View
               style={[
@@ -593,6 +614,39 @@ export default function VendorOnboardingScreen() {
                 maxLength={280}
               />
 
+              <BrandLabel theme={theme}>Business photo URL (optional)</BrandLabel>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: imageFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
+                placeholder="https://…"
+                placeholderTextColor={theme.textSecondary}
+                value={businessImageUrl}
+                onChangeText={setBusinessImageUrl}
+                onFocus={() => setImageFocused(true)}
+                onBlur={() => setImageFocused(false)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                maxLength={500}
+              />
+              {businessImageUrl.trim() && /^https?:\/\//i.test(businessImageUrl.trim()) ? (
+                <View style={styles.formImagePreviewWrap}>
+                  <Image
+                    source={{ uri: businessImageUrl.trim() }}
+                    style={styles.formImagePreview}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+
               <View
                 style={[
                   styles.infoBox,
@@ -889,6 +943,29 @@ const styles = StyleSheet.create({
   backLinkText: {
     ...Typography.link,
     fontWeight: "600",
+  },
+
+  // Existing vendor image preview on welcome-back
+  existingImageWrap: {
+    alignItems: "center",
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  existingImage: {
+    width: 120,
+    height: 120,
+    borderRadius: BorderRadius.lg,
+  },
+
+  // Form image preview (while editing URL)
+  formImagePreviewWrap: {
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  formImagePreview: {
+    width: 96,
+    height: 96,
+    borderRadius: BorderRadius.md,
   },
 
   // Welcome-back: vendor ref card

@@ -6,6 +6,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -355,9 +356,18 @@ function VendorCard({
       accessibilityRole="button"
       accessibilityLabel={`Pay ${vendor.businessName}`}
     >
-      <View style={[styles.vendorIcon, { backgroundColor: meta.accent + "12" }]}>
-        <Feather name={meta.icon} size={22} color={meta.accent} />
-      </View>
+      {vendor.businessImageUrl ? (
+        <Image
+          source={{ uri: vendor.businessImageUrl }}
+          style={styles.vendorPhoto}
+          resizeMode="cover"
+          accessibilityLabel={`${vendor.businessName} photo`}
+        />
+      ) : (
+        <View style={[styles.vendorIcon, { backgroundColor: meta.accent + "12" }]}>
+          <Feather name={meta.icon} size={22} color={meta.accent} />
+        </View>
+      )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <ThemedText style={styles.vendorName} numberOfLines={1}>
           {vendor.businessName}
@@ -509,6 +519,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  vendorPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
   },
   vendorName: {
     ...Typography.h4,

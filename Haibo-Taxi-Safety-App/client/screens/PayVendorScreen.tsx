@@ -6,6 +6,7 @@ import {
   Pressable,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -291,21 +292,30 @@ export default function PayVendorScreen() {
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.vendorIcon,
-                    {
-                      backgroundColor:
-                        BrandColors.primary.gradientStart + "12",
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="shopping-bag"
-                    size={26}
-                    color={BrandColors.primary.gradientStart}
+                {vendor.businessImageUrl ? (
+                  <Image
+                    source={{ uri: vendor.businessImageUrl }}
+                    style={styles.vendorPhoto}
+                    resizeMode="cover"
+                    accessibilityLabel={`${vendor.businessName} photo`}
                   />
-                </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.vendorIcon,
+                      {
+                        backgroundColor:
+                          BrandColors.primary.gradientStart + "12",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name="shopping-bag"
+                      size={26}
+                      color={BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <ThemedText style={styles.vendorName}>
                     {vendor.businessName}
@@ -543,6 +553,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  vendorPhoto: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
   },
   vendorName: {
     ...Typography.h4,

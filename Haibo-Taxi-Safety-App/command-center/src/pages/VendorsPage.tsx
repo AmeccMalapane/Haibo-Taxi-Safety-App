@@ -171,23 +171,46 @@ export function VendorsPage() {
             {rows.map((v) => (
               <tr key={v.id}>
                 <TD>
-                  <div style={{ fontWeight: 700 }}>{v.businessName}</div>
-                  {v.description ? (
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: colors.textTertiary,
-                        marginTop: 2,
-                        maxWidth: 260,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={v.description}
-                    >
-                      {v.description}
+                  <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
+                    {v.businessImageUrl ? (
+                      <img
+                        src={v.businessImageUrl}
+                        alt={v.businessName}
+                        onError={(e) => {
+                          // Broken URL — hide the img so the row doesn't show a
+                          // permanently-broken image icon. A text-only card
+                          // still reads fine.
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: radius.sm,
+                          objectFit: "cover",
+                          flexShrink: 0,
+                        }}
+                      />
+                    ) : null}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700 }}>{v.businessName}</div>
+                      {v.description ? (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: colors.textTertiary,
+                            marginTop: 2,
+                            maxWidth: 260,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={v.description}
+                        >
+                          {v.description}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                  </div>
                 </TD>
                 <TD>
                   <Badge tone="neutral">{TYPE_LABEL[v.vendorType] || v.vendorType}</Badge>
