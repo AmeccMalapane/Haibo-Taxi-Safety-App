@@ -10,6 +10,7 @@ export interface AuthUser {
   displayName?: string | null;
   role: string;
   avatarType?: string | null;
+  avatarUrl?: string | null;
   referralCode?: string | null;
   walletBalance?: number | null;
   isVerified?: boolean;

@@ -13,6 +13,10 @@ export const users = pgTable("users", {
   role: text("role").default("commuter"), // commuter, driver, owner, association, admin
   displayName: text("display_name"),
   avatarType: text("avatar_type").default("commuter"),
+  // Profile photo — uploaded via /api/uploads/image?folder=profiles
+  // and stored as the returned public URL. Nullable; clients fall
+  // back to avatarType-based illustrated avatars when unset.
+  avatarUrl: text("avatar_url"),
   emergencyContactName: text("emergency_contact_name"),
   emergencyContactPhone: text("emergency_contact_phone"),
   homeAddress: text("home_address"),

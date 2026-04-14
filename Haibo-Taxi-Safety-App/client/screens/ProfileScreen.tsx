@@ -6,7 +6,9 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -27,6 +29,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { EmergencyContact } from "@/lib/types";
 import { getEmergencyContacts } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { uploadFromUri } from "@/lib/uploads";
 
 // typeui-clean rework — Profile as a fintech-style account hub:
 //   1. Reads the live user from useAuth() instead of local AsyncStorage —
@@ -54,10 +57,11 @@ export default function ProfileScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, updateProfile } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const loadContacts = useCallback(async () => {
     const contacts = await getEmergencyContacts();
@@ -89,6 +93,46 @@ export default function ProfileScreen() {
   const handleEditProfile = () => {
     triggerHaptic("light");
     navigation.navigate("ProfileSetup");
+  };
+
+  // Tap the avatar → pick from library → upload → PUT /api/auth/profile
+  // with the returned URL. Optimistic local state update via updateProfile
+  // keeps the new photo visible immediately.
+  const handleChangeAvatar = async () => {
+    if (!isAuthenticated || avatarUploading) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access to change your avatar.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      await triggerHaptic("light");
+      setAvatarUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "profiles",
+        name: result.assets[0].fileName || undefined,
+      });
+      const update = await updateProfile({ avatarUrl: uploaded.url });
+      if (!update.success) {
+        throw new Error(update.error || "Failed to save avatar");
+      }
+      await triggerHaptic("success");
+    } catch (error: any) {
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleEmergencyContacts = () => {
@@ -199,11 +243,36 @@ export default function ProfileScreen() {
             entering={reducedMotion ? undefined : FadeIn.duration(400)}
             style={styles.heroAvatarWrap}
           >
-            <View style={styles.avatarRing}>
+            <Pressable
+              onPress={handleChangeAvatar}
+              disabled={!isAuthenticated || avatarUploading}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isAuthenticated ? "Change profile photo" : "Profile photo"
+              }
+              style={styles.avatarRing}
+            >
               <View style={styles.avatar}>
-                <ThemedText style={styles.avatarMonogram}>{monogram}</ThemedText>
+                {user?.avatarUrl ? (
+                  <Image
+                    source={{ uri: user.avatarUrl }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <ThemedText style={styles.avatarMonogram}>{monogram}</ThemedText>
+                )}
               </View>
-            </View>
+              {isAuthenticated ? (
+                <View style={styles.avatarEditBadge}>
+                  <Feather
+                    name={avatarUploading ? "loader" : "camera"}
+                    size={12}
+                    color="#FFFFFF"
+                  />
+                </View>
+              ) : null}
+            </Pressable>
           </Animated.View>
 
           <Animated.View
@@ -478,12 +547,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarMonogram: {
     fontSize: 36,
     fontWeight: "800",
     fontFamily: "SpaceGrotesk_700Bold",
     color: BrandColors.primary.gradientStart,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
   heroTextWrap: {
     alignItems: "center",

@@ -135,6 +135,7 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
         displayName: user.displayName,
         role: user.role,
         avatarType: user.avatarType,
+        avatarUrl: user.avatarUrl,
         referralCode: user.referralCode,
         walletBalance: user.walletBalance,
       },
@@ -266,6 +267,7 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
         displayName: user.displayName,
         role: user.role,
         avatarType: user.avatarType,
+        avatarUrl: user.avatarUrl,
         referralCode: user.referralCode,
         walletBalance: user.walletBalance,
         isVerified: true,
@@ -340,6 +342,7 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
       displayName: user.displayName,
       role: user.role,
       avatarType: user.avatarType,
+      avatarUrl: user.avatarUrl,
       referralCode: user.referralCode,
       walletBalance: user.walletBalance,
       isVerified: user.isVerified,
@@ -456,12 +459,13 @@ router.put("/change-password", authMiddleware, async (req: AuthRequest, res: Res
 // PUT /api/auth/profile
 router.put("/profile", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { displayName, email, avatarType, emergencyContactName, emergencyContactPhone, homeAddress, fcmToken } = req.body;
+    const { displayName, email, avatarType, avatarUrl, emergencyContactName, emergencyContactPhone, homeAddress, fcmToken } = req.body;
 
     const updateData: any = {};
     if (displayName !== undefined) updateData.displayName = displayName;
     if (email !== undefined) updateData.email = email;
     if (avatarType !== undefined) updateData.avatarType = avatarType;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
     if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName;
     if (emergencyContactPhone !== undefined) updateData.emergencyContactPhone = emergencyContactPhone;
     if (homeAddress !== undefined) updateData.homeAddress = homeAddress;
@@ -476,6 +480,7 @@ router.put("/profile", authMiddleware, async (req: AuthRequest, res: Response) =
       displayName: updated.displayName,
       role: updated.role,
       avatarType: updated.avatarType,
+      avatarUrl: updated.avatarUrl,
     });
   } catch (error: any) {
     console.error("Update profile error:", error);
