@@ -7,13 +7,14 @@ import {
   FlatList,
   ActivityIndicator,
   Image,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
@@ -57,6 +58,15 @@ interface DirectoryResponse {
   nextOffset: number | null;
 }
 
+interface RankRow {
+  rank: string;
+  count: number;
+}
+
+interface RanksResponse {
+  data: RankRow[];
+}
+
 const PAGE_SIZE = 50;
 
 const TYPE_META: Record<
@@ -89,9 +99,20 @@ export default function VendorDirectoryScreen() {
 
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [activeRank, setActiveRank] = useState<string | null>(null);
+
+  // Rank chip strip data — popular ranks with vendor counts. We don't
+  // gate the directory on this loading; an empty strip just means no
+  // chips render.
+  const ranksQ = useQuery<RanksResponse>({
+    queryKey: ["/api/vendor-profile/ranks"],
+    queryFn: () => apiRequest("/api/vendor-profile/ranks"),
+  });
+
+  const ranks = ranksQ.data?.data || [];
 
   const directoryQ = useInfiniteQuery<DirectoryResponse>({
-    queryKey: ["/api/vendor-profile/directory", search],
+    queryKey: ["/api/vendor-profile/directory", search, activeRank],
     initialPageParam: 0,
     queryFn: ({ pageParam = 0 }) => {
       const q = search.trim();
@@ -99,6 +120,7 @@ export default function VendorDirectoryScreen() {
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(pageParam));
       if (q) params.set("q", q);
+      if (activeRank) params.set("rank", activeRank);
       return apiRequest(`/api/vendor-profile/directory?${params.toString()}`);
     },
     getNextPageParam: (lastPage) => lastPage.nextOffset,
@@ -239,6 +261,35 @@ export default function VendorDirectoryScreen() {
           ) : null}
         </View>
 
+        {/* Rank filter chips — horizontal scroll, "All" chip first
+            followed by popular ranks with vendor counts. */}
+        {ranks.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.rankChipRow}
+            style={styles.rankChipStrip}
+          >
+            <RankChip
+              label="All"
+              count={null}
+              active={activeRank === null}
+              onPress={() => setActiveRank(null)}
+              theme={theme}
+            />
+            {ranks.map((r) => (
+              <RankChip
+                key={r.rank}
+                label={r.rank}
+                count={r.count}
+                active={activeRank === r.rank}
+                onPress={() => setActiveRank(r.rank)}
+                theme={theme}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
+
         {directoryQ.isLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator
@@ -331,6 +382,65 @@ export default function VendorDirectoryScreen() {
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+function RankChip({
+  label,
+  count,
+  active,
+  onPress,
+  theme,
+}: {
+  label: string;
+  count: number | null;
+  active: boolean;
+  onPress: () => void;
+  theme: any;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.rankChip,
+        {
+          backgroundColor: active
+            ? BrandColors.primary.gradientStart
+            : theme.backgroundDefault,
+          borderColor: active
+            ? BrandColors.primary.gradientStart
+            : theme.border,
+        },
+        pressed && styles.pressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`Filter by ${label}`}
+    >
+      <ThemedText
+        style={[
+          styles.rankChipText,
+          { color: active ? "#FFFFFF" : theme.text },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </ThemedText>
+      {count != null ? (
+        <ThemedText
+          style={[
+            styles.rankChipCount,
+            {
+              color: active
+                ? "rgba(255,255,255,0.85)"
+                : theme.textSecondary,
+            },
+          ]}
+        >
+          {count}
+        </ThemedText>
+      ) : null}
+    </Pressable>
+  );
+}
 
 function VendorCard({
   vendor,
@@ -485,6 +595,38 @@ const styles = StyleSheet.create({
     ...Typography.small,
     fontSize: 11,
     marginTop: 1,
+  },
+
+  // Rank filter chip strip
+  rankChipStrip: {
+    marginBottom: Spacing.md,
+    marginHorizontal: -Spacing.lg,
+  },
+  rankChipRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+  rankChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    maxWidth: 200,
+  },
+  rankChipText: {
+    ...Typography.small,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  rankChipCount: {
+    ...Typography.small,
+    fontSize: 11,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
 
   // Search

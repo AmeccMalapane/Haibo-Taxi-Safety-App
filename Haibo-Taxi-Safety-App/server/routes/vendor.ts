@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import QRCode from "qrcode";
 import { db } from "../db";
 import { vendorProfiles, users, p2pTransfers } from "../../shared/schema";
-import { eq, desc, ilike, and, SQL } from "drizzle-orm";
+import { eq, desc, ilike, and, isNotNull, sql, SQL } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -321,6 +321,39 @@ router.get("/:vendorRef/qr.png", async (req, res: Response) => {
   } catch (error: any) {
     console.error("Vendor QR error:", error);
     res.status(500).json({ error: "Failed to render QR code" });
+  }
+});
+
+// GET /api/vendor-profile/ranks — distinct list of rank names across
+// verified vendors, sorted by popularity. Drives the rank filter
+// chip strip on the mobile directory so users can one-tap filter to
+// their local rank instead of typing a search term.
+router.get("/ranks", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        rankLocation: vendorProfiles.rankLocation,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(vendorProfiles)
+      .where(
+        and(
+          eq(vendorProfiles.status, "verified"),
+          isNotNull(vendorProfiles.rankLocation),
+        ),
+      )
+      .groupBy(vendorProfiles.rankLocation)
+      .orderBy(desc(sql`count(*)`))
+      .limit(20);
+
+    res.json({
+      data: rows
+        .filter((r) => r.rankLocation)
+        .map((r) => ({ rank: r.rankLocation as string, count: r.count })),
+    });
+  } catch (error: any) {
+    console.error("Vendor ranks error:", error);
+    res.status(500).json({ error: "Failed to fetch ranks" });
   }
 });
 
