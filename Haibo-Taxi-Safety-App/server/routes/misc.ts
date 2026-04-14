@@ -9,6 +9,7 @@ import {
 } from "../../shared/schema";
 import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
+import { emitToAdmins } from "../services/realtime";
 import { parsePagination, paginationResponse, generateReferralCode } from "../utils/helpers";
 
 const router = Router();
@@ -44,6 +45,10 @@ router.post("/complaints", authMiddleware, async (req: AuthRequest, res: Respons
       isAnonymous: isAnonymous || false,
       status: "pending",
     }).returning();
+
+    // Fan out so the Command Center dashboard + complaints page can update
+    // without a manual refetch
+    emitToAdmins("complaint:new", complaint);
 
     res.status(201).json(complaint);
   } catch (error: any) {

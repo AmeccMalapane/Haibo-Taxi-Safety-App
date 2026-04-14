@@ -117,7 +117,36 @@ export const admin = {
   async verifyTaxi(id: string) {
     return request(`/api/admin/taxis/${id}/verify`, { method: "PUT" });
   },
+
+  async getWithdrawals(status?: string) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request(`/api/admin/withdrawals${q}`);
+  },
+
+  async approveWithdrawal(id: string) {
+    return request(`/api/admin/withdrawals/${id}/approve`, { method: "PUT" });
+  },
+
+  async rejectWithdrawal(id: string, reason: string) {
+    return request(`/api/admin/withdrawals/${id}/reject`, {
+      method: "PUT",
+      body: JSON.stringify({ reason }),
+    });
+  },
 };
+
+/**
+ * Token accessor for the Socket.IO client — lives here so the WebSocket
+ * handshake reads the same localStorage key as the HTTP client without
+ * duplicating the storage convention.
+ */
+export function getStoredToken(): string | null {
+  return localStorage.getItem("haibo_cc_token");
+}
+
+export function getApiUrl(): string {
+  return API_URL;
+}
 
 // ─── Taxis ───────────────────────────────────────────────────────────────────
 

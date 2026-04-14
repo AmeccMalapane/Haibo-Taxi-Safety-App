@@ -8,6 +8,7 @@ import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { sensitiveRateLimit, financialRateLimit } from "../middleware/rateLimit";
 import { verifyTransaction } from "../services/paystack";
+import { emitToAdmins } from "../services/realtime";
 import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
@@ -247,6 +248,18 @@ router.post("/withdraw", authMiddleware, sensitiveRateLimit, async (req: AuthReq
       amount: -amount,
       description: `Withdrawal request - R${amount.toFixed(2)}`,
       status: "pending",
+    });
+
+    // Fan out to Command Center so the approval queue lights up in realtime
+    emitToAdmins("withdrawal:requested", {
+      id: withdrawal.id,
+      userId: req.user!.userId,
+      userPhone: req.user!.phone,
+      amount,
+      bankCode,
+      accountNumber,
+      requires2FA: withdrawal.requires2FA,
+      requestedAt: withdrawal.requestedAt,
     });
 
     res.json({ message: "Withdrawal request submitted", withdrawal });

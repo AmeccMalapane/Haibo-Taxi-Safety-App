@@ -1,14 +1,17 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { admin, healthCheck } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/Card";
 import { Table, TH, TD } from "../components/Table";
 import { Badge, severityTone, statusTone } from "../components/Badge";
 import { LoadingState, ErrorState, EmptyState } from "../components/States";
+import { useAdminSocket } from "../hooks/useAdminSocket";
 import { colors, spacing } from "../lib/brand";
 
 export function DashboardPage() {
+  const qc = useQueryClient();
   const metricsQ = useQuery({
     queryKey: ["admin", "system-metrics"],
     queryFn: () => admin.getSystemMetrics(),
@@ -22,6 +25,36 @@ export function DashboardPage() {
     queryFn: () => healthCheck(),
     refetchInterval: 30_000,
   });
+
+  // Realtime: SOS alerts page the operator with a hard toast; complaint:new
+  // and withdrawal:requested invalidate the metrics query so the dashboard
+  // badge counts update without a manual refetch.
+  const handlers = useMemo(
+    () => ({
+      "sos:alert": (payload: any) => {
+        toast.error(
+          `🚨 SOS from ${payload.phone || payload.userId || "unknown"}`,
+          {
+            description: payload.message || "Emergency triggered",
+            duration: 15_000,
+          }
+        );
+      },
+      "complaint:new": (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["admin", "system-metrics"] });
+        qc.invalidateQueries({ queryKey: ["complaints"] });
+        toast.info(`New complaint: ${payload.category || "general"}`);
+      },
+      "withdrawal:requested": (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["admin", "withdrawals"] });
+        toast.info(
+          `New withdrawal: R${Number(payload.amount).toFixed(2)}`
+        );
+      },
+    }),
+    [qc]
+  );
+  useAdminSocket(handlers);
 
   const anyError = metricsQ.error || complianceQ.error || healthQ.error;
   const anyLoading = metricsQ.isLoading || complianceQ.isLoading || healthQ.isLoading;

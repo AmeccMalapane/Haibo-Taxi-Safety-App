@@ -75,6 +75,13 @@ export function initRealtime(httpServer: HttpServer): Server {
       socket.join("drivers");
     }
 
+    // Admins join the admins room so the Command Center can receive
+    // sos:alert, complaint:new, withdrawal:requested fanouts without every
+    // route having to look up admin user IDs.
+    if (user.role === "admin") {
+      socket.join("admins");
+    }
+
     // --- GPS Location Updates (from drivers) ---
     socket.on("location:update", async (data: {
       latitude: number;
@@ -253,6 +260,15 @@ export function emitToUser(userId: string, event: string, data: any): void {
  */
 export function broadcast(event: string, data: any): void {
   io?.emit(event, data);
+}
+
+/**
+ * Emit an event to every connected admin (Command Center). Admins join the
+ * "admins" room on connection — this is the single entry point for fanning
+ * out admin-facing events from any route or service.
+ */
+export function emitToAdmins(event: string, data: any): void {
+  io?.to("admins").emit(event, data);
 }
 
 /**

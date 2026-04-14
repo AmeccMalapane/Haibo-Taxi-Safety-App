@@ -9,11 +9,13 @@ import {
 } from "react-router-dom";
 
 import { auth } from "./api/client";
+import { closeSocket } from "./lib/socket";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { ComplaintsPage } from "./pages/ComplaintsPage";
+import { WithdrawalsPage } from "./pages/WithdrawalsPage";
 import { FleetPage } from "./pages/FleetPage";
 import { EventsPage } from "./pages/EventsPage";
 import { colors, spacing } from "./lib/brand";
@@ -26,11 +28,13 @@ import { colors, spacing } from "./lib/brand";
 function ProtectedShell() {
   const location = useLocation();
   if (!auth.isAuthenticated()) {
+    closeSocket();
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   const user = auth.getUser();
   if (user?.role && user.role !== "admin") {
     // Non-admin session — sign out and bounce.
+    closeSocket();
     auth.logout();
     return null;
   }
@@ -59,8 +63,9 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedShell />}>
           <Route index element={<DashboardPage />} />
-          <Route path="/users" element={<UsersPage />} />
+          <Route path="/withdrawals" element={<WithdrawalsPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
+          <Route path="/users" element={<UsersPage />} />
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="/events" element={<EventsPage />} />
         </Route>

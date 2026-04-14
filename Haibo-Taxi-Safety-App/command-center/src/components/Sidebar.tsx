@@ -6,11 +6,13 @@ import {
   AlertTriangle,
   Truck,
   Calendar,
+  Banknote,
   LogOut,
   LucideIcon,
 } from "lucide-react";
-import { colors, radius, spacing } from "../lib/brand";
+import { colors, spacing } from "../lib/brand";
 import { auth } from "../api/client";
+import { closeSocket } from "../lib/socket";
 
 interface NavItem {
   to: string;
@@ -20,8 +22,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", Icon: LayoutGrid },
-  { to: "/users", label: "Users", Icon: Users },
+  { to: "/withdrawals", label: "Withdrawals", Icon: Banknote },
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle },
+  { to: "/users", label: "Users", Icon: Users },
   { to: "/fleet", label: "Fleet", Icon: Truck },
   { to: "/events", label: "Events", Icon: Calendar },
 ];
@@ -93,7 +96,10 @@ export function Sidebar() {
           {user?.role || "—"}
         </div>
         <button
-          onClick={() => auth.logout()}
+          onClick={() => {
+            closeSocket();
+            auth.logout();
+          }}
           style={{
             marginTop: spacing.md,
             background: "transparent",
