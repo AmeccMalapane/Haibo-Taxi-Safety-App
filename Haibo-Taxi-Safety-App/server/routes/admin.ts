@@ -1057,6 +1057,8 @@ router.get(
           vehicleModel: driverProfiles.vehicleModel,
           vehicleYear: driverProfiles.vehicleYear,
           vehicleColor: driverProfiles.vehicleColor,
+          licenseImageUrl: driverProfiles.licenseImageUrl,
+          vehicleImageUrl: driverProfiles.vehicleImageUrl,
           lastLocationUpdate: driverProfiles.lastLocationUpdate,
           createdAt: driverProfiles.createdAt,
           userPhone: users.phone,

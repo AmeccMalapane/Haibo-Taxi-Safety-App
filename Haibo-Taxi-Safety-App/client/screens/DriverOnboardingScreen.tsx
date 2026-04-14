@@ -6,7 +6,9 @@ import {
   Pressable,
   Alert,
   Platform,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -27,6 +29,7 @@ import {
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { apiRequest } from "@/lib/query-client";
+import { uploadFromUri } from "@/lib/uploads";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // typeui-clean DriverOnboarding — self-service driver registration on
@@ -74,6 +77,10 @@ export default function DriverOnboardingScreen() {
   const [licenseExpiry, setLicenseExpiry] = useState("");
   const [insuranceNumber, setInsuranceNumber] = useState("");
   const [insuranceExpiry, setInsuranceExpiry] = useState("");
+  const [licenseImageUrl, setLicenseImageUrl] = useState("");
+  const [vehicleImageUrl, setVehicleImageUrl] = useState("");
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [vehicleUploading, setVehicleUploading] = useState(false);
   const [licenseFocused, setLicenseFocused] = useState(false);
   const [licenseExpFocused, setLicenseExpFocused] = useState(false);
   const [insuranceFocused, setInsuranceFocused] = useState(false);
@@ -110,6 +117,8 @@ export default function DriverOnboardingScreen() {
           licenseExpiry: parseIsoDate(licenseExpiry),
           insuranceNumber: insuranceNumber.trim() || undefined,
           insuranceExpiry: parseIsoDate(insuranceExpiry),
+          licenseImageUrl: licenseImageUrl || undefined,
+          vehicleImageUrl: vehicleImageUrl || undefined,
         }),
       });
     },
@@ -137,6 +146,70 @@ export default function DriverOnboardingScreen() {
       Alert.alert("Couldn't register", error.message || "Please try again.");
     },
   });
+
+  // Shared picker for license and vehicle photos. camera=true opens
+  // the camera for a fresh capture (license shot), false opens the
+  // library (vehicle shot — user likely already has one). Both go to
+  // /api/uploads/image?folder=drivers.
+  const handlePickPhoto = async (
+    kind: "license" | "vehicle",
+    useCamera: boolean = false
+  ) => {
+    const setUploading =
+      kind === "license" ? setLicenseUploading : setVehicleUploading;
+    const setUrl =
+      kind === "license" ? setLicenseImageUrl : setVehicleImageUrl;
+    try {
+      if (useCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            "Camera permission needed",
+            "Allow camera access to capture a photo.",
+          );
+          return;
+        }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert(
+            "Permission needed",
+            "Grant photo library access to pick an image.",
+          );
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.85,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.85,
+          });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      triggerHaptic("selection");
+      setUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "drivers",
+        name: result.assets[0].fileName || undefined,
+      });
+      setUrl(uploaded.url);
+      triggerHaptic("success");
+    } catch (error: any) {
+      triggerHaptic("error");
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const step1Valid = plateNumber.trim().length >= 4;
 
@@ -436,6 +509,34 @@ export default function DriverOnboardingScreen() {
                 </ThemedText>
               </View>
 
+              <BrandLabel theme={theme}>License photo</BrandLabel>
+              <PhotoPicker
+                imageUrl={licenseImageUrl}
+                uploading={licenseUploading}
+                onPickLibrary={() => handlePickPhoto("license", false)}
+                onPickCamera={() => handlePickPhoto("license", true)}
+                onClear={() => {
+                  triggerHaptic("selection");
+                  setLicenseImageUrl("");
+                }}
+                hint="Front of your professional driving permit"
+                theme={theme}
+              />
+
+              <BrandLabel theme={theme}>Vehicle photo</BrandLabel>
+              <PhotoPicker
+                imageUrl={vehicleImageUrl}
+                uploading={vehicleUploading}
+                onPickLibrary={() => handlePickPhoto("vehicle", false)}
+                onPickCamera={() => handlePickPhoto("vehicle", true)}
+                onClear={() => {
+                  triggerHaptic("selection");
+                  setVehicleImageUrl("");
+                }}
+                hint="Three-quarter angle showing the plate"
+                theme={theme}
+              />
+
               <BrandLabel theme={theme}>License number</BrandLabel>
               <TextInput
                 style={[
@@ -579,6 +680,102 @@ function BrandLabel({
   );
 }
 
+function PhotoPicker({
+  imageUrl,
+  uploading,
+  onPickLibrary,
+  onPickCamera,
+  onClear,
+  hint,
+  theme,
+}: {
+  imageUrl: string;
+  uploading: boolean;
+  onPickLibrary: () => void;
+  onPickCamera: () => void;
+  onClear: () => void;
+  hint: string;
+  theme: any;
+}) {
+  if (imageUrl) {
+    return (
+      <View style={styles.photoPreviewWrap}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.photoPreview}
+          resizeMode="cover"
+        />
+        <Pressable
+          onPress={onClear}
+          style={({ pressed }) => [
+            styles.photoClearBtn,
+            pressed && { opacity: 0.8 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Remove photo"
+        >
+          <Feather name="x" size={14} color="#FFFFFF" />
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View>
+      <View style={styles.photoRow}>
+        <Pressable
+          onPress={onPickCamera}
+          disabled={uploading}
+          style={({ pressed }) => [
+            styles.photoBtn,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.border,
+            },
+            pressed && { opacity: 0.85 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Take photo with camera"
+        >
+          <Feather
+            name={uploading ? "loader" : "camera"}
+            size={18}
+            color={BrandColors.primary.gradientStart}
+          />
+          <ThemedText style={[styles.photoBtnText, { color: theme.text }]}>
+            Camera
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          onPress={onPickLibrary}
+          disabled={uploading}
+          style={({ pressed }) => [
+            styles.photoBtn,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.border,
+            },
+            pressed && { opacity: 0.85 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Pick photo from library"
+        >
+          <Feather
+            name="image"
+            size={18}
+            color={BrandColors.primary.gradientStart}
+          />
+          <ThemedText style={[styles.photoBtnText, { color: theme.text }]}>
+            Library
+          </ThemedText>
+        </Pressable>
+      </View>
+      <ThemedText style={[styles.photoHint, { color: theme.textSecondary }]}>
+        {uploading ? "Uploading…" : hint}
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
@@ -705,6 +902,56 @@ const styles = StyleSheet.create({
 
   cta: {
     marginTop: Spacing["2xl"],
+  },
+
+  // Photo picker sub-component
+  photoRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  photoBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+  },
+  photoBtnText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  photoHint: {
+    ...Typography.small,
+    fontSize: 11,
+    marginTop: Spacing.xs,
+    marginLeft: 2,
+  },
+  photoPreviewWrap: {
+    width: "100%",
+    height: 160,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+    position: "relative",
+  },
+  photoPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  photoClearBtn: {
+    position: "absolute",
+    top: Spacing.sm,
+    right: Spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   skipLink: {

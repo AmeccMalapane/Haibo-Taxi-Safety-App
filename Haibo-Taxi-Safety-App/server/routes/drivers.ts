@@ -13,7 +13,7 @@ router.post("/register", authMiddleware, async (req: AuthRequest, res: Response)
     const {
       taxiPlateNumber, licenseNumber, licenseExpiry,
       insuranceNumber, insuranceExpiry, vehicleColor,
-      vehicleModel, vehicleYear,
+      vehicleModel, vehicleYear, licenseImageUrl, vehicleImageUrl,
     } = req.body;
 
     if (!taxiPlateNumber) {
@@ -40,6 +40,8 @@ router.post("/register", authMiddleware, async (req: AuthRequest, res: Response)
       vehicleColor: vehicleColor || null,
       vehicleModel: vehicleModel || null,
       vehicleYear: vehicleYear || null,
+      licenseImageUrl: licenseImageUrl || null,
+      vehicleImageUrl: vehicleImageUrl || null,
       payReferenceCode,
     }).returning();
 

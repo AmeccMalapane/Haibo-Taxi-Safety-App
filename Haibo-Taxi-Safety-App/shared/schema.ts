@@ -1110,6 +1110,11 @@ export const driverProfiles = pgTable("driver_profiles", {
   vehicleColor: text("vehicle_color"),
   vehicleModel: text("vehicle_model"),
   vehicleYear: integer("vehicle_year"),
+  // KYC photos — captured during self-service onboarding, reviewed by
+  // admins in the Driver KYC queue. All nullable so drivers can finish
+  // registering with just a plate and add documents later.
+  licenseImageUrl: text("license_image_url"),
+  vehicleImageUrl: text("vehicle_image_url"),
   payReferenceCode: text("pay_reference_code").unique(),
   currentLatitude: real("current_latitude"),
   currentLongitude: real("current_longitude"),
