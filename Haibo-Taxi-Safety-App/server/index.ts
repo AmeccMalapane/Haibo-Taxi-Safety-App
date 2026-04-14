@@ -27,6 +27,7 @@ import adminRoutes from "./routes/admin";
 import notificationRoutes from "./routes/notifications";
 import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
+import vendorRoutes from "./routes/vendor";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -101,6 +102,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/paystack", paystackRoutes);
 app.use("/api/pasop", pasopRoutes);
+app.use("/api/vendor-profile", vendorRoutes);
 
 // --- 404 handler ---
 app.use((req, res) => {

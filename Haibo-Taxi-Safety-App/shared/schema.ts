@@ -912,8 +912,67 @@ export const p2pTransfers = pgTable("p2p_transfers", {
   amount: real("amount").notNull(),
   message: text("message"),
   status: text("status").notNull().default("completed"), // 'pending', 'completed', 'rejected'
+  // When set, this transfer was a vendor sale (buyer scanned vendor ref).
+  // Lets us classify "sale" vs "personal P2P" in reports without a second
+  // table. Nullable: all existing rows stay valid as personal transfers.
+  vendorRef: text("vendor_ref"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ============================================
+// HAIBO VAULT — VENDOR PROFILES
+// ============================================
+// Vendor profile is a flag/metadata layer on top of an existing user
+// account, NOT a separate identity. Every vendor is a regular Haibo
+// user who opted in and provided business info; the money itself
+// flows through their existing wallet (users.walletBalance) and out
+// through the existing withdrawal_requests pipeline.
+//
+// This is deliberately different from the earlier prototype (which
+// had a standalone `vendors` table with its own banking columns) —
+// we want commuter ↔ driver ↔ vendor payments to all ride the same
+// p2pTransfers rail so the whole ecosystem feels like one wallet.
+
+export const vendorProfiles = pgTable("vendor_profiles", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  // One profile per user. Unique so a user can't accidentally register
+  // themselves twice under two vendor refs.
+  userId: varchar("user_id").notNull().unique(),
+  vendorType: text("vendor_type").notNull(), // 'taxi_vendor' | 'hawker' | 'accessories'
+  businessName: text("business_name").notNull(),
+  rankLocation: text("rank_location"),
+  description: text("description"),
+  businessImageUrl: text("business_image_url"),
+  // Short, human-readable code the buyer types or scans (e.g. HBV-1234-XYZ9).
+  // Unique so QR lookups are O(1) and collision-free.
+  vendorRef: text("vendor_ref").notNull().unique(),
+  status: text("status").notNull().default("pending"), // 'pending' | 'verified' | 'suspended'
+  // Derived counter maintained on sale — lets the directory/CC sort
+  // by popularity without an aggregate query on every page load.
+  totalSales: real("total_sales").notNull().default(0),
+  salesCount: integer("sales_count").notNull().default(0),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertVendorProfileSchema = createInsertSchema(vendorProfiles).omit({
+  id: true,
+  vendorRef: true,
+  status: true,
+  totalSales: true,
+  salesCount: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VendorProfile = typeof vendorProfiles.$inferSelect;
+export type InsertVendorProfile = z.infer<typeof insertVendorProfileSchema>;
 
 export const sponsorships = pgTable("sponsorships", {
   id: varchar("id")
