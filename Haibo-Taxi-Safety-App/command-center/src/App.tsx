@@ -21,6 +21,7 @@ import { PasopPage } from "./pages/PasopPage";
 import { UserWalletPage } from "./pages/UserWalletPage";
 import { DriversPage } from "./pages/DriversPage";
 import { DriverDetailPage } from "./pages/DriverDetailPage";
+import { BroadcastPage } from "./pages/BroadcastPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -75,6 +76,7 @@ export default function App() {
           <Route path="/sos" element={<SOSAlertsPage />} />
           <Route path="/withdrawals" element={<WithdrawalsPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
+          <Route path="/broadcast" element={<BroadcastPage />} />
           <Route path="/moderation/pasop" element={<PasopPage />} />
           <Route path="/moderation/reels" element={<ReelsModerationPage />} />
           <Route path="/moderation/lost-found" element={<LostFoundModerationPage />} />

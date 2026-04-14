@@ -14,6 +14,7 @@ import {
   ScrollText,
   Radar,
   BadgeCheck,
+  Megaphone,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { to: "/sos", label: "SOS alerts", Icon: AlertOctagon, section: "Ops" },
   { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
+  { to: "/broadcast", label: "Broadcast", Icon: Megaphone, section: "Ops" },
 
   // Moderation — content + person review
   { to: "/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },

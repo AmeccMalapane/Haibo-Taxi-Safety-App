@@ -114,6 +114,11 @@ export const auth = {
 
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
+export type BroadcastAudience =
+  | { kind: "all" }
+  | { kind: "role"; role: string }
+  | { kind: "phones"; phones: string[] };
+
 export const admin = {
   async getSystemMetrics() {
     return request("/api/admin/system-metrics");
@@ -251,6 +256,31 @@ export const admin = {
     return request(`/api/admin/drivers/${driverId}/unverify`, {
       method: "PUT",
       body: JSON.stringify({ reason }),
+    });
+  },
+
+  /**
+   * Broadcast push notifications to a resolved audience.
+   * Audience:
+   *   - { kind: "all" } → every user
+   *   - { kind: "role", role: "commuter"|"driver"|"owner"|"admin" }
+   *   - { kind: "phones", phones: string[] } → match users by phone
+   */
+  async previewBroadcast(audience: BroadcastAudience) {
+    return request("/api/admin/broadcast/preview", {
+      method: "POST",
+      body: JSON.stringify({ audience }),
+    });
+  },
+
+  async sendBroadcast(input: {
+    title: string;
+    body: string;
+    audience: BroadcastAudience;
+  }) {
+    return request("/api/admin/broadcast", {
+      method: "POST",
+      body: JSON.stringify(input),
     });
   },
 

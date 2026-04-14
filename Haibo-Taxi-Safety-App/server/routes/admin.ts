@@ -7,9 +7,9 @@ import {
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
   sosAlerts, driverRatings,
 } from "../../shared/schema";
-import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
+import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
-import { notifyUser } from "../services/notifications";
+import { notifyUser, notifyUsers } from "../services/notifications";
 import { recordAdminAction } from "../services/audit";
 
 const router = Router();
@@ -1221,5 +1221,163 @@ router.put(
     }
   }
 );
+
+// ============ BROADCAST / PUSH NOTIFICATIONS ============
+// Ops-side tool for sending targeted announcements. Resolves the audience
+// (all / by role / by phone list) to userIds, then fans out via
+// notifyUsers which persists to the notifications table and fires FCM
+// push in one pass. Every broadcast is audit-logged with recipient count
+// so the history view can reconstruct who sent what.
+
+type BroadcastAudience =
+  | { kind: "all" }
+  | { kind: "role"; role: string }
+  | { kind: "phones"; phones: string[] };
+
+// POST /api/admin/broadcast/preview — resolve an audience and return the
+// recipient count without actually sending. Lets the CC show an accurate
+// "This will go to 1,432 users — confirm?" dialog before the operator
+// commits.
+router.post(
+  "/broadcast/preview",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { audience } = req.body as { audience?: BroadcastAudience };
+      if (!audience) {
+        res.status(400).json({ error: "audience is required" });
+        return;
+      }
+
+      const count = await resolveAudienceCount(audience);
+      res.json({ recipientCount: count });
+    } catch (error: any) {
+      console.error("Broadcast preview error:", error);
+      res.status(500).json({ error: "Failed to preview broadcast" });
+    }
+  }
+);
+
+// POST /api/admin/broadcast — send the broadcast. Body:
+//   { title: string, body: string, audience: BroadcastAudience }
+// Returns: { recipients: N, sent: N, failed: N }
+router.post(
+  "/broadcast",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { title, body, audience } = req.body as {
+        title?: string;
+        body?: string;
+        audience?: BroadcastAudience;
+      };
+
+      if (!title || title.trim().length < 2) {
+        res.status(400).json({ error: "title is required (min 2 chars)" });
+        return;
+      }
+      if (!body || body.trim().length < 4) {
+        res.status(400).json({ error: "body is required (min 4 chars)" });
+        return;
+      }
+      if (!audience) {
+        res.status(400).json({ error: "audience is required" });
+        return;
+      }
+
+      const userIds = await resolveAudienceUserIds(audience);
+      if (userIds.length === 0) {
+        res.status(400).json({ error: "No recipients match the audience" });
+        return;
+      }
+
+      const result = await notifyUsers(
+        userIds,
+        "system",
+        title.trim(),
+        body.trim()
+      );
+
+      await recordAdminAction(
+        req,
+        "broadcast.send",
+        "notifications",
+        null,
+        {
+          audience,
+          title: title.trim(),
+          body: body.trim(),
+          recipients: userIds.length,
+          sent: result.sent,
+          failed: result.failed,
+        }
+      );
+
+      res.json({
+        recipients: userIds.length,
+        sent: result.sent,
+        failed: result.failed,
+      });
+    } catch (error: any) {
+      console.error("Broadcast send error:", error);
+      res.status(500).json({ error: "Failed to send broadcast" });
+    }
+  }
+);
+
+// Audience → userIds resolver. Kept as a local helper so preview + send
+// share the exact same logic and can't drift.
+async function resolveAudienceUserIds(
+  audience: BroadcastAudience
+): Promise<string[]> {
+  if (audience.kind === "all") {
+    const rows = await db.select({ id: users.id }).from(users);
+    return rows.map((r) => r.id);
+  }
+  if (audience.kind === "role") {
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, audience.role));
+    return rows.map((r) => r.id);
+  }
+  if (audience.kind === "phones") {
+    const cleaned = audience.phones
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    if (cleaned.length === 0) return [];
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(inArray(users.phone, cleaned));
+    return rows.map((r) => r.id);
+  }
+  return [];
+}
+
+async function resolveAudienceCount(
+  audience: BroadcastAudience
+): Promise<number> {
+  // Count-only variant to avoid loading every user row for "all" when we
+  // just want a number.
+  if (audience.kind === "all") {
+    const [r] = await db.select({ count: count() }).from(users);
+    return r.count;
+  }
+  if (audience.kind === "role") {
+    const [r] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, audience.role));
+    return r.count;
+  }
+  if (audience.kind === "phones") {
+    const ids = await resolveAudienceUserIds(audience);
+    return ids.length;
+  }
+  return 0;
+}
 
 export default router;
