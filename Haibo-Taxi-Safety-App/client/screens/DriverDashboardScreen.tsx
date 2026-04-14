@@ -220,13 +220,40 @@ export default function DriverDashboardScreen() {
           </View>
 
           <ThemedText style={styles.heroGreeting}>Mzansi greets you,</ThemedText>
-          <ThemedText style={styles.heroTitle}>{driverName}</ThemedText>
+          <View style={styles.heroNameRow}>
+            <ThemedText style={styles.heroTitle}>{driverName}</ThemedText>
+            {profile?.isVerified ? (
+              <View style={styles.verifiedBadge}>
+                <Feather name="check" size={12} color={BrandColors.primary.gradientStart} />
+              </View>
+            ) : null}
+          </View>
           <View style={styles.heroPlateRow}>
             <Feather name="truck" size={16} color="rgba(255,255,255,0.85)" />
             <ThemedText style={styles.heroPlate}>
               {plateNumber || "Plate not set"}
             </ThemedText>
+            {/* Rating pill — only visible once the driver has at least
+                one rating so we're not flashing a meaningless "5.0"
+                score on a brand-new profile. */}
+            {profile && (profile.totalRatings ?? 0) > 0 ? (
+              <View style={styles.ratingPill}>
+                <Feather name="star" size={11} color="#FFFFFF" />
+                <ThemedText style={styles.ratingPillText}>
+                  {Number(profile.safetyRating ?? 0).toFixed(1)}
+                </ThemedText>
+              </View>
+            ) : null}
           </View>
+          {/* KYC status ribbon — one-liner beneath the plate row so the
+              driver always knows where their verification stands. */}
+          {profile ? (
+            <ThemedText style={styles.kycStatus}>
+              {profile.isVerified
+                ? "KYC verified"
+                : "KYC review pending — payments still work"}
+            </ThemedText>
+          ) : null}
         </LinearGradient>
 
         <View style={styles.content}>
@@ -423,10 +450,28 @@ const styles = StyleSheet.create({
     ...Typography.small,
     color: "rgba(255, 255, 255, 0.85)",
   },
+  heroNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: 2,
+  },
   heroTitle: {
     ...Typography.h1,
     color: "#FFFFFF",
-    marginTop: 2,
+  },
+  verifiedBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
   heroPlateRow: {
     flexDirection: "row",
@@ -439,6 +484,30 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.9)",
     fontVariant: ["tabular-nums"],
     fontWeight: "700",
+  },
+  ratingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    marginLeft: Spacing.sm,
+  },
+  ratingPillText: {
+    ...Typography.small,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    fontVariant: ["tabular-nums"],
+  },
+  kycStatus: {
+    ...Typography.small,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: Spacing.xs,
+    fontStyle: "italic",
   },
   content: {
     paddingHorizontal: Spacing.lg,
