@@ -94,6 +94,16 @@ interface VendorProfileRow {
   totalSales: number;
 }
 
+interface VendorSaleRow {
+  id: string;
+  senderId: string;
+  amount: number;
+  message: string | null;
+  createdAt: string | null;
+  buyerName: string | null;
+  buyerPhone: string | null;
+}
+
 export default function VendorOnboardingScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -125,6 +135,18 @@ export default function VendorOnboardingScreen() {
   });
 
   const existing = existingQ.data?.data ?? null;
+
+  // Recent sales feed — only enabled once we know the vendor exists,
+  // so unregistered users don't burn a request. 60s refetch keeps the
+  // list live while the vendor is actively looking at their screen.
+  const salesQ = useQuery<{ data: VendorSaleRow[]; hasMore: boolean }>({
+    queryKey: ["/api/vendor-profile/me/sales"],
+    queryFn: () => apiRequest("/api/vendor-profile/me/sales?limit=10"),
+    enabled: !!existing && !editing,
+    refetchInterval: 60_000,
+  });
+
+  const recentSales = salesQ.data?.data || [];
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -447,6 +469,30 @@ export default function VendorOnboardingScreen() {
                 theme={theme}
               />
             </View>
+
+            {/* Recent sales feed — only in read-only mode. During edit we
+                hide it to reduce visual noise while the form is open. */}
+            {!editing && recentSales.length > 0 ? (
+              <View style={styles.salesSection}>
+                <View style={styles.salesHeaderRow}>
+                  <ThemedText
+                    style={[styles.salesHeader, { color: theme.textSecondary }]}
+                  >
+                    RECENT SALES
+                  </ThemedText>
+                  {salesQ.data?.hasMore ? (
+                    <ThemedText
+                      style={[styles.salesMore, { color: theme.textSecondary }]}
+                    >
+                      latest {recentSales.length}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                {recentSales.map((sale) => (
+                  <SaleRow key={sale.id} sale={sale} theme={theme} />
+                ))}
+              </View>
+            ) : null}
 
             {/* Edit form — inline, only when editing is true */}
             {editing ? (
@@ -1114,6 +1160,70 @@ function StatTile({
   );
 }
 
+function SaleRow({
+  sale,
+  theme,
+}: {
+  sale: VendorSaleRow;
+  theme: any;
+}) {
+  // Human label for the buyer — prefer displayName, then phone, then a
+  // friendly "walk-up customer" fallback for non-user recipients.
+  const buyerLabel = sale.buyerName || sale.buyerPhone || "Walk-up customer";
+  const when = sale.createdAt
+    ? new Date(sale.createdAt).toLocaleTimeString("en-ZA", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+  const dateLabel = sale.createdAt
+    ? new Date(sale.createdAt).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+      })
+    : "";
+  return (
+    <View
+      style={[
+        styles.saleRow,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <View
+        style={[
+          styles.saleIcon,
+          { backgroundColor: BrandColors.status.success + "14" },
+        ]}
+      >
+        <Feather name="arrow-down-left" size={14} color={BrandColors.status.success} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <ThemedText style={styles.saleBuyer} numberOfLines={1}>
+          {buyerLabel}
+        </ThemedText>
+        {sale.message ? (
+          <ThemedText
+            style={[styles.saleMessage, { color: theme.textSecondary }]}
+            numberOfLines={1}
+          >
+            "{sale.message}"
+          </ThemedText>
+        ) : null}
+        <ThemedText
+          style={[styles.saleWhen, { color: theme.textSecondary }]}
+        >
+          {dateLabel} · {when}
+        </ThemedText>
+      </View>
+      <ThemedText
+        style={[styles.saleAmount, { color: BrandColors.status.success }]}
+      >
+        +R{Number(sale.amount).toFixed(2)}
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
@@ -1430,6 +1540,64 @@ const styles = StyleSheet.create({
     ...Typography.small,
     textAlign: "center",
     maxWidth: 300,
+  },
+
+  // Recent sales feed
+  salesSection: {
+    marginTop: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  salesHeaderRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  salesHeader: {
+    ...Typography.label,
+    letterSpacing: 1.2,
+    fontSize: 11,
+  },
+  salesMore: {
+    ...Typography.small,
+    fontSize: 11,
+  },
+  saleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  saleIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saleBuyer: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  saleMessage: {
+    ...Typography.small,
+    fontSize: 12,
+    fontStyle: "italic",
+    marginTop: 1,
+  },
+  saleWhen: {
+    ...Typography.small,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  saleAmount: {
+    ...Typography.h4,
+    fontSize: 15,
+    fontVariant: ["tabular-nums"],
+    fontWeight: "700",
   },
 
   // Stat grid

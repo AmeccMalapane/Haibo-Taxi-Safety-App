@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
 import QRCode from "qrcode";
 import { db } from "../db";
-import { vendorProfiles, users } from "../../shared/schema";
+import { vendorProfiles, users, p2pTransfers } from "../../shared/schema";
 import { eq, desc, ilike, and, SQL } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 
@@ -46,6 +46,77 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: "Failed to fetch vendor profile" });
   }
 });
+
+// GET /api/vendor-profile/me/sales — recent sales feed for the current
+// vendor. Filters p2pTransfers by the caller's vendorRef so vendors can
+// reconcile individual sales against their physical inventory. Joined
+// against users so the UI can show buyer name/phone where available
+// (non-user recipients still show a friendly "walk-up customer" label
+// on the client side).
+router.get(
+  "/me/sales",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { limit: rawLimit, offset: rawOffset } = req.query as {
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 30, 100);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const [profile] = await db
+        .select({ vendorRef: vendorProfiles.vendorRef })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.userId, req.user!.userId))
+        .limit(1);
+
+      if (!profile) {
+        // No vendor profile → return an empty feed rather than 404. The
+        // client can render the same empty state whether you've never
+        // registered or just haven't received your first sale yet.
+        res.json({ data: [], hasMore: false, nextOffset: null });
+        return;
+      }
+
+      // Fetch limit+1 to compute hasMore without a second COUNT query,
+      // same pattern as the directory endpoint in Chunk 19.
+      const rows = await db
+        .select({
+          id: p2pTransfers.id,
+          senderId: p2pTransfers.senderId,
+          amount: p2pTransfers.amount,
+          message: p2pTransfers.message,
+          createdAt: p2pTransfers.createdAt,
+          buyerName: users.displayName,
+          buyerPhone: users.phone,
+        })
+        .from(p2pTransfers)
+        .leftJoin(users, eq(p2pTransfers.senderId, users.id))
+        .where(
+          and(
+            eq(p2pTransfers.vendorRef, profile.vendorRef),
+            eq(p2pTransfers.status, "completed"),
+          ),
+        )
+        .orderBy(desc(p2pTransfers.createdAt))
+        .limit(limit + 1)
+        .offset(offset);
+
+      const hasMore = rows.length > limit;
+      const data = hasMore ? rows.slice(0, limit) : rows;
+
+      res.json({
+        data,
+        hasMore,
+        nextOffset: hasMore ? offset + limit : null,
+      });
+    } catch (error: any) {
+      console.error("Vendor sales feed error:", error);
+      res.status(500).json({ error: "Failed to fetch sales" });
+    }
+  },
+);
 
 // POST /api/vendor-profile — create own profile. Idempotent: if the
 // user already has a profile we return it instead of erroring, so
