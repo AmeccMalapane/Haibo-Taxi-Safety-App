@@ -98,7 +98,7 @@ export default function ProfileScreen() {
 
   const handlePayment = () => {
     triggerHaptic("light");
-    navigation.navigate("Payment");
+    navigation.navigate("Wallet");
   };
 
   const handleSettings = () => {

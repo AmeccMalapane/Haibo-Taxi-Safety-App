@@ -4,7 +4,6 @@ import MainTabNavigator from "@/navigation/MainTabNavigator";
 import EmergencyScreen from "@/screens/EmergencyScreen";
 import TripShareScreen from "@/screens/TripShareScreen";
 import ReportScreen from "@/screens/ReportScreen";
-import PaymentScreen from "@/screens/PaymentScreen";
 import EmergencyContactsScreen from "@/screens/EmergencyContactsScreen";
 import EmergencyServicesScreen from "@/screens/EmergencyServicesScreen";
 import AddLocationScreen from "@/screens/AddLocationScreen";
@@ -58,7 +57,6 @@ export type RootStackParamList = {
   Emergency: undefined;
   TripShare: undefined;
   Report: undefined;
-  Payment: undefined;
   EmergencyContacts: undefined;
   EmergencyServices: undefined;
   AddLocation: { latitude?: number; longitude?: number } | undefined;
@@ -153,14 +151,6 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="Report"
         component={ReportScreen}
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="Payment"
-        component={PaymentScreen}
         options={{
           presentation: "modal",
           headerShown: false,
