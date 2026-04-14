@@ -9,6 +9,7 @@ import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { sensitiveRateLimit, financialRateLimit } from "../middleware/rateLimit";
 import { verifyTransaction } from "../services/paystack";
 import { emitToAdmins } from "../services/realtime";
+import { notifyUser } from "../services/notifications";
 import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
@@ -325,6 +326,29 @@ router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthR
         updatedAt: new Date(),
       })
       .where(eq(vendorProfiles.id, vendor.id));
+
+    // Fire-and-forget push receipt to the vendor. Don't await — a
+    // slow FCM call shouldn't delay the buyer's 200 response, and the
+    // transaction itself is already committed at this point. The
+    // notifications service persists to the DB even when FCM is
+    // misconfigured, so the vendor still sees the receipt in-app.
+    const buyerLabel =
+      sender.displayName || sender.phone || "a customer";
+    notifyUser({
+      userId: vendor.userId,
+      type: "payment",
+      title: `R${Number(amount).toFixed(2)} received`,
+      body: `${buyerLabel} paid you on Haibo${message ? `: "${message}"` : ""}`,
+      data: {
+        kind: "vendor_sale",
+        transferId: transfer.id,
+        amount: String(amount),
+        vendorRef: vendor.vendorRef,
+      },
+    }).catch((err) => {
+      // Never let receipt failures bubble — they're best-effort.
+      console.error("Vendor sale notify error:", err);
+    });
 
     res.json({
       message: "Payment successful",
