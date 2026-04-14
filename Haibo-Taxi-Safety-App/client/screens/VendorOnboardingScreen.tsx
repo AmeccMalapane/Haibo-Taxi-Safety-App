@@ -27,7 +27,7 @@ import {
 } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { createVendorPayLink } from "@/lib/deepLinks";
 
 // typeui-clean VendorOnboardingScreen — rose gradient hero with storefront
@@ -260,7 +260,7 @@ export default function VendorOnboardingScreen() {
               </View>
             ) : null}
 
-            {/* Vendor ref card — the thing they show customers */}
+            {/* Vendor ref card — QR + code, the thing they show customers */}
             <View
               style={[
                 styles.refCard,
@@ -275,11 +275,28 @@ export default function VendorOnboardingScreen() {
               >
                 YOUR HAIBO PAY VENDOR CODE
               </ThemedText>
+
+              {/* Server-rendered QR — commuters scan with any native
+                  camera to land in PayVendor with this ref pre-filled. */}
+              {(() => {
+                const apiBase = getApiUrl();
+                if (!apiBase) return null;
+                const qrUrl = `${apiBase}api/vendor-profile/${encodeURIComponent(existing.vendorRef)}/qr.png`;
+                return (
+                  <Image
+                    source={{ uri: qrUrl }}
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                    accessibilityLabel="Payment QR code"
+                  />
+                );
+              })()}
+
               <ThemedText style={styles.refValue}>{existing.vendorRef}</ThemedText>
               <ThemedText
                 style={[styles.refHint, { color: theme.textSecondary }]}
               >
-                Share this code with customers so they can pay you on Haibo.
+                Customers scan the QR or type the code to pay you on Haibo.
               </ThemedText>
             </View>
 
@@ -966,6 +983,13 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: BorderRadius.md,
+  },
+
+  // Welcome-back: QR image (server-rendered PNG)
+  qrImage: {
+    width: 220,
+    height: 220,
+    marginVertical: Spacing.md,
   },
 
   // Welcome-back: vendor ref card

@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import QRCode from "qrcode";
 import { db } from "../db";
 import { vendorProfiles, users } from "../../shared/schema";
 import { eq, desc, ilike, and, SQL } from "drizzle-orm";
@@ -180,6 +181,77 @@ router.get(
     }
   }
 );
+
+// GET /api/vendor-profile/:vendorRef/qr.png — server-rendered QR image
+// encoding the public pay deep link. Vendors can print this directly
+// onto stall signage or share it in their promotions; commuters scan
+// with any native camera and land on PayVendorScreen with the ref
+// pre-filled (see client/lib/deepLinks.ts + Chunk 17).
+//
+// Public (no auth) so the image can be embedded in printed materials,
+// websites, and WhatsApp broadcasts without requiring a session. The
+// underlying ref does nothing sensitive on its own — pay-vendor is
+// still authenticated on the write side.
+router.get("/:vendorRef/qr.png", async (req, res: Response) => {
+  try {
+    const { vendorRef } = req.params;
+
+    // Verify the vendor exists and isn't suspended before generating
+    // an image — otherwise we'd happily print QR stickers for invalid
+    // refs. Note: we do NOT return 200 for pending vendors on payment
+    // lookup, but we DO here because a vendor needs to print their QR
+    // before anyone pays them (chicken/egg).
+    const [vendor] = await db
+      .select({ status: vendorProfiles.status })
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.vendorRef, vendorRef))
+      .limit(1);
+
+    if (!vendor || vendor.status === "suspended") {
+      res.status(404).json({ error: "Vendor not found" });
+      return;
+    }
+
+    // Build the smart link the QR encodes. Same shape as
+    // client/lib/deepLinks.ts createVendorPayLink so a native camera
+    // scan lands in exactly the same place as an in-app share tap.
+    // VENDOR_SHARE_BASE_URL takes precedence, falls back to
+    // EXPO_PUBLIC_DOMAIN for parity with client smart-links, then the
+    // raw app scheme as a last resort for local dev.
+    const shareBase =
+      process.env.VENDOR_SHARE_BASE_URL ||
+      (process.env.EXPO_PUBLIC_DOMAIN
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+        : null);
+    const payUrl = shareBase
+      ? `${shareBase.replace(/\/$/, "")}/pay/${encodeURIComponent(vendorRef)}`
+      : `haibo-taxi://pay/${encodeURIComponent(vendorRef)}`;
+
+    // Render a 512px PNG with medium error-correction (resilient to
+    // smudges on a printed sticker) and a small quiet-zone margin.
+    const png = await QRCode.toBuffer(payUrl, {
+      type: "png",
+      errorCorrectionLevel: "M",
+      width: 512,
+      margin: 2,
+      color: {
+        // Haibo rose primary for the modules; white quiet zone.
+        dark: "#C81E5E",
+        light: "#FFFFFF",
+      },
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    // Short cache — if a vendor is suspended we want the printed sticker
+    // to stop resolving reasonably quickly, so we don't lean on CDN edge
+    // caches here.
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(png);
+  } catch (error: any) {
+    console.error("Vendor QR error:", error);
+    res.status(500).json({ error: "Failed to render QR code" });
+  }
+});
 
 // GET /api/vendor-profile/directory — list of verified vendors for
 // the commuter-facing directory. Supports optional rank filter, free-
