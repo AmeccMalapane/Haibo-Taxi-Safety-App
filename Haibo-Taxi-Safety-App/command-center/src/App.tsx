@@ -16,6 +16,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { ComplaintsPage } from "./pages/ComplaintsPage";
 import { WithdrawalsPage } from "./pages/WithdrawalsPage";
+import { PasopPage } from "./pages/PasopPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -69,6 +70,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="/withdrawals" element={<WithdrawalsPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
+          <Route path="/moderation/pasop" element={<PasopPage />} />
           <Route path="/moderation/reels" element={<ReelsModerationPage />} />
           <Route path="/moderation/lost-found" element={<LostFoundModerationPage />} />
           <Route path="/moderation/jobs" element={<JobsModerationPage />} />

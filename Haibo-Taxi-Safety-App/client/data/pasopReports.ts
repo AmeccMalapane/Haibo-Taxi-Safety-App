@@ -22,6 +22,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Feather } from "@expo/vector-icons";
 import { BrandColors } from "@/constants/theme";
+import {
+  isPasopServerAvailable,
+  fetchServerReports,
+  postServerReport,
+  postServerPetition,
+} from "@/lib/pasopApi";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -380,8 +386,15 @@ export function buildSTPBSegments(
 }
 
 // ─── Storage Operations ─────────────────────────────────────────────────────
+//
+// Server-first with AsyncStorage as a cache + offline fallback. The
+// previous version stored everything locally and never left the device;
+// Phase 5B added a real /api/pasop route so reports can be moderated
+// and viewed across users. We keep the AsyncStorage path because the
+// feature still has to work in guest mode and on patchy South African
+// networks where the commuter has the most reason to be reading hazards.
 
-export async function getPasopReports(): Promise<PasopReport[]> {
+async function readLocalReports(): Promise<PasopReport[]> {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.PASOP_REPORTS);
     if (!data) return getSeedReports();
@@ -395,22 +408,89 @@ export async function getPasopReports(): Promise<PasopReport[]> {
   }
 }
 
+async function writeLocalReports(reports: PasopReport[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.PASOP_REPORTS,
+      JSON.stringify(reports)
+    );
+  } catch {
+    // best-effort — if AsyncStorage is full the server path still works
+  }
+}
+
+export async function getPasopReports(): Promise<PasopReport[]> {
+  if (isPasopServerAvailable()) {
+    try {
+      const serverReports = await fetchServerReports();
+      // Refresh the local cache so the next offline read has real data
+      // instead of stale seed rows.
+      await writeLocalReports(serverReports);
+      return serverReports.map((r) => ({
+        ...r,
+        status: Date.now() >= r.expiresAt ? "expired" : r.status,
+      }));
+    } catch {
+      // Fall through to local cache on network failure
+    }
+  }
+  return readLocalReports();
+}
+
 export async function savePasopReport(report: PasopReport): Promise<void> {
-  const reports = await getPasopReports();
+  // Try the server first when available so the row lands in the shared
+  // store and the Command Center sees it immediately via the realtime
+  // emit. If the post fails, we still cache locally so the reporter sees
+  // their own report in the feed.
+  if (isPasopServerAvailable()) {
+    try {
+      const serverReport = await postServerReport({
+        category: report.category,
+        latitude: report.latitude,
+        longitude: report.longitude,
+        description: report.description,
+        reporterName: report.reporterName,
+      });
+      const cached = await readLocalReports();
+      const next = [
+        serverReport,
+        ...cached.filter((r) => r.id !== serverReport.id && r.id !== report.id),
+      ];
+      await writeLocalReports(next);
+      return;
+    } catch {
+      // fall through to local-only write
+    }
+  }
+
+  const reports = await readLocalReports();
   const idx = reports.findIndex((r) => r.id === report.id);
   if (idx >= 0) {
     reports[idx] = report;
   } else {
     reports.unshift(report);
   }
-  await AsyncStorage.setItem(STORAGE_KEYS.PASOP_REPORTS, JSON.stringify(reports));
+  await writeLocalReports(reports);
 }
 
 export async function petitionPasopReport(
   reportId: string,
   petitionerId: string
 ): Promise<PasopReport | null> {
-  const reports = await getPasopReports();
+  if (isPasopServerAvailable()) {
+    try {
+      const updated = await postServerPetition(reportId, petitionerId);
+      const cached = await readLocalReports();
+      const idx = cached.findIndex((r) => r.id === reportId);
+      if (idx >= 0) cached[idx] = updated;
+      await writeLocalReports(cached);
+      return updated;
+    } catch {
+      // fall through to local-only petition
+    }
+  }
+
+  const reports = await readLocalReports();
   const idx = reports.findIndex((r) => r.id === reportId);
   if (idx < 0) return null;
   const report = reports[idx];
@@ -422,7 +502,7 @@ export async function petitionPasopReport(
     expiresAt: report.expiresAt + 30 * 60 * 1000, // each petition extends life by 30 minutes
   };
   reports[idx] = updated;
-  await AsyncStorage.setItem(STORAGE_KEYS.PASOP_REPORTS, JSON.stringify(reports));
+  await writeLocalReports(reports);
   return updated;
 }
 

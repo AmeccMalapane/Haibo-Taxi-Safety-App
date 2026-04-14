@@ -11,6 +11,7 @@ import {
   Search,
   Briefcase,
   ScrollText,
+  Radar,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
 
   // Moderation — content review
+  { to: "/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
   { to: "/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
   { to: "/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
   { to: "/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },

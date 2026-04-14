@@ -1245,6 +1245,42 @@ export const groupRideChats = pgTable("group_ride_chats", {
 export type GroupRideChat = typeof groupRideChats.$inferSelect;
 
 // ============================================
+// PASOP REPORTS - Community-filed hazard alerts ("watch out")
+// ============================================
+// Waze-style hazard reporting layer for the Haibo mobile app. Each report
+// has a category (reckless driving, unsafe vehicle, robbery risk, …),
+// GPS coordinates, and a community "still there?" petition mechanism.
+//
+// Time-decay weighting in the client derives a Safe-Trip Progress Bar
+// score; expired reports are filtered out client-side. The server stores
+// both the absolute expiresAt timestamp AND the original status so the
+// admin moderation queue can hide spam without waiting for TTL.
+export const pasopReports = pgTable("pasop_reports", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  category: text("category").notNull(), // reckless_driving, unsafe_vehicle, …
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  description: text("description"),
+  reporterId: varchar("reporter_id"), // nullable for guest reports
+  reporterName: text("reporter_name"),
+  petitionCount: integer("petition_count").default(0),
+  petitioners: jsonb("petitioners").$type<string[]>().default([]),
+  status: text("status").notNull().default("active"), // active | expired | resolved | hidden
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Backs the "nearby reports" query path (GET /api/pasop/reports) —
+  // status filter first, then spatial filtering is a follow-up bbox on
+  // lat/lng that we do in-memory until we add PostGIS.
+  statusIdx: index("idx_pasop_status").on(table.status),
+}));
+
+export type PasopReport = typeof pasopReports.$inferSelect;
+
+// ============================================
 // ADMIN AUDIT LOG - Append-only record of destructive admin actions
 // ============================================
 // Every write performed through the admin API (approving a withdrawal,

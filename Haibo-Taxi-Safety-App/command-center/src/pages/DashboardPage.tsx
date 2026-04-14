@@ -51,6 +51,14 @@ export function DashboardPage() {
           `New withdrawal: R${Number(payload.amount).toFixed(2)}`
         );
       },
+      "pasop:reported": (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["moderation:pasop"] });
+        toast.info(
+          `New hazard report: ${payload.category || "unknown"}${
+            payload.reporterName ? ` · ${payload.reporterName}` : ""
+          }`
+        );
+      },
     }),
     [qc]
   );

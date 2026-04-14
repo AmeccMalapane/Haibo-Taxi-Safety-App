@@ -4,7 +4,7 @@ import {
   users, taxis, driverProfiles, complaints, events,
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
-  reels, lostFoundItems, jobs, adminAuditLog,
+  reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
@@ -504,6 +504,24 @@ const MODERATION_RESOURCES: Record<
       imageUrl: events.imageUrl,
     },
     allowedFields: ["status", "isVerified", "isFeatured"],
+  },
+  pasop: {
+    table: pasopReports,
+    idColumn: pasopReports.id,
+    listColumns: {
+      id: pasopReports.id,
+      createdAt: pasopReports.createdAt,
+      status: pasopReports.status,
+      category: pasopReports.category,
+      latitude: pasopReports.latitude,
+      longitude: pasopReports.longitude,
+      description: pasopReports.description,
+      reporterId: pasopReports.reporterId,
+      reporterName: pasopReports.reporterName,
+      petitionCount: pasopReports.petitionCount,
+      expiresAt: pasopReports.expiresAt,
+    },
+    allowedFields: ["status"],
   },
 };
 
