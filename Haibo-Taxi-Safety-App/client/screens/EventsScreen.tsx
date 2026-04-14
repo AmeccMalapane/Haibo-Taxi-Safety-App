@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Spacing,
   BrandColors,
@@ -28,6 +30,7 @@ import { GradientButton } from "@/components/GradientButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useEvents } from "@/hooks/useApiData";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // typeui-clean rework — Events as a calm community board:
@@ -86,14 +89,18 @@ export default function EventsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { data: apiEvents = [] } = useEvents();
+  const { user } = useAuth();
+  const { data: apiEvents = [], refetch: refetchEvents } = useEvents();
+  const queryClient = useQueryClient();
 
   const [isPosting, setIsPosting] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [ticketPrice, setTicketPrice] = useState("");
   const [titleFocused, setTitleFocused] = useState(false);
+  const [descFocused, setDescFocused] = useState(false);
   const [dateFocused, setDateFocused] = useState(false);
   const [locFocused, setLocFocused] = useState(false);
   const [priceFocused, setPriceFocused] = useState(false);
@@ -121,13 +128,15 @@ export default function EventsScreen() {
       : mockEvents;
 
   const triggerHaptic = (
-    type: "selection" | "medium" | "success" = "selection"
+    type: "selection" | "medium" | "success" | "error" = "selection"
   ) => {
     if (Platform.OS === "web") return;
     try {
       const Haptics = require("expo-haptics");
       if (type === "success") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (type === "error") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else if (type === "medium") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } else {
@@ -141,30 +150,68 @@ export default function EventsScreen() {
     setIsPosting((prev) => !prev);
   };
 
+  // Parse the user's free-form date string into an ISO date. We accept
+  // whatever Date can parse (e.g. "March 15, 2026 2:00 PM") and fall
+  // back to null — the caller validates before calling.
+  const parseEventDate = (raw: string): Date | null => {
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const postMutation = useMutation({
+    mutationFn: async () => {
+      const parsedDate = parseEventDate(eventDate);
+      if (!parsedDate) {
+        throw new Error("Could not parse the event date. Try a format like '15 March 2026 14:00'.");
+      }
+      return apiRequest("/api/events/create", {
+        method: "POST",
+        body: JSON.stringify({
+          title: eventTitle.trim(),
+          description: eventDescription.trim(),
+          category: "community",
+          eventDate: parsedDate.toISOString(),
+          location: eventLocation.trim(),
+          organizer: user?.displayName || user?.phone || "Community",
+          organizerPhone: user?.phone || undefined,
+          ticketPrice: ticketPrice ? parseFloat(ticketPrice) : 0,
+        }),
+      });
+    },
+    onSuccess: () => {
+      triggerHaptic("success");
+      // Refresh both the local useEvents hook and the shared cache.
+      refetchEvents();
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      Alert.alert(
+        "Event posted",
+        "Your event is now live on Haibo. Share it with your community!",
+      );
+      setIsPosting(false);
+      setEventTitle("");
+      setEventDescription("");
+      setEventDate("");
+      setEventLocation("");
+      setTicketPrice("");
+    },
+    onError: (error: Error) => {
+      triggerHaptic("error");
+      Alert.alert("Couldn't post event", error.message || "Please try again.");
+    },
+  });
+
   const handlePostEvent = () => {
     triggerHaptic("medium");
-    Alert.alert(
-      "Promote your event",
-      "Promoting an event costs R50.00 for 7 days via Haibo Pay. Demo mode — Paystack checkout coming soon.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: () => {
-            triggerHaptic("success");
-            Alert.alert(
-              "Event posted",
-              "Your event will be promoted for the next 7 days."
-            );
-            setIsPosting(false);
-            setEventTitle("");
-            setEventDate("");
-            setEventLocation("");
-            setTicketPrice("");
-          },
-        },
-      ]
-    );
+    if (
+      !eventTitle.trim() ||
+      !eventDescription.trim() ||
+      !eventDate.trim() ||
+      !eventLocation.trim()
+    ) {
+      triggerHaptic("error");
+      return;
+    }
+    postMutation.mutate();
   };
 
   const handleBuyTicket = (event: EventPost) => {
@@ -289,7 +336,7 @@ export default function EventsScreen() {
               >
                 {isPosting
                   ? "Discard the form below"
-                  : "R50 for 7 days · demo mode"}
+                  : "Share a Mzansi meetup, festival, or launch"}
               </ThemedText>
             </View>
             <Feather
@@ -337,6 +384,35 @@ export default function EventsScreen() {
               <ThemedText
                 style={[styles.fieldLabel, { color: theme.textSecondary }]}
               >
+                DESCRIPTION
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.textArea,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: descFocused
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                  },
+                ]}
+                placeholder="What's the vibe? Who's performing? What should people bring?"
+                placeholderTextColor={theme.textSecondary}
+                value={eventDescription}
+                onChangeText={setEventDescription}
+                onFocus={() => setDescFocused(true)}
+                onBlur={() => setDescFocused(false)}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                maxLength={500}
+              />
+
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
+              >
                 DATE & TIME
               </ThemedText>
               <TextInput
@@ -350,7 +426,7 @@ export default function EventsScreen() {
                       : theme.border,
                   },
                 ]}
-                placeholder="e.g. March 15, 2:00 PM"
+                placeholder="e.g. 15 March 2026 14:00"
                 placeholderTextColor={theme.textSecondary}
                 value={eventDate}
                 onChangeText={setEventDate}
@@ -412,14 +488,16 @@ export default function EventsScreen() {
                   onPress={handlePostEvent}
                   disabled={
                     !eventTitle.trim() ||
+                    !eventDescription.trim() ||
                     !eventDate.trim() ||
-                    !eventLocation.trim()
+                    !eventLocation.trim() ||
+                    postMutation.isPending
                   }
                   size="large"
-                  icon="arrow-right"
+                  icon={postMutation.isPending ? undefined : "arrow-right"}
                   iconPosition="right"
                 >
-                  Pay R50 & post event
+                  {postMutation.isPending ? "Posting…" : "Post event"}
                 </GradientButton>
               </View>
             </Animated.View>
@@ -794,6 +872,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_400Regular",
     borderWidth: 1.5,
+  },
+  textArea: {
+    height: undefined,
+    minHeight: 90,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   formCta: {
     marginTop: Spacing.xl,
