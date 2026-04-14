@@ -310,6 +310,16 @@ export const admin = {
     return request(`/api/admin/group-rides${q}`);
   },
 
+  /** Read-only list of P2P wallet transfers with optional status filter. */
+  async getP2PTransfers(params: { status?: string; limit?: number; offset?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/p2p-transfers${q}`);
+  },
+
   /** Read-only list of deliveries with optional status filter. */
   async getDeliveries(params: { status?: string; limit?: number; offset?: number } = {}) {
     const qs = new URLSearchParams();

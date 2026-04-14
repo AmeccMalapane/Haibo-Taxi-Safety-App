@@ -5,8 +5,9 @@ import {
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
-  sosAlerts, driverRatings, routeContributions,
+  sosAlerts, driverRatings, routeContributions, p2pTransfers,
 } from "../../shared/schema";
+import { alias } from "drizzle-orm/pg-core";
 import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
 import { notifyUser, notifyUsers } from "../services/notifications";
@@ -1680,6 +1681,80 @@ router.put(
     } catch (error: any) {
       console.error("Unsuspend user error:", error);
       res.status(500).json({ error: "Failed to unsuspend user" });
+    }
+  }
+);
+
+// ============ P2P TRANSFERS (read-only) ============
+// Peer-to-peer wallet transfer audit trail. Join twice on users to
+// resolve both sides of the transfer, alias each join so drizzle
+// doesn't collide the column names.
+
+router.get(
+  "/p2p-transfers",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, limit: rawLimit, offset: rawOffset } = req.query as {
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const senderU = alias(users, "sender_u");
+      const recipientU = alias(users, "recipient_u");
+
+      const baseQuery = db
+        .select({
+          id: p2pTransfers.id,
+          senderId: p2pTransfers.senderId,
+          recipientId: p2pTransfers.recipientId,
+          recipientPhone: p2pTransfers.recipientPhone,
+          recipientUsername: p2pTransfers.recipientUsername,
+          amount: p2pTransfers.amount,
+          message: p2pTransfers.message,
+          status: p2pTransfers.status,
+          createdAt: p2pTransfers.createdAt,
+          senderPhone: senderU.phone,
+          senderName: senderU.displayName,
+          recipientResolvedPhone: recipientU.phone,
+          recipientResolvedName: recipientU.displayName,
+        })
+        .from(p2pTransfers)
+        .leftJoin(senderU, eq(p2pTransfers.senderId, senderU.id))
+        .leftJoin(recipientU, eq(p2pTransfers.recipientId, recipientU.id))
+        .orderBy(desc(p2pTransfers.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows = status
+        ? await baseQuery.where(eq(p2pTransfers.status, status))
+        : await baseQuery;
+
+      const countsRows = await db
+        .select({ status: p2pTransfers.status, count: count() })
+        .from(p2pTransfers)
+        .groupBy(p2pTransfers.status);
+      const counts: Record<string, number> = {};
+      for (const r of countsRows) counts[r.status] = r.count;
+
+      // Volume across all completed transfers for dashboard/sub label
+      const [volume] = await db
+        .select({ sum: sum(p2pTransfers.amount) })
+        .from(p2pTransfers)
+        .where(eq(p2pTransfers.status, "completed"));
+
+      res.json({
+        data: rows,
+        counts,
+        totalVolumeCompleted: Number(volume?.sum) || 0,
+      });
+    } catch (error: any) {
+      console.error("List p2p transfers error:", error);
+      res.status(500).json({ error: "Failed to fetch p2p transfers" });
     }
   }
 );

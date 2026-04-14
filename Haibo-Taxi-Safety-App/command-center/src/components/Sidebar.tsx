@@ -18,6 +18,7 @@ import {
   Users2,
   Package,
   Route,
+  Send,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", Icon: LayoutGrid, section: "Ops" },
   { to: "/sos", label: "SOS alerts", Icon: AlertOctagon, section: "Ops" },
   { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
+  { to: "/p2p-transfers", label: "Peer transfers", Icon: Send, section: "Ops" },
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
   { to: "/broadcast", label: "Broadcast", Icon: Megaphone, section: "Ops" },
 

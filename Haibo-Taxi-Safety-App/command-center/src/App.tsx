@@ -24,6 +24,7 @@ import { DriverDetailPage } from "./pages/DriverDetailPage";
 import { BroadcastPage } from "./pages/BroadcastPage";
 import { GroupRidesPage } from "./pages/GroupRidesPage";
 import { DeliveriesPage } from "./pages/DeliveriesPage";
+import { P2PTransfersPage } from "./pages/P2PTransfersPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -78,6 +79,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="/sos" element={<SOSAlertsPage />} />
           <Route path="/withdrawals" element={<WithdrawalsPage />} />
+          <Route path="/p2p-transfers" element={<P2PTransfersPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
           <Route path="/broadcast" element={<BroadcastPage />} />
           <Route path="/moderation/pasop" element={<PasopPage />} />
