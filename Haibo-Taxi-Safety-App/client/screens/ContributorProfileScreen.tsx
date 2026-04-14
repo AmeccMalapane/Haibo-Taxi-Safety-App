@@ -109,7 +109,7 @@ export default function ContributorProfileScreen() {
               {route.name}
             </ThemedText>
             {route.status === "verified" && (
-              <Feather name="check-circle" size={14} color={BrandColors.status.success} />
+              <Feather name="check-circle" size={16} color={BrandColors.status.success} />
             )}
           </View>
           <View style={styles.routeItemMeta}>
@@ -139,7 +139,7 @@ export default function ContributorProfileScreen() {
             </Text>
           </View>
         </View>
-        <Feather name="chevron-right" size={18} color={BrandColors.gray[400]} />
+        <Feather name="chevron-right" size={18} color={BrandColors.gray[600]} />
       </Pressable>
     );
   };
@@ -165,6 +165,8 @@ export default function ContributorProfileScreen() {
                 style={styles.backButton}
                 onPress={() => navigation.goBack()}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
               >
                 <Feather name="arrow-left" size={24} color="#FFFFFF" />
               </Pressable>
@@ -321,7 +323,7 @@ export default function ContributorProfileScreen() {
             <Feather
               name={activeTab === "routes" ? "map" : "star"}
               size={40}
-              color={BrandColors.gray[400]}
+              color={BrandColors.gray[600]}
             />
             <ThemedText style={styles.emptyTitle}>
               {activeTab === "routes" ? "No routes yet" : "No starred routes"}

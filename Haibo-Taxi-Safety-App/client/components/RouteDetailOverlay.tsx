@@ -26,7 +26,12 @@ export function RouteDetailOverlay({ route, onClose }: RouteDetailOverlayProps) 
   return (
     <View style={[styles.container, { backgroundColor: theme.surface }]}>
       {/* Close button */}
-      <Pressable onPress={onClose} style={styles.closeButton}>
+      <Pressable
+        onPress={onClose}
+        style={styles.closeButton}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
         <Feather name="x" size={18} color={theme.textSecondary} />
       </Pressable>
 

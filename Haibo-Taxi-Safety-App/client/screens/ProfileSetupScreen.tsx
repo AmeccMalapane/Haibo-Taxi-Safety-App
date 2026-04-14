@@ -18,6 +18,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { AuthUser } from "@/contexts/AuthContext";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
@@ -31,7 +32,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 //   as the floating brand mark. No Feather placeholder — the splash-screen
 //   logo IS the brand identity, so this screen finally uses it.
 // - Form card floats from the gradient with rounded top corners, same
-//   pattern as LoginScreen and OTPVerificationScreen so the auth flow
+//   pattern as AuthScreen and OTPVerificationScreen so the auth flow
 //   feels like one continuous surface.
 // - Avatar role picker keeps three distinct accent colors (blue / green /
 //   purple) because the rose brand gradient is already doing work in the
@@ -63,14 +64,14 @@ const AVATAR_OPTIONS: {
   type: AvatarType;
   icon: keyof typeof Feather.glyphMap;
   label: string;
-  color: string;
 }[] = [
-  { type: "commuter", icon: "user", label: "Commuter", color: BrandColors.primary.blue },
-  { type: "driver", icon: "truck", label: "Driver", color: BrandColors.primary.green },
-  { type: "operator", icon: "briefcase", label: "Operator", color: "#7B1FA2" },
+  { type: "commuter", icon: "user", label: "Commuter" },
+  { type: "driver", icon: "truck", label: "Driver" },
+  { type: "operator", icon: "briefcase", label: "Operator" },
 ];
 
 export default function ProfileSetupScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { updateProfile } = useAuth();
@@ -145,7 +146,7 @@ export default function ProfileSetupScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.gradientBand, { paddingTop: insets.top + Spacing["2xl"] }]}
       >
-        <Animated.View entering={FadeIn.duration(400)} style={styles.logoWrap}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.logoWrap}>
           <View style={styles.logoShadow}>
             <Image
               source={require("@/assets/images/icon.png")}
@@ -156,7 +157,7 @@ export default function ProfileSetupScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.heroText}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)} style={styles.heroText}>
           <ThemedText style={styles.title}>Set up your profile</ThemedText>
           <ThemedText style={styles.subtitle}>
             A few quick details so we can personalize your Haibo experience
@@ -172,7 +173,7 @@ export default function ProfileSetupScreen() {
         ]}
       >
         <Animated.View
-          entering={FadeInUp.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
           style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
         >
           {/* Role picker */}
@@ -189,9 +190,11 @@ export default function ProfileSetupScreen() {
                     styles.avatarOption,
                     {
                       backgroundColor: selected
-                        ? option.color + "15"
+                        ? BrandColors.primary.gradientStart + "12"
                         : theme.backgroundDefault,
-                      borderColor: selected ? option.color : theme.border,
+                      borderColor: selected
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
                     },
                   ]}
                   onPress={() => {
@@ -205,13 +208,30 @@ export default function ProfileSetupScreen() {
                   accessibilityState={{ selected }}
                   accessibilityLabel={option.label}
                 >
-                  <View style={[styles.avatarIcon, { backgroundColor: option.color }]}>
-                    <Feather name={option.icon} size={22} color="#FFFFFF" />
+                  <View
+                    style={[
+                      styles.avatarIcon,
+                      {
+                        backgroundColor: selected
+                          ? BrandColors.primary.gradientStart
+                          : BrandColors.primary.gradientStart + "15",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={option.icon}
+                      size={22}
+                      color={selected ? "#FFFFFF" : BrandColors.primary.gradientStart}
+                    />
                   </View>
                   <ThemedText
                     style={[
                       styles.avatarLabel,
-                      { color: selected ? option.color : theme.text },
+                      {
+                        color: selected
+                          ? BrandColors.primary.gradientStart
+                          : theme.text,
+                      },
                     ]}
                   >
                     {option.label}

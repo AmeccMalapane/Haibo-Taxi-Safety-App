@@ -1,26 +1,31 @@
 import React, { useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Pressable,
   TextInput,
   Alert,
-  Dimensions,
   Image,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
-import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { Button } from "@/components/Button";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGroupRides } from "@/hooks/useApiData";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
-const { width } = Dimensions.get("window");
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
+import { ThemedText } from "@/components/ThemedText";
+import { GradientButton } from "@/components/GradientButton";
+import { SkeletonBlock } from "@/components/Skeleton";
+import { useTheme } from "@/hooks/useTheme";
+import { useGroupRides } from "@/hooks/useApiData";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface GroupRidePost {
   id: string;
@@ -33,12 +38,12 @@ interface GroupRidePost {
   fare: number;
   seatsAvailable: number;
   description: string;
-  mapPreviewUrl: string;
+  mapPreviewUrl?: string;
   likes: number;
   comments: number;
 }
 
-const mockPosts: GroupRidePost[] = [
+const MOCK_RIDES: GroupRidePost[] = [
   {
     id: "1",
     driverName: "Thabo Mokoena",
@@ -49,228 +54,780 @@ const mockPosts: GroupRidePost[] = [
     departureTime: "Today, 17:30",
     fare: 35,
     seatsAvailable: 4,
-    description: "Heading to Soweto after work. Clean taxi, strictly no smoking. Safe drop-offs along the main road.",
-    mapPreviewUrl: "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=1000",
+    description:
+      "Heading to Soweto after work. Clean taxi, strictly no smoking. Safe drop-offs along the main road.",
+    mapPreviewUrl:
+      "https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=1000",
     likes: 24,
     comments: 5,
   },
+  {
+    id: "2",
+    driverName: "Nomvula Dlamini",
+    driverRating: 4.9,
+    isVerified: true,
+    origin: "Sandton",
+    destination: "Alexandra",
+    departureTime: "Tomorrow, 07:15",
+    fare: 22,
+    seatsAvailable: 3,
+    description:
+      "Daily morning ride to Alex. Pickup at the Sandton Gautrain. WhatsApp first so I know you're coming.",
+    mapPreviewUrl:
+      "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?q=80&w=1000",
+    likes: 18,
+    comments: 3,
+  },
 ];
 
+function getInitials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function GroupRidesScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp>();
+  const { data: apiRides = [], isLoading } = useGroupRides();
+
   const [isPosting, setIsPosting] = useState(false);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [fare, setFare] = useState("");
-  const { data: apiRides = [] } = useGroupRides();
+  const [description, setDescription] = useState("");
 
-  const rides: GroupRidePost[] = apiRides.length > 0
-    ? apiRides.map((r: any) => ({
-        id: r.id,
-        driverName: r.organizerId || "Community Driver",
-        driverRating: r.driverSafetyRating || 4.5,
-        isVerified: r.isVerifiedDriver || false,
-        origin: r.pickupLocation,
-        destination: r.dropoffLocation,
-        date: new Date(r.scheduledDate).toLocaleDateString("en-ZA"),
-        time: r.scheduledDate ? new Date(r.scheduledDate).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "TBA",
-        seatsAvailable: r.maxPassengers || 4,
-        fare: r.costPerPerson || 0,
-        rideType: r.rideType || "scheduled",
-      }))
-    : mockPosts;
+  const rides: GroupRidePost[] =
+    apiRides.length > 0
+      ? apiRides.map((r: any) => ({
+          id: String(r.id),
+          driverName: r.organizerName || r.organizerId || "Community Driver",
+          driverRating: Number(r.driverSafetyRating ?? 4.5),
+          isVerified: Boolean(r.isVerifiedDriver),
+          origin: r.pickupLocation || "—",
+          destination: r.dropoffLocation || "—",
+          departureTime: r.scheduledDate
+            ? new Date(r.scheduledDate).toLocaleString("en-ZA", {
+                weekday: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "TBA",
+          fare: Number(r.costPerPerson ?? 0),
+          seatsAvailable: Number(r.maxPassengers ?? 4),
+          description: r.notes || r.description || "",
+          mapPreviewUrl: r.mapPreviewUrl,
+          likes: Number(r.likes ?? 0),
+          comments: Number(r.comments ?? 0),
+        }))
+      : MOCK_RIDES;
 
   const handleBookRide = (post: GroupRidePost) => {
+    Haptics.selectionAsync();
     Alert.alert(
-      "Confirm Booking",
-      `Book a seat from ${post.origin} to ${post.destination} for R${post.fare}?`,
+      "Confirm booking",
+      `Book a seat with ${post.driverName} from ${post.origin} to ${post.destination} for R${post.fare}?`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Pay with Haibo Pay", 
-          onPress: () => Alert.alert("Success", "Seat booked successfully! Your reference code is HB-RIDE-123") 
+        {
+          text: "Pay with Haibo Pay",
+          onPress: () =>
+            Alert.alert(
+              "Seat reserved",
+              "Your reference code is HB-RIDE-123. (Demo mode — real booking coming soon.)"
+            ),
         },
       ]
     );
   };
 
-  return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 10 }]}>
-        <ThemedText type="h3">Group Rides</ThemedText>
-        <Pressable 
-          onPress={() => setIsPosting(!isPosting)}
-          style={[styles.postToggle, { backgroundColor: isPosting ? theme.border : BrandColors.primary.red }]}
-        >
-          <Feather name={isPosting ? "x" : "plus"} size={20} color="#FFF" />
-          <Text style={styles.postToggleText}>{isPosting ? "Cancel" : "Post Trip"}</Text>
-        </Pressable>
+  const handlePostTrip = () => {
+    if (!origin || !destination || !fare) {
+      Alert.alert("Missing info", "Enter origin, destination and fare to post a trip.");
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert(
+      "Trip posted",
+      "Your trip is live. (Demo mode — backend sync coming soon.)",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            setIsPosting(false);
+            setOrigin("");
+            setDestination("");
+            setFare("");
+            setDescription("");
+          },
+        },
+      ]
+    );
+  };
+
+  const renderSkeletonCard = () => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <SkeletonBlock style={{ width: 44, height: 44, borderRadius: 22 }} />
+        <View style={{ flex: 1, marginLeft: Spacing.md, gap: 6 }}>
+          <SkeletonBlock style={{ width: "50%", height: 14, borderRadius: 4 }} />
+          <SkeletonBlock style={{ width: "30%", height: 10, borderRadius: 4 }} />
+        </View>
+        <SkeletonBlock style={{ width: 60, height: 28, borderRadius: 14 }} />
       </View>
+      <SkeletonBlock style={{ width: "100%", height: 160 }} />
+      <View style={{ padding: Spacing.md, gap: 6 }}>
+        <SkeletonBlock style={{ width: "100%", height: 14, borderRadius: 4 }} />
+        <SkeletonBlock style={{ width: "70%", height: 14, borderRadius: 4 }} />
+      </View>
+    </View>
+  );
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}>
-        {isPosting && (
-          <View style={[styles.postForm, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText style={styles.formTitle}>Post a Verified Trip</ThemedText>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Starting Point</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-                placeholder="Where are you starting?"
-                placeholderTextColor={theme.textSecondary}
-                value={origin}
-                onChangeText={setOrigin}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Destination</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-                placeholder="Where are you going?"
-                placeholderTextColor={theme.textSecondary}
-                value={destination}
-                onChangeText={setDestination}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>Fare (R)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
-                placeholder="e.g. 35"
-                keyboardType="numeric"
-                placeholderTextColor={theme.textSecondary}
-                value={fare}
-                onChangeText={setFare}
-              />
-            </View>
-            <Button title="Post Trip with Map Route" onPress={() => setIsPosting(false)} />
+  return (
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: insets.top + Spacing.md }]}
+      >
+        <View style={styles.heroTopRow}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.heroButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Feather name="arrow-left" size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.heroBadge}>
+            <Feather name="truck" size={16} color="#FFFFFF" />
+            <ThemedText style={styles.heroBadgeText}>Group rides</ThemedText>
           </View>
+          <Pressable
+            onPress={() => setIsPosting((p) => !p)}
+            style={styles.heroButton}
+            accessibilityRole="button"
+            accessibilityLabel={isPosting ? "Cancel new ride" : "Post a ride"}
+          >
+            <Feather name={isPosting ? "x" : "plus"} size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+        <ThemedText style={styles.heroTitle}>Ride together.</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>
+          Verified drivers, safer commutes, shared fares across Mzansi.
+        </ThemedText>
+        <View style={styles.heroStatsRow}>
+          <View style={styles.heroStat}>
+            <ThemedText style={styles.heroStatValue}>
+              {isLoading ? "—" : rides.length}
+            </ThemedText>
+            <ThemedText style={styles.heroStatLabel}>Open rides</ThemedText>
+          </View>
+          <View style={styles.heroStatDivider} />
+          <View style={styles.heroStat}>
+            <ThemedText style={styles.heroStatValue}>
+              {isLoading
+                ? "—"
+                : rides.reduce((sum, r) => sum + r.seatsAvailable, 0)}
+            </ThemedText>
+            <ThemedText style={styles.heroStatLabel}>Seats</ThemedText>
+          </View>
+          <View style={styles.heroStatDivider} />
+          <View style={styles.heroStat}>
+            <ThemedText style={styles.heroStatValue}>
+              R
+              {rides.length
+                ? Math.round(
+                    rides.reduce((sum, r) => sum + r.fare, 0) / rides.length
+                  )
+                : 0}
+            </ThemedText>
+            <ThemedText style={styles.heroStatLabel}>Avg fare</ThemedText>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
+        ]}
+      >
+        {isPosting ? (
+          <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={styles.postForm}>
+            <View style={styles.formHeader}>
+              <View style={styles.formIconWrap}>
+                <Feather name="map" size={18} color={BrandColors.primary.gradientStart} />
+              </View>
+              <ThemedText style={styles.formTitle}>Post a verified trip</ThemedText>
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>From</ThemedText>
+              <View style={styles.inputWrap}>
+                <Feather name="map-pin" size={16} color={BrandColors.gray[600]} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Where are you starting?"
+                  placeholderTextColor={BrandColors.gray[500]}
+                  value={origin}
+                  onChangeText={setOrigin}
+                />
+              </View>
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>To</ThemedText>
+              <View style={styles.inputWrap}>
+                <Feather name="navigation" size={16} color={BrandColors.gray[600]} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Where are you going?"
+                  placeholderTextColor={BrandColors.gray[500]}
+                  value={destination}
+                  onChangeText={setDestination}
+                />
+              </View>
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Fare per seat</ThemedText>
+              <View style={styles.inputWrap}>
+                <ThemedText style={styles.currencyPrefix}>R</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 35"
+                  keyboardType="numeric"
+                  placeholderTextColor={BrandColors.gray[500]}
+                  value={fare}
+                  onChangeText={setFare}
+                />
+              </View>
+            </View>
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Notes (optional)</ThemedText>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Pickup details, rules, meeting point..."
+                placeholderTextColor={BrandColors.gray[500]}
+                multiline
+                textAlignVertical="top"
+                value={description}
+                onChangeText={setDescription}
+              />
+            </View>
+            <GradientButton onPress={handlePostTrip} icon="send">
+              Post trip
+            </GradientButton>
+            <ThemedText style={styles.demoHint}>
+              Demo mode — real trip sync coming soon.
+            </ThemedText>
+          </Animated.View>
+        ) : null}
+
+        {isLoading ? (
+          <View style={{ gap: Spacing.md }}>
+            {renderSkeletonCard()}
+            {renderSkeletonCard()}
+          </View>
+        ) : rides.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrap}>
+              <Feather name="truck" size={28} color={BrandColors.primary.gradientStart} />
+            </View>
+            <ThemedText style={styles.emptyTitle}>No rides posted yet</ThemedText>
+            <ThemedText style={styles.emptySubtitle}>
+              Post your trip and be the first to share the road.
+            </ThemedText>
+          </View>
+        ) : (
+          rides.map((post, index) => (
+            <Animated.View
+              key={post.id}
+              entering={reducedMotion ? undefined : FadeInDown.delay(index * 60).duration(400)}
+              style={styles.card}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.avatar}>
+                  <ThemedText style={styles.avatarInitials}>
+                    {getInitials(post.driverName)}
+                  </ThemedText>
+                </View>
+                <View style={styles.driverInfo}>
+                  <View style={styles.nameRow}>
+                    <ThemedText style={styles.driverName}>{post.driverName}</ThemedText>
+                    {post.isVerified ? (
+                      <Feather
+                        name="check-circle"
+                        size={16}
+                        color={BrandColors.primary.gradientStart}
+                      />
+                    ) : null}
+                  </View>
+                  <View style={styles.ratingRow}>
+                    <Feather name="star" size={12} color="#FFB400" />
+                    <ThemedText style={styles.ratingText}>
+                      {post.driverRating.toFixed(1)} driver rating
+                    </ThemedText>
+                  </View>
+                </View>
+                <View style={styles.fareTag}>
+                  <ThemedText style={styles.fareText}>R{post.fare}</ThemedText>
+                </View>
+              </View>
+
+              {post.mapPreviewUrl ? (
+                <View style={styles.mapContainer}>
+                  <Image
+                    source={{ uri: post.mapPreviewUrl }}
+                    style={styles.mapImage}
+                    resizeMode="cover"
+                  />
+                  <LinearGradient
+                    colors={["transparent", "rgba(0,0,0,0.65)"]}
+                    style={styles.mapOverlay}
+                  >
+                    <View style={styles.routeOverlay}>
+                      <Feather name="navigation" size={16} color="#FFFFFF" />
+                      <ThemedText style={styles.routeOverlayText}>
+                        {post.origin}  →  {post.destination}
+                      </ThemedText>
+                    </View>
+                  </LinearGradient>
+                  <View style={styles.watermark}>
+                    <ThemedText style={styles.watermarkText}>Haibo!</ThemedText>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.routeStripe}>
+                  <Feather
+                    name="navigation"
+                    size={16}
+                    color={BrandColors.primary.gradientStart}
+                  />
+                  <ThemedText style={styles.routeStripeText}>
+                    {post.origin}  →  {post.destination}
+                  </ThemedText>
+                </View>
+              )}
+
+              <View style={styles.cardContent}>
+                {post.description ? (
+                  <ThemedText style={styles.description}>{post.description}</ThemedText>
+                ) : null}
+                <View style={styles.rideDetails}>
+                  <View style={styles.detailChip}>
+                    <Feather name="clock" size={12} color={BrandColors.primary.gradientStart} />
+                    <ThemedText style={styles.detailText}>{post.departureTime}</ThemedText>
+                  </View>
+                  <View style={styles.detailChip}>
+                    <Feather name="users" size={12} color={BrandColors.primary.gradientStart} />
+                    <ThemedText style={styles.detailText}>
+                      {post.seatsAvailable} seats left
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.interactionBar}>
+                <View style={styles.socialActions}>
+                  <Pressable style={styles.actionButton}>
+                    <Feather name="heart" size={16} color={BrandColors.gray[600]} />
+                    <ThemedText style={styles.actionText}>{post.likes}</ThemedText>
+                  </Pressable>
+                  <Pressable style={styles.actionButton}>
+                    <Feather name="message-circle" size={16} color={BrandColors.gray[600]} />
+                    <ThemedText style={styles.actionText}>{post.comments}</ThemedText>
+                  </Pressable>
+                </View>
+                <Pressable
+                  style={styles.bookButtonWrap}
+                  onPress={() => handleBookRide(post)}
+                >
+                  <LinearGradient
+                    colors={BrandColors.gradient.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bookButton}
+                  >
+                    <Feather name="credit-card" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.bookButtonText}>
+                      Book with Haibo Pay
+                    </ThemedText>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </Animated.View>
+          ))
         )}
-
-        {rides.map((post) => (
-          <View key={post.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            {/* Driver Info Header */}
-            <View style={styles.cardHeader}>
-              <View style={[styles.avatar, { backgroundColor: theme.border }]}>
-                <Feather name="user" size={24} color={theme.textSecondary} />
-              </View>
-              <View style={styles.driverInfo}>
-                <View style={styles.nameRow}>
-                  <ThemedText style={styles.driverName}>{post.driverName}</ThemedText>
-                  {post.isVerified && <Feather name="check-circle" size={14} color={BrandColors.primary.blue} />}
-                </View>
-                <View style={styles.ratingRow}>
-                  <Feather name="star" size={12} color="#FFD700" />
-                  <Text style={[styles.ratingText, { color: theme.textSecondary }]}>{post.driverRating}</Text>
-                </View>
-              </View>
-              <View style={styles.fareTag}>
-                <Text style={styles.fareText}>R{post.fare}</Text>
-              </View>
-            </View>
-
-            {/* Route Map Preview */}
-            <View style={styles.mapContainer}>
-              <Image 
-                source={{ uri: post.mapPreviewUrl }} 
-                style={styles.mapImage}
-              />
-              <LinearGradient 
-                colors={["transparent", "rgba(0,0,0,0.6)"]} 
-                style={styles.mapOverlay}
-              >
-                <View style={styles.routeOverlay}>
-                  <Feather name="navigation" size={16} color="#FFF" />
-                  <Text style={styles.routeOverlayText}>{post.origin} → {post.destination}</Text>
-                </View>
-              </LinearGradient>
-              {/* Watermark */}
-              <View style={styles.watermark}>
-                <Text style={styles.watermarkText}>Haibo! App</Text>
-              </View>
-            </View>
-
-            {/* Post Content */}
-            <View style={styles.cardContent}>
-              <ThemedText style={styles.description}>{post.description}</ThemedText>
-              <View style={styles.rideDetails}>
-                <View style={styles.detailItem}>
-                  <Feather name="clock" size={14} color={theme.textSecondary} />
-                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>{post.departureTime}</Text>
-                </View>
-                <View style={styles.detailItem}>
-                  <Feather name="users" size={14} color={theme.textSecondary} />
-                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>{post.seatsAvailable} seats left</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Interaction Bar */}
-            <View style={[styles.interactionBar, { borderTopColor: theme.border }]}>
-              <View style={styles.socialActions}>
-                <Pressable style={styles.actionButton}>
-                  <Feather name="heart" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.actionText, { color: theme.textSecondary }]}>{post.likes}</Text>
-                </Pressable>
-                <Pressable style={styles.actionButton}>
-                  <Feather name="message-circle" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.actionText, { color: theme.textSecondary }]}>{post.comments}</Text>
-                </Pressable>
-                <Pressable style={styles.actionButton}>
-                  <Feather name="share-2" size={20} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-              <Pressable 
-                style={[styles.bookButton, { backgroundColor: BrandColors.primary.red }]}
-                onPress={() => handleBookRide(post)}
-              >
-                <Text style={styles.bookButtonText}>Book with Haibo Pay</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1 },
-  postToggle: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 6 },
-  postToggleText: { color: "#FFF", fontWeight: "700", fontSize: 12 },
-  scrollContent: { padding: 16 },
-  postForm: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
-  formTitle: { fontSize: 18, fontWeight: "800", marginBottom: 16 },
-  inputGroup: { marginBottom: 12 },
-  label: { fontSize: 12, fontWeight: "700", marginBottom: 6, marginLeft: 4 },
-  input: { height: 44, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12 },
-  card: { borderRadius: 16, borderWidth: 1, marginBottom: 20, overflow: "hidden" },
-  cardHeader: { flexDirection: "row", alignItems: "center", padding: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  driverInfo: { flex: 1, marginLeft: 12 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  driverName: { fontWeight: "700", fontSize: 14 },
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  ratingText: { fontSize: 12 },
-  fareTag: { backgroundColor: BrandColors.primary.green + "20", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  fareText: { color: BrandColors.primary.green, fontWeight: "800", fontSize: 16 },
-  mapContainer: { width: "100%", height: 180, position: "relative" },
-  mapImage: { width: "100%", height: "100%" },
-  mapOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", padding: 12 },
-  routeOverlay: { flexDirection: "row", alignItems: "center", gap: 8 },
-  routeOverlayText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
-  watermark: { position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  watermarkText: { color: "#FFF", fontSize: 10, fontWeight: "700", opacity: 0.8 },
-  cardContent: { padding: 12 },
-  description: { fontSize: 14, lineHeight: 20, marginBottom: 10 },
-  rideDetails: { flexDirection: "row", gap: 16 },
-  detailItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  detailText: { fontSize: 12 },
-  interactionBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderTopWidth: 1 },
-  socialActions: { flexDirection: "row", gap: 16 },
-  actionButton: { flexDirection: "row", alignItems: "center", gap: 4 },
-  actionText: { fontSize: 12, fontWeight: "600" },
-  bookButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  bookButtonText: { color: "#FFF", fontWeight: "700", fontSize: 12 },
+  container: {
+    flex: 1,
+  },
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
+    borderBottomLeftRadius: BorderRadius["2xl"],
+    borderBottomRightRadius: BorderRadius["2xl"],
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  heroButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  heroBadgeText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  heroTitle: {
+    ...Typography.h1,
+    color: "#FFFFFF",
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: Spacing.xs,
+  },
+  heroStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: BorderRadius.md,
+  },
+  heroStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  heroStatValue: {
+    ...Typography.h3,
+    color: "#FFFFFF",
+  },
+  heroStatLabel: {
+    ...Typography.label,
+    color: "rgba(255, 255, 255, 0.85)",
+    marginTop: 2,
+  },
+  heroStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    marginTop: -Spacing["2xl"],
+    gap: Spacing.md,
+  },
+  postForm: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  formHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  formIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  formTitle: {
+    ...Typography.h4,
+    color: BrandColors.gray[900],
+  },
+  inputGroup: {
+    marginBottom: Spacing.md,
+  },
+  label: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: BrandColors.gray[50],
+  },
+  input: {
+    ...Typography.body,
+    flex: 1,
+    height: 46,
+    color: BrandColors.gray[900],
+  },
+  currencyPrefix: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  textArea: {
+    ...Typography.body,
+    minHeight: 80,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: BrandColors.gray[50],
+    color: BrandColors.gray[900],
+  },
+  demoHint: {
+    ...Typography.small,
+    color: BrandColors.gray[500],
+    textAlign: "center",
+    marginTop: Spacing.sm,
+  },
+  card: {
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  driverInfo: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  driverName: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.gray[900],
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  ratingText: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+  },
+  fareTag: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.status.success + "15",
+  },
+  fareText: {
+    ...Typography.body,
+    fontWeight: "800",
+    color: BrandColors.status.success,
+  },
+  mapContainer: {
+    width: "100%",
+    height: 160,
+    position: "relative",
+  },
+  mapImage: {
+    width: "100%",
+    height: "100%",
+  },
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    padding: Spacing.md,
+  },
+  routeOverlay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  routeOverlayText: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  watermark: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(231, 35, 105, 0.85)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  watermarkText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  routeStripe: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: BrandColors.primary.gradientStart + "08",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "20",
+  },
+  routeStripeText: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  cardContent: {
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  description: {
+    ...Typography.body,
+    color: BrandColors.gray[800],
+  },
+  rideDetails: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    flexWrap: "wrap",
+  },
+  detailChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+  },
+  detailText: {
+    ...Typography.small,
+    fontWeight: "600",
+    color: BrandColors.primary.gradientStart,
+  },
+  interactionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.gray[100],
+  },
+  socialActions: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  actionText: {
+    ...Typography.small,
+    color: BrandColors.gray[500],
+    fontVariant: ["tabular-nums"],
+  },
+  bookButtonWrap: {
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+  },
+  bookButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 9,
+  },
+  bookButtonText: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing["5xl"],
+    gap: Spacing.sm,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  emptyTitle: {
+    ...Typography.h4,
+    color: BrandColors.gray[900],
+  },
+  emptySubtitle: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    textAlign: "center",
+  },
 });

@@ -24,6 +24,7 @@ import {
 } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { useLostFound } from "@/hooks/useApiData";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // typeui-clean rework — Lost & Found as a calm, branded reporting board:
@@ -99,6 +100,7 @@ function formatDate(dateStr: string) {
 }
 
 export default function LostFoundScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -154,7 +156,7 @@ export default function LostFoundScreen() {
 
     return (
       <Animated.View
-        entering={FadeInDown.duration(300).delay(Math.min(index * 30, 300))}
+        entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(Math.min(index * 30, 300))}
       >
         <Pressable
           style={({ pressed }) => [
@@ -181,7 +183,7 @@ export default function LostFoundScreen() {
             >
               <Feather
                 name={isLost ? "search" : "check-circle"}
-                size={11}
+                size={12}
                 color={typeColor}
               />
               <ThemedText
@@ -226,7 +228,7 @@ export default function LostFoundScreen() {
                 <View style={styles.routeRow}>
                   <Feather
                     name="map-pin"
-                    size={11}
+                    size={12}
                     color={theme.textSecondary}
                   />
                   <ThemedText
@@ -254,7 +256,7 @@ export default function LostFoundScreen() {
             >
               <Feather
                 name="gift"
-                size={11}
+                size={12}
                 color={BrandColors.primary.gradientStart}
               />
               <ThemedText style={styles.rewardText}>
@@ -276,7 +278,7 @@ export default function LostFoundScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
       >
-        <Animated.View entering={FadeIn.duration(300)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
           <Pressable
             onPress={() => navigation.goBack()}
             style={styles.backButton}
@@ -289,7 +291,7 @@ export default function LostFoundScreen() {
         </Animated.View>
 
         <Animated.View
-          entering={FadeIn.duration(400).delay(100)}
+          entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
           style={styles.heroBadgeWrap}
         >
           <View style={styles.heroBadge}>
@@ -298,7 +300,7 @@ export default function LostFoundScreen() {
         </Animated.View>
 
         <Animated.View
-          entering={FadeInDown.duration(500).delay(150)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
           style={styles.heroText}
         >
           <ThemedText style={styles.heroTitle}>Lost & found</ThemedText>
@@ -310,7 +312,7 @@ export default function LostFoundScreen() {
 
       {/* Floating content card */}
       <Animated.View
-        entering={FadeInUp.duration(500).delay(200)}
+        entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
         style={[
           styles.contentCard,
           { backgroundColor: theme.backgroundRoot },
@@ -340,7 +342,12 @@ export default function LostFoundScreen() {
             returnKeyType="search"
           />
           {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+            <Pressable
+              onPress={() => setSearchQuery("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Feather name="x" size={16} color={theme.textSecondary} />
             </Pressable>
           ) : null}
@@ -418,7 +425,7 @@ export default function LostFoundScreen() {
           }
           ListEmptyComponent={
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={styles.emptyState}
             >
               <View

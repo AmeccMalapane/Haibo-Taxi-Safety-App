@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +24,8 @@ import Animated, {
 import * as Location from "expo-location";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { MapViewComponent } from "@/components/MapViewComponent";
@@ -32,10 +34,19 @@ import { RankDetailPanel } from "@/components/RankDetailPanel";
 import { RouteDetailOverlay } from "@/components/RouteDetailOverlay";
 import { TransitRouteLegend } from "@/components/TransitRouteLegend";
 import { MapControlButtons } from "@/components/MapControlButtons";
+import { PasopPinSheet } from "@/components/PasopPinSheet";
 import { useLocations } from "@/hooks/useApiData";
+import { getDeviceId } from "@/lib/deviceId";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import type { TaxiLocation, LocationType } from "@/lib/types";
 import type { MapboxTaxiRank, MapboxTaxiRoute } from "@/data/mapbox_transit_data";
+import {
+  PasopReport,
+  getMyPetitions,
+  getPasopReports,
+  petitionPasopReport,
+  recordMyPetition,
+} from "@/data/pasopReports";
 
 // typeui-clean rework — map-first screen with the brand rose-red surfacing
 // in the touchpoints (sheet handle, search focus, distance pill, chevrons).
@@ -82,11 +93,139 @@ function formatDistance(km: number): string {
   return `${Math.round(km)} km`;
 }
 
+interface ModePillButtonProps {
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  active: boolean;
+  onPress: () => void;
+  badgeCount?: number;
+}
+
+function ModePillButton({ label, icon, active, onPress, badgeCount }: ModePillButtonProps) {
+  const content = (
+    <>
+      <Feather
+        name={icon}
+        size={13}
+        color={active ? "#FFFFFF" : BrandColors.gray[700]}
+      />
+      <ThemedText
+        style={[
+          modePillStyles.text,
+          { color: active ? "#FFFFFF" : BrandColors.gray[700] },
+        ]}
+      >
+        {label}
+      </ThemedText>
+      {badgeCount !== undefined && badgeCount > 0 ? (
+        <View
+          style={[
+            modePillStyles.badge,
+            {
+              backgroundColor: active
+                ? "rgba(255,255,255,0.3)"
+                : BrandColors.primary.gradientStart + "1F",
+            },
+          ]}
+        >
+          <ThemedText
+            style={[
+              modePillStyles.badgeText,
+              {
+                color: active ? "#FFFFFF" : BrandColors.primary.gradientStart,
+              },
+            ]}
+          >
+            {badgeCount}
+          </ThemedText>
+        </View>
+      ) : null}
+    </>
+  );
+
+  if (active) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={modePillStyles.buttonWrap}
+        accessibilityRole="button"
+        accessibilityLabel={`Show ${label} on map`}
+        accessibilityState={{ selected: true }}
+      >
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={modePillStyles.buttonActive}
+        >
+          {content}
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={modePillStyles.button}
+      accessibilityRole="button"
+      accessibilityLabel={`Show ${label} on map`}
+      accessibilityState={{ selected: false }}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+const modePillStyles = StyleSheet.create({
+  buttonWrap: {
+    flex: 1,
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+  },
+  button: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.full,
+  },
+  buttonActive: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  text: {
+    ...Typography.label,
+    fontWeight: "800",
+  },
+  badge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.full,
+    minWidth: 16,
+    alignItems: "center",
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+});
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const reducedMotion = useReducedMotion();
 
   const mapRef = useRef<any>(null);
   const [selectedLocation, setSelectedLocation] = useState<TaxiLocation | null>(null);
@@ -100,8 +239,31 @@ export default function HomeScreen() {
   const [selectedRoute, setSelectedRoute] = useState<MapboxTaxiRoute | null>(null);
   const [showTransitRoutes, setShowTransitRoutes] = useState(true);
 
+  // Pasop layer state — mode pill drives which layers render, tapped pin
+  // opens the PasopPinSheet preview.
+  const [mapMode, setMapMode] = useState<"routes" | "pasop" | "all">("routes");
+  const [pasopReports, setPasopReports] = useState<PasopReport[]>([]);
+  const [pasopPetitions, setPasopPetitions] = useState<string[]>([]);
+  const [activePasop, setActivePasop] = useState<PasopReport | null>(null);
+  const { user } = useAuth();
+
   const { data: locations = [] } = useLocations();
   const sheetHeight = useSharedValue(220);
+
+  // Derive layer visibility from the current mode pill selection
+  const pasopMode = mapMode === "pasop";
+  const allMode = mapMode === "all";
+  const routesMode = mapMode === "routes";
+  const mapShowTransitRoutes = showTransitRoutes && (routesMode || allMode);
+  const mapShowTransitRanks = true;
+  const mapDimRanks = pasopMode;
+  const mapShowPasopPins = pasopMode || allMode;
+  const mapUserLatLng = userLocation
+    ? {
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+      }
+    : null;
 
   useEffect(() => {
     (async () => {
@@ -111,6 +273,22 @@ export default function HomeScreen() {
       setUserLocation(loc);
     })();
   }, []);
+
+  // Refresh Pasop reports and the user's own petitions every time HomeScreen
+  // is focused — covers coming back from PasopFeed/PasopReport so newly
+  // filed hazards appear immediately.
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const [reports, petitions] = await Promise.all([
+          getPasopReports(),
+          getMyPetitions(),
+        ]);
+        setPasopReports(reports);
+        setPasopPetitions(petitions);
+      })();
+    }, [])
+  );
 
   const triggerHaptic = (style: "light" | "medium" = "light") => {
     if (Platform.OS === "web") return;
@@ -182,6 +360,58 @@ export default function HomeScreen() {
   const handleToggleRoutes = useCallback(() => {
     setShowTransitRoutes((prev) => !prev);
   }, []);
+
+  const handleModeChange = useCallback(
+    (mode: "routes" | "pasop" | "all") => {
+      triggerHaptic("light");
+      setMapMode(mode);
+      // Clear any existing selection when flipping modes so the sheet and
+      // panels don't fight with the new layer being shown.
+      setSelectedRank(null);
+      setSelectedRoute(null);
+      setActivePasop(null);
+    },
+    []
+  );
+
+  const handlePasopPress = useCallback((report: PasopReport) => {
+    triggerHaptic("medium");
+    setActivePasop(report);
+    setSelectedRank(null);
+    setSelectedRoute(null);
+  }, []);
+
+  const handleClosePasopSheet = useCallback(() => {
+    setActivePasop(null);
+  }, []);
+
+  const handlePasopPetition = useCallback(
+    async (report: PasopReport) => {
+      const petitionerId = user?.id || (await getDeviceId());
+      const updated = await petitionPasopReport(report.id, petitionerId);
+      if (updated) {
+        setPasopReports((prev) =>
+          prev.map((r) => (r.id === updated.id ? updated : r))
+        );
+        await recordMyPetition(report.id);
+        setPasopPetitions((prev) =>
+          prev.includes(report.id) ? prev : [...prev, report.id]
+        );
+        setActivePasop(updated);
+      }
+    },
+    [user]
+  );
+
+  const handleSeeAllPasop = useCallback(() => {
+    setActivePasop(null);
+    navigation.navigate("PasopFeed");
+  }, [navigation]);
+
+  const handleOpenPasopReport = useCallback(() => {
+    triggerHaptic("medium");
+    navigation.navigate("PasopReport");
+  }, [navigation]);
 
   const handleLocateUser = useCallback(() => {
     if (userLocation) {
@@ -273,18 +503,23 @@ export default function HomeScreen() {
           onLongPress={handleMapLongPress}
           pinnedLocation={pinnedLocation}
           onPinnedMarkerPress={handleAddLocation}
-          showTransitRoutes={showTransitRoutes}
+          showTransitRoutes={mapShowTransitRoutes}
+          showTransitRanks={mapShowTransitRanks}
+          dimTransitRanks={mapDimRanks}
           onRankSelect={handleRankSelect}
           onRouteSelect={handleRouteSelect}
           selectedRankId={selectedRank?.id || null}
           selectedRouteId={selectedRoute?.id || null}
+          pasopReports={pasopReports}
+          showPasopPins={mapShowPasopPins}
+          onPasopPress={handlePasopPress}
         />
 
         {/* Pin banner — gradient-bordered card with rose CTA, replaces the
             old utilitarian green/grey button row */}
         {pinnedLocation ? (
           <Animated.View
-            entering={FadeInDown.duration(300)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={[
               styles.pinBanner,
               {
@@ -318,7 +553,7 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 1 }}
                   style={styles.pinAddGradient}
                 >
-                  <Feather name="plus" size={14} color="#FFFFFF" />
+                  <Feather name="plus" size={16} color="#FFFFFF" />
                   <ThemedText style={styles.pinAddText}>Add</ThemedText>
                 </LinearGradient>
               </Pressable>
@@ -344,12 +579,71 @@ export default function HomeScreen() {
           topOffset={insets.top + 56}
         />
 
-        {showTransitRoutes && !selectedRank && !selectedRoute && (
+        {/* Map mode pill — flips between Routes / Pasop / All */}
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(400)}
+          style={[
+            styles.modePill,
+            {
+              top: insets.top + 60,
+              backgroundColor: theme.surface,
+            },
+          ]}
+        >
+          <ModePillButton
+            label="Routes"
+            icon="map"
+            active={routesMode}
+            onPress={() => handleModeChange("routes")}
+          />
+          <ModePillButton
+            label="Pasop"
+            icon="alert-triangle"
+            active={pasopMode}
+            onPress={() => handleModeChange("pasop")}
+            badgeCount={pasopReports.filter((r) => r.status === "active").length}
+          />
+          <ModePillButton
+            label="All"
+            icon="layers"
+            active={allMode}
+            onPress={() => handleModeChange("all")}
+          />
+        </Animated.View>
+
+        {showTransitRoutes && !selectedRank && !selectedRoute && routesMode && (
           <TransitRouteLegend
             selectedRouteId={selectedRoute?.id || null}
             onRouteSelect={handleRouteSelect}
           />
         )}
+
+        {/* Floating "+ Report" FAB — only visible when the Pasop layer is on */}
+        {mapShowPasopPins ? (
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+            style={[
+              styles.pasopFab,
+              { bottom: tabBarHeight + 220 + Spacing.md },
+            ]}
+          >
+            <Pressable
+              onPress={handleOpenPasopReport}
+              accessibilityRole="button"
+              accessibilityLabel="Report a hazard"
+            >
+              <LinearGradient
+                colors={BrandColors.gradient.primary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.pasopFabInner}
+              >
+                <Feather name="plus" size={18} color="#FFFFFF" />
+                <ThemedText style={styles.pasopFabText}>Report</ThemedText>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        ) : null}
       </View>
 
       {selectedRank && (
@@ -394,7 +688,12 @@ export default function HomeScreen() {
             animatedSheetStyle,
           ]}
         >
-          <Pressable onPress={() => toggleSheet()} style={styles.sheetHandleWrap}>
+          <Pressable
+            onPress={() => toggleSheet()}
+            style={styles.sheetHandleWrap}
+            accessibilityRole="button"
+            accessibilityLabel={isSheetExpanded ? "Collapse rank list" : "Expand rank list"}
+          >
             <LinearGradient
               colors={BrandColors.gradient.primary}
               start={{ x: 0, y: 0 }}
@@ -456,7 +755,12 @@ export default function HomeScreen() {
               returnKeyType="search"
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
                 <Feather name="x" size={16} color={theme.textSecondary} />
               </Pressable>
             ) : null}
@@ -470,7 +774,7 @@ export default function HomeScreen() {
           >
             {filteredLocations.length === 0 ? (
               <Animated.View
-                entering={FadeIn.duration(300)}
+                entering={reducedMotion ? undefined : FadeIn.duration(300)}
                 style={styles.emptyState}
               >
                 <View
@@ -510,9 +814,11 @@ export default function HomeScreen() {
                 return (
                   <Animated.View
                     key={location.id}
-                    entering={FadeInDown.duration(300).delay(
-                      Math.min(index * 30, 300)
-                    )}
+                    entering={
+                      reducedMotion
+                        ? undefined
+                        : FadeInDown.duration(300).delay(Math.min(index * 30, 300))
+                    }
                   >
                     <Pressable
                       onPress={() => handleLocationDetails(location)}
@@ -586,6 +892,18 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
       )}
+
+      {/* Pasop pin preview — slides up over the map on pin tap */}
+      <PasopPinSheet
+        report={activePasop}
+        userLocation={mapUserLatLng}
+        hasPetitioned={
+          activePasop ? pasopPetitions.includes(activePasop.id) : false
+        }
+        onClose={handleClosePasopSheet}
+        onPetition={handlePasopPetition}
+        onSeeAll={handleSeeAllPasop}
+      />
     </View>
   );
 }
@@ -593,6 +911,46 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   mapContainer: { flex: 1, position: "relative" },
+
+  modePill: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    padding: 4,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 10,
+  },
+  pasopFab: {
+    position: "absolute",
+    right: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 5,
+  },
+  pasopFabInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+  },
+  pasopFabText: {
+    ...Typography.small,
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
 
   pinBanner: {
     position: "absolute",

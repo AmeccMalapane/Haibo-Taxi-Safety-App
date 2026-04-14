@@ -17,12 +17,13 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-// typeui-clean: matches the LoginScreen hero pattern — rose gradient band
+// typeui-clean: matches the AuthScreen hero pattern — rose gradient band
 // + floating form card — so the auth flow feels like a single surface.
 //
 // Also fixes three latent bugs:
@@ -40,6 +41,7 @@ const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
 
 export default function OTPVerificationScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { verifyOTP, sendOTP, user } = useAuth();
@@ -152,14 +154,14 @@ export default function OTPVerificationScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
-      {/* Rose gradient hero band with back button — mirrors LoginScreen */}
+      {/* Rose gradient hero band with back button — mirrors AuthScreen */}
       <LinearGradient
         colors={BrandColors.gradient.primary}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.gradientBand, { paddingTop: insets.top + Spacing.lg }]}
       >
-        <Animated.View entering={FadeIn.duration(300)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
           <Pressable
             onPress={() => navigation.goBack()}
             style={styles.backButton}
@@ -171,13 +173,13 @@ export default function OTPVerificationScreen() {
           </Pressable>
         </Animated.View>
 
-        <Animated.View entering={FadeIn.duration(400).delay(100)} style={styles.badgeWrap}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)} style={styles.badgeWrap}>
           <View style={styles.badge}>
             <Feather name="message-circle" size={40} color={BrandColors.primary.gradientStart} />
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.heroText}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)} style={styles.heroText}>
           <ThemedText style={styles.title}>Verify your number</ThemedText>
           <ThemedText style={styles.subtitle}>
             Enter the 6-digit code we sent to
@@ -196,7 +198,7 @@ export default function OTPVerificationScreen() {
         ]}
       >
         <Animated.View
-          entering={FadeInUp.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
           style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
         >
           <View style={styles.otpContainer}>

@@ -30,6 +30,8 @@ export function ContributeButton({ variant = "filled", style }: ContributeButton
       <Pressable
         style={[styles.compactButton, { backgroundColor: `${BrandColors.primary.blue}15` }, style]}
         onPress={handlePress}
+        accessibilityRole="button"
+        accessibilityLabel="Contribute route"
       >
         <Feather name="plus" size={16} color={BrandColors.primary.blue} />
       </Pressable>

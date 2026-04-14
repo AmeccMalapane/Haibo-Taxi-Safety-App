@@ -20,6 +20,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
 import {
   Spacing,
@@ -53,6 +54,7 @@ const HELP_URL = "https://haibo.africa/help";
 const SUPPORT_EMAIL = "support@haibo.africa";
 
 export default function SettingsScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { isAuthenticated, logout } = useAuth();
@@ -165,7 +167,7 @@ export default function SettingsScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -178,7 +180,7 @@ export default function SettingsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -187,7 +189,7 @@ export default function SettingsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Settings</ThemedText>
@@ -199,7 +201,7 @@ export default function SettingsScreen() {
 
         {/* Floating white content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -318,7 +320,7 @@ export default function SettingsScreen() {
           {/* Sign out — only when authenticated */}
           {isAuthenticated ? (
             <Animated.View
-              entering={FadeInDown.duration(500).delay(400)}
+              entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(400)}
               style={styles.signOutWrap}
             >
               <Pressable

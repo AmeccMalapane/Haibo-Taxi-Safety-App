@@ -146,7 +146,12 @@ export default function FloatingSearchBar({
           onFocus={handleExpand}
         />
         {isExpanded ? (
-          <TouchableOpacity onPress={handleCollapse} style={styles.closeButton}>
+          <TouchableOpacity
+            onPress={handleCollapse}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close search"
+          >
             <Feather name="x" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         ) : null}

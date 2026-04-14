@@ -26,6 +26,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { createRouteLink, getAppStoreLink } from "@/lib/deepLinks";
 import {
   CommunityRoute,
   getCommunityRoutes,
@@ -234,7 +235,7 @@ export default function CommunityRoutesScreen() {
                     {route.name}
                   </ThemedText>
                   {route.status === "verified" && (
-                    <Feather name="check-circle" size={14} color={BrandColors.status.success} />
+                    <Feather name="check-circle" size={16} color={BrandColors.status.success} />
                   )}
                 </View>
                 <View style={styles.routeMeta}>
@@ -251,11 +252,16 @@ export default function CommunityRoutesScreen() {
                   </Text>
                 </View>
               </View>
-              <Pressable onPress={() => handleStar(route.id)} hitSlop={8}>
+              <Pressable
+                onPress={() => handleStar(route.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={isStarred ? "Unstar route" : "Star route"}
+              >
                 <Feather
                   name={isStarred ? "star" : "star"}
                   size={20}
-                  color={isStarred ? BrandColors.secondary.orange : BrandColors.gray[400]}
+                  color={isStarred ? BrandColors.secondary.orange : BrandColors.gray[600]}
                   style={isStarred ? { opacity: 1 } : { opacity: 0.5 }}
                 />
               </Pressable>
@@ -273,7 +279,7 @@ export default function CommunityRoutesScreen() {
                     {stop.name}
                   </Text>
                   {i < Math.min(stops.length, 4) - 1 && (
-                    <Feather name="chevron-right" size={10} color={BrandColors.gray[400]} />
+                    <Feather name="chevron-right" size={10} color={BrandColors.gray[600]} />
                   )}
                 </View>
               ))}
@@ -294,11 +300,13 @@ export default function CommunityRoutesScreen() {
                     myVote === "up" && { backgroundColor: `${BrandColors.status.success}15` },
                   ]}
                   onPress={() => handleVote(route.id, "up")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upvote route"
                 >
                   <Feather
                     name="arrow-up"
                     size={16}
-                    color={myVote === "up" ? BrandColors.status.success : BrandColors.gray[500]}
+                    color={myVote === "up" ? BrandColors.status.success : BrandColors.gray[600]}
                   />
                 </Pressable>
                 <Text
@@ -322,11 +330,13 @@ export default function CommunityRoutesScreen() {
                     myVote === "down" && { backgroundColor: `${BrandColors.status.emergency}15` },
                   ]}
                   onPress={() => handleVote(route.id, "down")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Downvote route"
                 >
                   <Feather
                     name="arrow-down"
                     size={16}
-                    color={myVote === "down" ? BrandColors.status.emergency : BrandColors.gray[500]}
+                    color={myVote === "down" ? BrandColors.status.emergency : BrandColors.gray[600]}
                   />
                 </Pressable>
               </View>
@@ -347,23 +357,27 @@ export default function CommunityRoutesScreen() {
               <Pressable
                 style={styles.shareBtn}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Share route"
                 onPress={async (e) => {
                   e.stopPropagation?.();
                   try {
                     const origin = stops[0]?.name || "Unknown";
                     const dest = stops[stops.length - 1]?.name || "Unknown";
+                    const openLink = createRouteLink(route.id);
                     await Share.share({
-                      message: `🚐 ${route.name}\n📍 ${origin} → ${dest}\nR${route.fare}\n\nShared via Haibo App`,
+                      message: `🚐 ${route.name}\n📍 ${origin} → ${dest}\nR${route.fare}\n\nOpen in Haibo: ${openLink}\nGet the app: ${getAppStoreLink()}`,
+                      title: `${route.name} · Haibo route`,
                     });
                   } catch {}
                 }}
               >
-                <Feather name="share-2" size={14} color={BrandColors.gray[500]} />
+                <Feather name="share-2" size={16} color={BrandColors.gray[600]} />
               </Pressable>
 
               {/* Time & comments */}
               <View style={styles.timeRow}>
-                <Feather name="message-circle" size={12} color={BrandColors.gray[500]} />
+                <Feather name="message-circle" size={12} color={BrandColors.gray[600]} />
                 <Text style={[styles.timeText, { color: theme.textSecondary }]}>
                   {route.commentCount}
                 </Text>
@@ -390,13 +404,20 @@ export default function CommunityRoutesScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: theme.surface }]}>
         <View style={styles.headerTop}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Feather name="arrow-left" size={24} color={theme.text} />
           </Pressable>
           <ThemedText style={styles.headerTitle}>Community Routes</ThemedText>
           <Pressable
             onPress={() => navigation.navigate("ContributorProfile" as any)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open contributor profile"
           >
             <Feather name="user" size={22} color={theme.text} />
           </Pressable>
@@ -413,7 +434,11 @@ export default function CommunityRoutesScreen() {
             onChangeText={setSearchQuery}
           />
           {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery("")}>
+            <Pressable
+              onPress={() => setSearchQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Feather name="x" size={18} color={theme.textSecondary} />
             </Pressable>
           ) : null}
@@ -452,7 +477,7 @@ export default function CommunityRoutesScreen() {
               setFilterStatus(next);
             }}
           >
-            <Feather name="filter" size={14} color={filterStatus !== "all" ? BrandColors.primary.red : theme.textSecondary} />
+            <Feather name="filter" size={16} color={filterStatus !== "all" ? BrandColors.primary.red : theme.textSecondary} />
             <Text
               style={[
                 styles.filterChipText,
@@ -477,7 +502,7 @@ export default function CommunityRoutesScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="map" size={48} color={BrandColors.gray[400]} />
+            <Feather name="map" size={48} color={BrandColors.gray[600]} />
             <ThemedText style={styles.emptyTitle}>No routes found</ThemedText>
             <ThemedText style={[styles.emptyDesc, { color: theme.textSecondary }]}>
               Be the first to contribute a route in this area!

@@ -16,7 +16,6 @@ import HubScreen from "@/screens/HubScreen";
 import SendPackageScreen from "@/screens/SendPackageScreen";
 import TrackPackageScreen from "@/screens/TrackPackageScreen";
 import PackageHistoryScreen from "@/screens/PackageHistoryScreen";
-import LoginScreen from "@/screens/LoginScreen";
 import OTPVerificationScreen from "@/screens/OTPVerificationScreen";
 import ProfileSetupScreen from "@/screens/ProfileSetupScreen";
 import LostFoundScreen from "@/screens/LostFoundScreen";
@@ -36,7 +35,6 @@ import RatingScreen from "@/screens/RatingScreen";
 import RouteDetailScreen from "@/screens/RouteDetailScreen";
 import WalletScreen from "@/screens/WalletScreen";
 import AuthScreen from "@/screens/AuthScreen";
-import VerifyOTPScreen from "@/screens/VerifyOTPScreen";
 import RouteDrawingScreen from "@/screens/RouteDrawingScreen";
 import RouteSubmissionScreen from "@/screens/RouteSubmissionScreen";
 import CommunityRoutesScreen from "@/screens/CommunityRoutesScreen";
@@ -45,13 +43,14 @@ import ContributorProfileScreen from "@/screens/ContributorProfileScreen";
 import CommunityScreen from "@/screens/CommunityScreen";
 import PushaScreen from "@/screens/PushaScreen";
 import TaxiFareScreen from "@/screens/TaxiFareScreen";
+import DriverDashboardScreen from "@/screens/DriverDashboardScreen";
+import PasopFeedScreen from "@/screens/PasopFeedScreen";
+import PasopReportScreen from "@/screens/PasopReportScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useAuth } from "@/hooks/useAuth";
 
 export type RootStackParamList = {
-  Login: undefined;
   Auth: undefined;
-  VerifyOTP: { phoneNumber: string; purpose: "login" | "register" };
   OTPVerification: { phone: string };
   ProfileSetup: undefined;
   MainTabs: undefined;
@@ -95,6 +94,9 @@ export type RootStackParamList = {
   Community: undefined;
   Pusha: undefined;
   TaxiFare: undefined;
+  DriverDashboard: undefined;
+  PasopFeed: undefined;
+  PasopReport: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -118,18 +120,8 @@ export default function RootStackNavigator() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
         name="Auth"
         component={AuthScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="VerifyOTP"
-        component={VerifyOTPScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -155,7 +147,7 @@ export default function RootStackNavigator() {
         component={TripShareScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Share Trip",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -163,7 +155,7 @@ export default function RootStackNavigator() {
         component={ReportScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Report Issue",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -171,7 +163,7 @@ export default function RootStackNavigator() {
         component={PaymentScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Haibo Pay",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -195,15 +187,14 @@ export default function RootStackNavigator() {
         component={AddLocationScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Add Taxi Stop",
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="LocationDetails"
         component={LocationDetailsScreen}
         options={{
-          presentation: "card",
-          headerTitle: "Stop Details",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -219,7 +210,7 @@ export default function RootStackNavigator() {
         component={ContributeRouteScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Contribute Route",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -291,7 +282,7 @@ export default function RootStackNavigator() {
         component={HaiboFamScreen}
         options={{
           presentation: "card",
-          headerTitle: "Haibo Fam",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -299,7 +290,7 @@ export default function RootStackNavigator() {
         component={QAForumScreen}
         options={{
           presentation: "card",
-          headerTitle: "Directions",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -307,7 +298,7 @@ export default function RootStackNavigator() {
         component={GroupRidesScreen}
         options={{
           presentation: "card",
-          headerTitle: "Group Rides",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -315,7 +306,7 @@ export default function RootStackNavigator() {
         component={CreateReelScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Create Reel",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -346,8 +337,7 @@ export default function RootStackNavigator() {
         name="CityExplorer"
         component={CityExplorerScreen}
         options={{
-          presentation: "card",
-          headerTitle: "City Explorer",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -371,15 +361,14 @@ export default function RootStackNavigator() {
         component={RatingScreen}
         options={{
           presentation: "modal",
-          headerTitle: "Rate Driver",
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="RouteDetail"
         component={RouteDetailScreen}
         options={{
-          presentation: "card",
-          headerTitle: "Route Details",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -395,16 +384,14 @@ export default function RootStackNavigator() {
         component={RouteDrawingScreen}
         options={{
           presentation: "fullScreenModal",
-          headerTitle: "Draw Route",
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="RouteSubmission"
         component={RouteSubmissionScreen}
         options={{
-          presentation: "card",
-          headerTitle: "Route Details",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -418,8 +405,7 @@ export default function RootStackNavigator() {
         name="CommunityRouteDetail"
         component={CommunityRouteDetailScreen}
         options={{
-          presentation: "card",
-          headerTitle: "Route",
+          headerShown: false,
         }}
       />
       <Stack.Screen
@@ -447,6 +433,28 @@ export default function RootStackNavigator() {
         name="TaxiFare"
         component={TaxiFareScreen}
         options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="DriverDashboard"
+        component={DriverDashboardScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="PasopFeed"
+        component={PasopFeedScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="PasopReport"
+        component={PasopReportScreen}
+        options={{
+          presentation: "modal",
           headerShown: false,
         }}
       />

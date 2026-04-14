@@ -47,7 +47,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       name: "Haibo Alerts",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#E72369",
+      lightColor: "#C81E5E",
       sound: "default",
     });
   }

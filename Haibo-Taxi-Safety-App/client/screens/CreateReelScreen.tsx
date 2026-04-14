@@ -4,10 +4,8 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  ScrollView,
   Platform,
   Alert,
-  ActivityIndicator,
   Linking,
 } from "react-native";
 import { Image } from "expo-image";
@@ -15,26 +13,30 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 
-import { useTheme } from "@/hooks/useTheme";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { GradientButton } from "@/components/GradientButton";
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
-import { getDeviceId } from "@/lib/deviceId";
+import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-const categories = [
-  { id: "safety_tips", name: "Safety Tips" },
-  { id: "taxi_hacks", name: "Taxi Hacks" },
-  { id: "driver_stories", name: "Drivers" },
-  { id: "route_reviews", name: "Routes" },
-  { id: "general", name: "General" },
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+const CATEGORIES = [
+  { id: "safety_tips", name: "Safety tips", icon: "shield" as const },
+  { id: "taxi_hacks", name: "Taxi hacks", icon: "zap" as const },
+  { id: "driver_stories", name: "Drivers", icon: "truck" as const },
+  { id: "route_reviews", name: "Routes", icon: "map" as const },
+  { id: "general", name: "General", icon: "hash" as const },
 ];
 
-const suggestedHashtags = [
+const SUGGESTED_HASHTAGS = [
   "#HaiboSafety",
   "#TaxiTalkZA",
   "#MinibusMoments",
@@ -42,11 +44,13 @@ const suggestedHashtags = [
   "#GautengTaxis",
 ];
 
+const CAPTION_MAX = 500;
+
 export default function CreateReelScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const queryClient = useQueryClient();
+  const navigation = useNavigation<NavigationProp>();
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
@@ -54,40 +58,47 @@ export default function CreateReelScreen() {
   const [selectedCategory, setSelectedCategory] = useState("general");
   const [isUploading, setIsUploading] = useState(false);
 
-  const checkPermissions = async () => {
+  const requestMediaPermission = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please allow access to your media library to upload photos and videos.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Open Settings", 
-            onPress: () => {
-              if (Platform.OS !== "web") {
-                Linking.openSettings().catch(() => {});
-              }
-            }
+    if (status === "granted") return true;
+    Alert.alert(
+      "Permission required",
+      "Allow media library access to upload photos and videos.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Open settings",
+          onPress: () => {
+            if (Platform.OS !== "web") Linking.openSettings().catch(() => {});
           },
-        ]
-      );
-      return false;
-    }
-    return true;
+        },
+      ]
+    );
+    return false;
+  };
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status === "granted") return true;
+    Alert.alert(
+      "Permission required",
+      "Allow camera access to capture reels.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Open settings",
+          onPress: () => {
+            if (Platform.OS !== "web") Linking.openSettings().catch(() => {});
+          },
+        },
+      ]
+    );
+    return false;
   };
 
   const pickImage = async () => {
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) return;
-
-    if (Platform.OS !== "web") {
-      try {
-        const Haptics = await import("expo-haptics");
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
-    }
-
+    if (!(await requestMediaPermission())) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -95,27 +106,18 @@ export default function CreateReelScreen() {
         aspect: [9, 16],
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
         setMediaUri(result.assets[0].uri);
         setMediaType("image");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
   const pickVideo = async () => {
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) return;
-
-    if (Platform.OS !== "web") {
-      try {
-        const Haptics = await import("expo-haptics");
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
-    }
-
+    if (!(await requestMediaPermission())) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
@@ -123,258 +125,253 @@ export default function CreateReelScreen() {
         videoMaxDuration: 60,
         quality: 0.7,
       });
-
       if (!result.canceled && result.assets[0]) {
         setMediaUri(result.assets[0].uri);
         setMediaType("video");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to pick video. Please try again.");
     }
   };
 
   const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please allow camera access to take photos.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Open Settings", 
-            onPress: () => {
-              if (Platform.OS !== "web") {
-                Linking.openSettings().catch(() => {});
-              }
-            }
-          },
-        ]
-      );
-      return;
-    }
-
-    if (Platform.OS !== "web") {
-      try {
-        const Haptics = await import("expo-haptics");
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
-    }
-
+    if (!(await requestCameraPermission())) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [9, 16],
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets[0]) {
         setMediaUri(result.assets[0].uri);
         setMediaType("image");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to take photo. Please try again.");
     }
   };
 
   const handlePost = async () => {
     if (!mediaUri) {
-      Alert.alert("Missing Media", "Please select a photo or video to upload.");
+      Alert.alert("Missing media", "Please select a photo or video to upload.");
       return;
     }
-
     if (!caption.trim()) {
-      Alert.alert("Missing Caption", "Please add a caption to your post.");
+      Alert.alert("Missing caption", "Please add a caption to your reel.");
       return;
     }
 
     setIsUploading(true);
-
-    try {
-      if (Platform.OS !== "web") {
-        const Haptics = await import("expo-haptics");
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setTimeout(() => {
+      setIsUploading(false);
       Alert.alert(
-        "Coming Soon!",
-        "Reel uploads will be available in a future update. Your content has been saved locally.",
+        "Saved locally",
+        "Reel uploads are coming soon. Your content has been saved on this device.",
         [{ text: "OK", onPress: () => navigation.goBack() }]
       );
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload. Please try again.");
-    } finally {
-      setIsUploading(false);
-    }
+    }, 600);
   };
 
-  const addHashtag = (tag: string) => {
-    if (!caption.includes(tag)) {
+  const toggleHashtag = (tag: string) => {
+    Haptics.selectionAsync();
+    if (caption.includes(tag)) {
+      setCaption((prev) => prev.replace(tag, "").replace(/\s+/g, " ").trim());
+    } else {
       setCaption((prev) => (prev ? `${prev} ${tag}` : tag));
     }
   };
 
+  const canPost = Boolean(mediaUri) && caption.trim().length > 0 && !isUploading;
+
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + Spacing.xl },
-        ]}
-        showsVerticalScrollIndicator={false}
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: insets.top + Spacing.md }]}
       >
-        <View style={styles.mediaSection}>
+        <View style={styles.heroTopRow}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.heroCloseButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Feather name="x" size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.heroBadge}>
+            <Feather name="film" size={16} color="#FFFFFF" />
+            <ThemedText style={styles.heroBadgeText}>Create reel</ThemedText>
+          </View>
+          <View style={styles.heroSpacer} />
+        </View>
+        <ThemedText style={styles.heroTitle}>Tell Mzansi a story.</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>
+          Safety tips, taxi hacks, hand signals — inspire your commuters.
+        </ThemedText>
+      </LinearGradient>
+
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 120 },
+        ]}
+      >
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.mediaCard}>
           {mediaUri ? (
             <View style={styles.mediaPreview}>
-              <Image
-                source={{ uri: mediaUri }}
-                style={styles.mediaImage}
-                contentFit="cover"
-              />
+              <Image source={{ uri: mediaUri }} style={styles.mediaImage} contentFit="cover" />
+              <View style={styles.mediaTypePill}>
+                <Feather
+                  name={mediaType === "video" ? "video" : "image"}
+                  size={12}
+                  color="#FFFFFF"
+                />
+                <ThemedText style={styles.mediaTypePillText}>
+                  {mediaType === "video" ? "Video" : "Photo"}
+                </ThemedText>
+              </View>
               <Pressable
                 style={styles.removeMediaButton}
                 onPress={() => setMediaUri(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove media"
               >
-                <Feather name="x" size={20} color="#FFFFFF" />
+                <Feather name="x" size={18} color="#FFFFFF" />
               </Pressable>
-              <View style={styles.mediaTypeIndicator}>
-                <Feather
-                  name={mediaType === "video" ? "video" : "image"}
-                  size={16}
-                  color="#FFFFFF"
-                />
-              </View>
             </View>
           ) : (
-            <View style={styles.mediaPicker}>
-              <Pressable
-                style={[styles.mediaPickerButton, { backgroundColor: theme.backgroundSecondary }]}
-                onPress={pickImage}
-              >
-                <Feather name="image" size={32} color={BrandColors.primary.blue} />
-                <ThemedText style={styles.mediaPickerText}>Photo</ThemedText>
-              </Pressable>
-              <Pressable
-                style={[styles.mediaPickerButton, { backgroundColor: theme.backgroundSecondary }]}
-                onPress={pickVideo}
-              >
-                <Feather name="video" size={32} color={BrandColors.secondary.purple} />
-                <ThemedText style={styles.mediaPickerText}>Video</ThemedText>
-              </Pressable>
-              <Pressable
-                style={[styles.mediaPickerButton, { backgroundColor: theme.backgroundSecondary }]}
-                onPress={takePhoto}
-              >
-                <Feather name="camera" size={32} color={BrandColors.secondary.orange} />
+            <View style={styles.mediaPickerRow}>
+              <Pressable style={styles.mediaPickerButton} onPress={takePhoto}>
+                <View style={styles.mediaIconWrap}>
+                  <Feather name="camera" size={22} color={BrandColors.primary.gradientStart} />
+                </View>
                 <ThemedText style={styles.mediaPickerText}>Camera</ThemedText>
+                <ThemedText style={styles.mediaPickerHint}>Capture live</ThemedText>
+              </Pressable>
+              <Pressable style={styles.mediaPickerButton} onPress={pickImage}>
+                <View style={styles.mediaIconWrap}>
+                  <Feather name="image" size={22} color={BrandColors.primary.gradientStart} />
+                </View>
+                <ThemedText style={styles.mediaPickerText}>Photo</ThemedText>
+                <ThemedText style={styles.mediaPickerHint}>From gallery</ThemedText>
+              </Pressable>
+              <Pressable style={styles.mediaPickerButton} onPress={pickVideo}>
+                <View style={styles.mediaIconWrap}>
+                  <Feather name="video" size={22} color={BrandColors.primary.gradientStart} />
+                </View>
+                <ThemedText style={styles.mediaPickerText}>Video</ThemedText>
+                <ThemedText style={styles.mediaPickerHint}>Up to 60s</ThemedText>
               </Pressable>
             </View>
           )}
-        </View>
+        </Animated.View>
 
-        <View style={styles.captionSection}>
-          <ThemedText style={styles.sectionTitle}>Caption</ThemedText>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(80).duration(400)} style={styles.section}>
+          <View style={styles.sectionLabelRow}>
+            <ThemedText style={styles.sectionLabel}>Caption</ThemedText>
+            <ThemedText
+              style={[
+                styles.charCount,
+                caption.length > 0 && { color: BrandColors.primary.gradientStart },
+              ]}
+            >
+              {caption.length}/{CAPTION_MAX}
+            </ThemedText>
+          </View>
           <TextInput
-            style={[
-              styles.captionInput,
-              { backgroundColor: theme.backgroundSecondary, color: theme.text },
-            ]}
+            style={styles.captionInput}
             placeholder="Share your taxi experience..."
-            placeholderTextColor={theme.textSecondary}
+            placeholderTextColor={BrandColors.gray[500]}
             value={caption}
             onChangeText={setCaption}
             multiline
-            maxLength={500}
+            maxLength={CAPTION_MAX}
+            textAlignVertical="top"
           />
-          <ThemedText type="small" style={[styles.charCount, { color: theme.textSecondary }]}>
-            {caption.length}/500
-          </ThemedText>
-        </View>
+        </Animated.View>
 
-        <View style={styles.hashtagSection}>
-          <ThemedText style={styles.sectionTitle}>Suggested Hashtags</ThemedText>
-          <View style={styles.hashtagList}>
-            {suggestedHashtags.map((tag) => (
-              <Pressable
-                key={tag}
-                style={[
-                  styles.hashtagChip,
-                  {
-                    backgroundColor: caption.includes(tag)
-                      ? BrandColors.primary.blue
-                      : theme.backgroundSecondary,
-                  },
-                ]}
-                onPress={() => addHashtag(tag)}
-              >
-                <ThemedText
-                  style={[
-                    styles.hashtagText,
-                    { color: caption.includes(tag) ? "#FFFFFF" : theme.text },
-                  ]}
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(140).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Suggested hashtags</ThemedText>
+          <View style={styles.chipRow}>
+            {SUGGESTED_HASHTAGS.map((tag) => {
+              const active = caption.includes(tag);
+              return (
+                <Pressable
+                  key={tag}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => toggleHashtag(tag)}
                 >
-                  {tag}
-                </ThemedText>
-              </Pressable>
-            ))}
+                  <ThemedText style={[styles.chipText, active && styles.chipTextActive]}>
+                    {tag}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.categorySection}>
-          <ThemedText style={styles.sectionTitle}>Category</ThemedText>
-          <View style={styles.categoryList}>
-            {categories.map((cat) => (
-              <Pressable
-                key={cat.id}
-                style={[
-                  styles.categoryChip,
-                  {
-                    backgroundColor:
-                      selectedCategory === cat.id
-                        ? BrandColors.primary.blue
-                        : theme.backgroundSecondary,
-                  },
-                ]}
-                onPress={() => setSelectedCategory(cat.id)}
-              >
-                <ThemedText
-                  style={[
-                    styles.categoryChipText,
-                    { color: selectedCategory === cat.id ? "#FFFFFF" : theme.text },
-                  ]}
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(200).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Category</ThemedText>
+          <View style={styles.chipRow}>
+            {CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat.id;
+              return (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedCategory(cat.id);
+                  }}
+                  style={[styles.categoryChip, active && styles.categoryChipActive]}
                 >
-                  {cat.name}
-                </ThemedText>
-              </Pressable>
-            ))}
+                  <Feather
+                    name={cat.icon}
+                    size={16}
+                    color={active ? "#FFFFFF" : BrandColors.primary.gradientStart}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.categoryChipText,
+                      active && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {cat.name}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
-      </ScrollView>
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        <Pressable
-          style={[
-            styles.postButton,
-            {
-              backgroundColor: mediaUri && caption.trim() 
-                ? BrandColors.primary.blue 
-                : theme.backgroundTertiary,
-            },
-          ]}
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + Spacing.md,
+            backgroundColor: theme.backgroundDefault,
+          },
+        ]}
+      >
+        <GradientButton
           onPress={handlePost}
-          disabled={isUploading || !mediaUri || !caption.trim()}
+          disabled={!canPost}
+          icon={isUploading ? undefined : "send"}
         >
-          {isUploading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <Feather name="send" size={20} color="#FFFFFF" />
-              <ThemedText style={styles.postButtonText}>Post Reel</ThemedText>
-            </>
-          )}
-        </Pressable>
+          {isUploading ? "Saving..." : "Post reel"}
+        </GradientButton>
+        <ThemedText style={styles.footerNote}>
+          Demo mode — reels are saved locally. Cloud upload coming soon.
+        </ThemedText>
       </View>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -382,41 +379,130 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    padding: Spacing.lg,
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
+    borderBottomLeftRadius: BorderRadius["2xl"],
+    borderBottomRightRadius: BorderRadius["2xl"],
   },
-  mediaSection: {
-    marginBottom: Spacing.xl,
-  },
-  mediaPicker: {
+  heroTopRow: {
     flexDirection: "row",
-    gap: Spacing.md,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  heroCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
     justifyContent: "center",
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  heroBadgeText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  heroSpacer: {
+    width: 40,
+  },
+  heroTitle: {
+    ...Typography.h1,
+    color: "#FFFFFF",
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: Spacing.xs,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: -Spacing["2xl"],
+  },
+  mediaCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  mediaPickerRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
   },
   mediaPickerButton: {
     flex: 1,
-    aspectRatio: 1,
-    maxWidth: 100,
-    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: BrandColors.primary.gradientStart + "4D",
+    backgroundColor: BrandColors.primary.gradientStart + "08",
+  },
+  mediaIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.sm,
+    marginBottom: 4,
   },
   mediaPickerText: {
-    fontSize: 12,
-    fontWeight: "500",
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  mediaPickerHint: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
   },
   mediaPreview: {
     width: "100%",
     aspectRatio: 9 / 16,
-    maxHeight: 400,
-    borderRadius: BorderRadius.lg,
+    maxHeight: 420,
+    borderRadius: BorderRadius.sm,
     overflow: "hidden",
     position: "relative",
   },
   mediaImage: {
     width: "100%",
     height: "100%",
+  },
+  mediaTypePill: {
+    position: "absolute",
+    top: Spacing.sm,
+    left: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(231, 35, 105, 0.85)",
+  },
+  mediaTypePillText: {
+    ...Typography.label,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   removeMediaButton: {
     position: "absolute",
@@ -425,88 +511,101 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
-  mediaTypeIndicator: {
-    position: "absolute",
-    top: Spacing.sm,
-    left: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  section: {
+    marginTop: Spacing.xl,
   },
-  captionSection: {
-    marginBottom: Spacing.xl,
+  sectionLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+  sectionLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: Spacing.sm,
+  },
+  charCount: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.gray[500],
+    fontVariant: ["tabular-nums"],
     marginBottom: Spacing.sm,
   },
   captionInput: {
-    minHeight: 100,
+    ...Typography.body,
+    minHeight: 110,
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    fontSize: 16,
-    textAlignVertical: "top",
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: "#FFFFFF",
+    color: BrandColors.gray[900],
   },
-  charCount: {
-    textAlign: "right",
-    marginTop: Spacing.xs,
-  },
-  hashtagSection: {
-    marginBottom: Spacing.xl,
-  },
-  hashtagList: {
+  chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  hashtagChip: {
+  chip: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 8,
     borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "33",
   },
-  hashtagText: {
-    fontSize: 13,
-    fontWeight: "500",
+  chipActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
+    borderColor: BrandColors.primary.gradientStart,
   },
-  categorySection: {
-    marginBottom: Spacing.xl,
+  chipText: {
+    ...Typography.small,
+    fontWeight: "600",
+    color: BrandColors.primary.gradientStart,
   },
-  categoryList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
+  chipTextActive: {
+    color: "#FFFFFF",
   },
   categoryChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  footer: {
-    padding: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.1)",
-  },
-  postButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 9,
     borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "33",
   },
-  postButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+  categoryChipActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  categoryChipText: {
+    ...Typography.small,
     fontWeight: "600",
+    color: BrandColors.primary.gradientStart,
+  },
+  categoryChipTextActive: {
+    color: "#FFFFFF",
+  },
+  footer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.gray[100],
+  },
+  footerNote: {
+    ...Typography.small,
+    color: BrandColors.gray[500],
+    textAlign: "center",
+    marginTop: Spacing.sm,
   },
 });

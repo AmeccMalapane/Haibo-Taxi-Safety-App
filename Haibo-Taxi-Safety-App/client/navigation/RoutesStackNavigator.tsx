@@ -30,7 +30,7 @@ export default function RoutesStackNavigator() {
       <Stack.Screen
         name="RouteDetail"
         component={RouteDetailScreen}
-        options={{ headerTitle: "Route Details" }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

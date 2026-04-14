@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BrandColors,
@@ -41,6 +42,7 @@ import type { TaxiRoute } from "@/lib/types";
 // commuter-facing fare lookup.
 
 export default function TaxiFareScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
 
@@ -124,7 +126,7 @@ export default function TaxiFareScreen() {
           style={[styles.hero, { paddingTop: insets.top + Spacing.xl }]}
         >
           <Animated.View
-            entering={FadeIn.duration(400)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -137,7 +139,7 @@ export default function TaxiFareScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(100)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(100)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Taxi fares</ThemedText>
@@ -149,7 +151,7 @@ export default function TaxiFareScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -157,7 +159,7 @@ export default function TaxiFareScreen() {
         >
           {/* Search inputs — origin + destination with swap button */}
           <Animated.View
-            entering={FadeInDown.duration(500).delay(250)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(250)}
             style={styles.searchBlock}
           >
             <View style={styles.inputRow}>
@@ -252,7 +254,7 @@ export default function TaxiFareScreen() {
 
           {/* Stats strip */}
           <Animated.View
-            entering={FadeInUp.duration(500).delay(300)}
+            entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
             style={[
               styles.statsCard,
               {
@@ -286,7 +288,7 @@ export default function TaxiFareScreen() {
 
           {/* Results */}
           <Animated.View
-            entering={FadeInDown.duration(500).delay(350)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(350)}
             style={styles.resultsHeader}
           >
             <ThemedText
@@ -304,7 +306,7 @@ export default function TaxiFareScreen() {
 
           {filteredRoutes.length === 0 ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={styles.emptyState}
             >
               <View
@@ -331,7 +333,7 @@ export default function TaxiFareScreen() {
               {filteredRoutes.map((route, index) => (
                 <Animated.View
                   key={route.id}
-                  entering={FadeInDown.duration(300).delay(
+                  entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(
                     Math.min(index * 25, 300)
                   )}
                 >

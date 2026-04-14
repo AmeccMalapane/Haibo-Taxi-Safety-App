@@ -123,7 +123,12 @@ export default function LocationDetailsScreen() {
             style={styles.headerImage}
             contentFit="cover"
           />
-          <Pressable style={styles.backIcon} onPress={() => navigation.goBack()}>
+          <Pressable
+            style={styles.backIcon}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Feather name="arrow-left" size={24} color="#FFF" />
           </Pressable>
           <View style={[styles.typeBadge, { backgroundColor: config.color }]}>
@@ -143,9 +148,11 @@ export default function LocationDetailsScreen() {
                 </ThemedText>
               </View>
             </View>
-            <Pressable 
+            <Pressable
               onPress={openInMaps}
               style={[styles.navButton, { backgroundColor: BrandColors.primary.red }]}
+              accessibilityRole="button"
+              accessibilityLabel="Open in maps"
             >
               <Feather name="navigation" size={20} color="#FFF" />
             </Pressable>

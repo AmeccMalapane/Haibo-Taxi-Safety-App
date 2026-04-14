@@ -20,8 +20,12 @@ export const ResponsiveSpacing = {
   tabBarHeight: DeviceSizes.isSmall ? 58 : 68,
 };
 
-// ClarifyUX: Rose Red as primary tint
-const tintColorLight = "#E72369";
+// ClarifyUX: Rose Red as primary tint.
+// Darkened from the original #E72369 (4.34:1 on white) to #C81E5E (5.52:1)
+// so white small-bold text on rose surfaces meets WCAG AA 4.5:1. The dark-
+// mode tint stays #EA4F52 — on a #121212 surface it clocks 5.12:1, so dark
+// mode doesn't need the shift.
+const tintColorLight = "#C81E5E";
 const tintColorDark = "#EA4F52";
 
 export type Colors = {
@@ -47,7 +51,7 @@ export const Colors: { light: Colors; dark: Colors } = {
     buttonText: "#FFFFFF",
     tabIconDefault: "#757575",
     tabIconSelected: tintColorLight,
-    link: "#E72369",
+    link: "#C81E5E",
     backgroundRoot: "#FFFFFF",
     backgroundDefault: "#F8F9FA",
     backgroundSecondary: "#F0F0F0",
@@ -75,9 +79,12 @@ export const Colors: { light: Colors; dark: Colors } = {
 
 export const BrandColors = {
   primary: {
-    gradientStart: "#E72369",
-    gradientEnd: "#EA4F52",
-    red: "#E72369",
+    // Rose darkened from #E72369 → #C81E5E (5.52:1 on white, WCAG AA)
+    // Coral darkened from #EA4F52 → #D13A52 (4.73:1 on white, WCAG AA)
+    // Small white text on the gradient now passes 4.5:1 across its full range.
+    gradientStart: "#C81E5E",
+    gradientEnd: "#D13A52",
+    red: "#C81E5E",
     redDark: "#C62828",
     blue: "#1976D2",
     blueDark: "#1565C0",
@@ -86,8 +93,8 @@ export const BrandColors = {
     orange: "#F57C00",
   },
   gradient: {
-    primary: ["#E72369", "#EA4F52"] as string[],
-    primaryReversed: ["#EA4F52", "#E72369"] as string[],
+    primary: ["#C81E5E", "#D13A52"] as string[],
+    primaryReversed: ["#D13A52", "#C81E5E"] as string[],
   },
   secondary: {
     orange: "#F57C00",
@@ -116,6 +123,91 @@ export const BrandColors = {
     900: "#212121",
   },
 };
+
+/**
+ * Shadow tokens — tiered elevation system matching Material/iOS conventions.
+ * Use these instead of inlining shadow props so the whole app can swap to a
+ * different shadow language (e.g. borders-only on dark mode) in one place.
+ *
+ * Usage:
+ *   style={[styles.card, BrandShadows.sm]}
+ *
+ * Each token is a complete shadow style block — offset, color, opacity,
+ * radius, and Android elevation. Drop it into a StyleSheet spread.
+ */
+export const BrandShadows = {
+  // Flat — no elevation, for cards on the same plane as the page
+  none: {
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  // sm — subtle card lift (list items, small cards)
+  sm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  // md — standard elevated card (content cards, stats)
+  md: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  // lg — floating panels (bottom sheets, modals, hero cards)
+  lg: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  // xl — top-layer floating (FABs, dismissible overlays)
+  xl: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  // brandSm — rose-tinted small shadow for interactive accents
+  brandSm: {
+    shadowColor: "#C81E5E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  // brandLg — rose-tinted strong glow for FABs + gradient CTAs
+  brandLg: {
+    shadowColor: "#C81E5E",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  // success / danger tinted shadows for state cards
+  successLg: {
+    shadowColor: "#28A745",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dangerLg: {
+    shadowColor: "#C62828",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+} as const;
 
 export const Spacing = {
   xs: 4,

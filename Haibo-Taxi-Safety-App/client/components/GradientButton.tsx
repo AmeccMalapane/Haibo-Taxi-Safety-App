@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   gradientButton: {
-    shadowColor: "#E72369",
+    shadowColor: "#C81E5E",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

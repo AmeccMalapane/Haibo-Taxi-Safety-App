@@ -17,6 +17,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BorderRadius,
@@ -151,6 +152,7 @@ function ThemeOption({
 }
 
 export default function MenuScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme, themeMode, setThemeMode } = useTheme();
   const { isAuthenticated, user } = useAuth();
   const navigation = useNavigation<NavigationProp>();
@@ -176,6 +178,9 @@ export default function MenuScreen() {
   const handleAuthLogin = () => navigation.navigate("Auth");
   const handleSettings = () => navigation.navigate("Settings");
   const handleRating = () => navigation.navigate("Rating");
+  const handleDriverDashboard = () => navigation.navigate("DriverDashboard");
+
+  const isDriver = user?.avatarType === "driver";
 
   const accountTitle = isAuthenticated
     ? user?.displayName || "Manage your account"
@@ -197,7 +202,7 @@ export default function MenuScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.header}>
           <ThemedText style={styles.headerTitle}>Menu</ThemedText>
           <ThemedText
             style={[styles.headerSubtitle, { color: theme.textSecondary }]}
@@ -208,7 +213,7 @@ export default function MenuScreen() {
 
         {/* Appearance */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(100)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(100)}
           style={styles.section}
         >
           <ThemedText
@@ -248,7 +253,7 @@ export default function MenuScreen() {
 
         {/* Featured */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(200)}
           style={styles.section}
         >
           <ThemedText
@@ -338,7 +343,7 @@ export default function MenuScreen() {
 
         {/* Services */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(300)}
           style={styles.section}
         >
           <ThemedText
@@ -396,6 +401,17 @@ export default function MenuScreen() {
               hint="Driver, association and admin roles"
               onPress={handleJobs}
             />
+            {isDriver ? (
+              <>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <MenuItem
+                  icon="truck"
+                  label="Driver dashboard"
+                  hint="GPS tracking, Haibo Pay, quick actions"
+                  onPress={handleDriverDashboard}
+                />
+              </>
+            ) : null}
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="settings"
@@ -407,7 +423,7 @@ export default function MenuScreen() {
 
         {/* Account */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(400)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(400)}
           style={styles.section}
         >
           <ThemedText

@@ -21,6 +21,7 @@ import Animated, {
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { SkeletonBlock } from "@/components/Skeleton";
@@ -39,6 +40,7 @@ import { getDeviceId } from "@/lib/deviceId";
 // - Typography tokens, no inline font sizing
 
 export default function EmergencyScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   useTheme();
   const { isAuthenticated } = useAuth();
@@ -216,13 +218,13 @@ export default function EmergencyScreen() {
 
       {/* Hero — the one thing you see on open. Anchored, never scrolls. */}
       <View style={[styles.hero, { paddingTop: insets.top + Spacing["3xl"] }]}>
-        <Animated.View entering={FadeIn.duration(400)} style={styles.heroLabelWrap}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.heroLabelWrap}>
           <View style={styles.statusDot} />
           <ThemedText style={styles.heroLabel}>SOS ACTIVE</ThemedText>
         </Animated.View>
 
         <Animated.View
-          entering={FadeIn.duration(600).delay(100)}
+          entering={reducedMotion ? undefined : FadeIn.duration(600).delay(100)}
           style={styles.sosContainer}
         >
           <Animated.View style={[styles.pulseCircle, animatedPulseStyle]} />
@@ -231,7 +233,7 @@ export default function EmergencyScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeIn.duration(500).delay(250)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500).delay(250)}>
           <ThemedText style={styles.heroTitle}>Help is on the way</ThemedText>
           <ThemedText style={styles.heroSubtitle}>
             Your location has been shared with emergency responders
@@ -243,7 +245,7 @@ export default function EmergencyScreen() {
       <View style={[styles.contentBand, { paddingBottom: insets.bottom + Spacing.lg }]}>
         {location ? (
           <Animated.View
-            entering={FadeInDown.duration(500).delay(350)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(350)}
             style={styles.locationPill}
           >
             <Feather name="map-pin" size={16} color="#FFFFFF" />
@@ -253,7 +255,7 @@ export default function EmergencyScreen() {
           </Animated.View>
         ) : locationDenied ? (
           <Animated.View
-            entering={FadeInDown.duration(500).delay(350)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(350)}
             style={styles.locationPill}
           >
             <Feather name="alert-circle" size={16} color="#FFFFFF" />
@@ -262,12 +264,12 @@ export default function EmergencyScreen() {
             </ThemedText>
           </Animated.View>
         ) : (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.locationPill}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)} style={styles.locationPill}>
             <SkeletonBlock tone="light" style={styles.locationSkeleton} />
           </Animated.View>
         )}
 
-        <Animated.View entering={FadeInDown.duration(500).delay(450)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(450)}>
           <Pressable
             onPress={handleCallEmergency}
             style={({ pressed }) => [
@@ -284,7 +286,7 @@ export default function EmergencyScreen() {
 
         {primaryContact ? (
           <Animated.View
-            entering={FadeInDown.duration(500).delay(550)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(550)}
             style={styles.contactRow}
           >
             {contacts.slice(0, 3).map((contact) => (
@@ -308,7 +310,7 @@ export default function EmergencyScreen() {
         ) : null}
 
         <Animated.View
-          entering={FadeInDown.duration(500).delay(650)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(650)}
           style={styles.cancelWrap}
         >
           <Pressable

@@ -33,7 +33,7 @@
     "createdAt": "2026-02-13T15:30:00Z",
     "category": "safety_tips",
     "localImage": "safety_tips",
-    "gradient": ["#E72369", "#EA4F52"]
+    "gradient": ["#C81E5E", "#D13A52"]
   },
   {
     "id": "p3",
@@ -159,7 +159,7 @@
     "createdAt": "2026-02-10T11:00:00Z",
     "category": "safety_tips",
     "localImage": "women_safety",
-    "gradient": ["#E72369", "#F06292"]
+    "gradient": ["#C81E5E", "#F06292"]
   },
   {
     "id": "p10",

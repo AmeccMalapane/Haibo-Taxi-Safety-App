@@ -12,6 +12,7 @@ import { MAPBOX_ACCESS_TOKEN, MAPBOX_STYLES, DEFAULT_CAMERA, ZOOM_LEVELS } from 
 import { RANKS, ROUTES, STATUS_CONFIG, GAUTENG_CENTER } from "@/data/mapbox_transit_data";
 import type { TaxiLocation, LocationType } from "@/lib/types";
 import type { MapboxTaxiRank, MapboxTaxiRoute } from "@/data/mapbox_transit_data";
+import type { PasopReport } from "@/data/pasopReports";
 
 // Dynamically load mapbox-gl for web
 let mapboxgl: any = null;
@@ -45,10 +46,15 @@ interface MapViewComponentProps {
   pinnedLocation?: { latitude: number; longitude: number } | null;
   onPinnedMarkerPress?: () => void;
   showTransitRoutes?: boolean;
+  showTransitRanks?: boolean;
+  dimTransitRanks?: boolean;
   onRankSelect?: (rank: MapboxTaxiRank | null) => void;
   onRouteSelect?: (route: MapboxTaxiRoute | null) => void;
   selectedRankId?: string | null;
   selectedRouteId?: string | null;
+  pasopReports?: PasopReport[];
+  showPasopPins?: boolean;
+  onPasopPress?: (report: PasopReport) => void;
 }
 
 export function MapViewComponent({

@@ -257,7 +257,7 @@ export const ROUTES: MapboxTaxiRoute[] = matchedRoutes;
 // ─── Status Config ──────────────────────────────────────────────────────────
 
 export const STATUS_CONFIG: Record<RankStatus, { color: string; label: string }> = {
-  busy: { color: "#E72369", label: "Busy" },
+  busy: { color: "#C81E5E", label: "Busy" },
   moderate: { color: "#FFA000", label: "Moderate" },
   quiet: { color: "#28A745", label: "Quiet" },
 };

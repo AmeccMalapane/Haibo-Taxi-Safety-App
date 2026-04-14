@@ -34,6 +34,8 @@ export function MapControlButtons({
         <Pressable
           style={[styles.button, { backgroundColor: theme.surface }]}
           onPress={onResetView}
+          accessibilityRole="button"
+          accessibilityLabel="Reset map view"
         >
           <Feather name="maximize" size={20} color={BrandColors.primary.red} />
         </Pressable>
@@ -48,6 +50,9 @@ export function MapControlButtons({
           },
         ]}
         onPress={onToggleRoutes}
+        accessibilityRole="button"
+        accessibilityLabel={showTransitRoutes ? "Hide transit routes" : "Show transit routes"}
+        accessibilityState={{ selected: showTransitRoutes }}
       >
         <Feather
           name="git-branch"
@@ -60,6 +65,8 @@ export function MapControlButtons({
       <Pressable
         style={[styles.button, { backgroundColor: theme.surface }]}
         onPress={onLocateUser}
+        accessibilityRole="button"
+        accessibilityLabel="Centre map on my location"
       >
         <Feather name="crosshair" size={20} color={BrandColors.primary.blue} />
       </Pressable>

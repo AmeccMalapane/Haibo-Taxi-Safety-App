@@ -45,7 +45,7 @@ interface Highlight {
 
 const TYPE_CONFIG: Record<string, { gradient: [string, string]; iconBg: string }> = {
   event: {
-    gradient: ["#E72369", "#EA4F52"],
+    gradient: ["#C81E5E", "#D13A52"],
     iconBg: "rgba(255,255,255,0.2)",
   },
   job: {

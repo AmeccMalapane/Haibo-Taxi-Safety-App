@@ -36,6 +36,7 @@ import {
   Typography,
 } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { createReelLink, getAppStoreLink } from "@/lib/deepLinks";
 import phushaContentData from "@/data/phusha_content.json";
 
 // typeui-clean polish on top of the existing reels feed:
@@ -193,7 +194,7 @@ const PhushaCard = memo(function PhushaCard({
         {/* Category Badge */}
         <View style={[styles.categoryBadge, { top: insets.top + 70 }]}>
           <View style={styles.categoryBadgeInner}>
-            <Feather name={categoryIcon} size={14} color="#FFFFFF" />
+            <Feather name={categoryIcon} size={16} color="#FFFFFF" />
             <ThemedText style={styles.categoryBadgeText}>
               {post.category.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
             </ThemedText>
@@ -256,7 +257,13 @@ const PhushaCard = memo(function PhushaCard({
         {/* Action Buttons */}
         <View style={styles.actions}>
           <Animated.View style={animatedLikeStyle}>
-            <Pressable style={styles.actionButton} onPress={handleLikePress}>
+            <Pressable
+              style={styles.actionButton}
+              onPress={handleLikePress}
+              accessibilityRole="button"
+              accessibilityLabel={liked ? "Unlike reel" : "Like reel"}
+              accessibilityState={{ selected: liked }}
+            >
               <View
                 style={[
                   styles.actionIconBg,
@@ -275,21 +282,37 @@ const PhushaCard = memo(function PhushaCard({
             </Pressable>
           </Animated.View>
 
-          <Pressable style={styles.actionButton} onPress={() => onComment(post.id)}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={() => onComment(post.id)}
+            accessibilityRole="button"
+            accessibilityLabel="View comments"
+          >
             <View style={styles.actionIconBg}>
               <Feather name="message-circle" size={24} color="#FFFFFF" />
             </View>
             <ThemedText style={styles.actionCount}>{formatCount(post.commentCount)}</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={() => onShare(post.id)}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={() => onShare(post.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Share reel"
+          >
             <View style={styles.actionIconBg}>
               <Feather name="send" size={22} color="#FFFFFF" />
             </View>
             <ThemedText style={styles.actionCount}>{formatCount(post.shareCount)}</ThemedText>
           </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={handleBookmark}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleBookmark}
+            accessibilityRole="button"
+            accessibilityLabel={bookmarked ? "Remove bookmark" : "Bookmark reel"}
+            accessibilityState={{ selected: bookmarked }}
+          >
             <View
               style={[
                 styles.actionIconBg,
@@ -306,7 +329,11 @@ const PhushaCard = memo(function PhushaCard({
             </View>
           </Pressable>
 
-          <Pressable style={styles.actionButton}>
+          <Pressable
+            style={styles.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+          >
             <View style={styles.actionIconBg}>
               <Feather name="more-horizontal" size={22} color="#FFFFFF" />
             </View>
@@ -359,8 +386,10 @@ export default function PushaScreen() {
     const post = allPosts.find((p) => p.id === id);
     if (!post) return;
     try {
+      const openLink = createReelLink(post.id);
       await Share.share({
-        message: `${post.caption}\n\n${post.hashtags.join(" ")}\n\nShared via Haibo App`,
+        message: `${post.caption}\n\n${post.hashtags.join(" ")}\n\nWatch on Haibo: ${openLink}\nGet the app: ${getAppStoreLink()}`,
+        title: "Haibo reel",
       });
     } catch {}
   };
@@ -429,10 +458,13 @@ export default function PushaScreen() {
                     .catch(() => {});
                 }
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter: ${cat.name}`}
+              accessibilityState={{ selected: activeCategory === cat.id }}
             >
               <Feather
                 name={cat.icon}
-                size={14}
+                size={16}
                 color={activeCategory === cat.id ? "#FFFFFF" : "rgba(255,255,255,0.5)"}
                 style={{ marginRight: 4 }}
               />
@@ -482,7 +514,12 @@ export default function PushaScreen() {
       </View>
 
       {/* Create FAB */}
-      <Pressable style={[styles.fab, { bottom: insets.bottom + 100 }]} onPress={handleCreateReel}>
+      <Pressable
+        style={[styles.fab, { bottom: insets.bottom + 100 }]}
+        onPress={handleCreateReel}
+        accessibilityRole="button"
+        accessibilityLabel="Create new reel"
+      >
         <LinearGradient
           colors={BrandColors.gradient.primary}
           start={{ x: 0, y: 0 }}

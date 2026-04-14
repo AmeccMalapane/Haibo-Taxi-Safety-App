@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { ThemedText } from "@/components/ThemedText";
 import { SkeletonBlock } from "@/components/Skeleton";
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BorderRadius,
@@ -92,11 +93,12 @@ function formatDate(dateStr: string) {
 function PackageCard({ item, index }: { item: Package; index: number }) {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const reducedMotion = useReducedMotion();
   const config = statusConfig[item.status] || statusConfig.pending;
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300).delay(Math.min(index * 30, 300))}
+      entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(Math.min(index * 30, 300))}
     >
       <Pressable
         onPress={() => navigation.navigate("TrackPackage")}
@@ -123,7 +125,7 @@ function PackageCard({ item, index }: { item: Package; index: number }) {
               { backgroundColor: config.color + "15" },
             ]}
           >
-            <Feather name={config.icon} size={11} color={config.color} />
+            <Feather name={config.icon} size={12} color={config.color} />
             <ThemedText style={[styles.statusText, { color: config.color }]}>
               {config.label.toUpperCase()}
             </ThemedText>
@@ -210,6 +212,7 @@ function PackageCard({ item, index }: { item: Package; index: number }) {
 }
 
 export default function PackageHistoryScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
@@ -244,7 +247,7 @@ export default function PackageHistoryScreen() {
               end={{ x: 1, y: 1 }}
               style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
             >
-              <Animated.View entering={FadeIn.duration(300)}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
                 <Pressable
                   onPress={() => navigation.goBack()}
                   style={styles.backButton}
@@ -257,7 +260,7 @@ export default function PackageHistoryScreen() {
               </Animated.View>
 
               <Animated.View
-                entering={FadeIn.duration(400).delay(100)}
+                entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
                 style={styles.heroBadgeWrap}
               >
                 <View style={styles.heroBadge}>
@@ -270,7 +273,7 @@ export default function PackageHistoryScreen() {
               </Animated.View>
 
               <Animated.View
-                entering={FadeInDown.duration(500).delay(150)}
+                entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
                 style={styles.heroText}
               >
                 <ThemedText style={styles.heroTitle}>
@@ -283,7 +286,7 @@ export default function PackageHistoryScreen() {
             </LinearGradient>
 
             <Animated.View
-              entering={FadeInUp.duration(500).delay(200)}
+              entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
               style={[
                 styles.contentCardTop,
                 { backgroundColor: theme.backgroundRoot },
@@ -325,7 +328,7 @@ export default function PackageHistoryScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={[
                 styles.emptyState,
                 { backgroundColor: theme.surface, borderColor: theme.border },

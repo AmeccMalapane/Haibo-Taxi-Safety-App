@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
 import {
   Spacing,
@@ -45,6 +46,13 @@ type TileConfig = {
 };
 
 const communityTiles: TileConfig[] = [
+  {
+    id: "pasop",
+    title: "Pasop",
+    subtitle: "Live hazard reports near you",
+    icon: "alert-triangle",
+    screen: "PasopFeed",
+  },
   {
     id: "community_routes",
     title: "Community routes",
@@ -99,6 +107,7 @@ function CommunityTile({
   index: number;
 }) {
   const { theme } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   const handlePress = async () => {
     if (Platform.OS !== "web") {
@@ -112,7 +121,7 @@ function CommunityTile({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(400).delay(150 + index * 60)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(150 + index * 60)}
       style={styles.tileWrap}
     >
       <Pressable
@@ -155,6 +164,7 @@ function CommunityTile({
 }
 
 export default function CommunityScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
@@ -204,7 +214,7 @@ export default function CommunityScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.header}>
           <ThemedText
             style={[styles.eyebrow, { color: theme.textSecondary }]}
           >
@@ -219,7 +229,7 @@ export default function CommunityScreen() {
         </Animated.View>
 
         {/* Highlights carousel */}
-        <Animated.View entering={FadeInUp.duration(500).delay(100)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(100)}>
           <HighlightsCarousel />
         </Animated.View>
 
@@ -237,7 +247,7 @@ export default function CommunityScreen() {
 
         {/* Community Feed quick link */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(450)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(450)}
           style={styles.feedSection}
         >
           <ThemedText
@@ -321,7 +331,7 @@ export default function CommunityScreen() {
 
         {/* Info card */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(550)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(550)}
           style={[
             styles.infoCard,
             {

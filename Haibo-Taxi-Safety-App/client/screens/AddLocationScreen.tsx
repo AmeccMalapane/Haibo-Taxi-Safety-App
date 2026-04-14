@@ -8,33 +8,46 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Location from "expo-location";
+import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { GradientButton } from "@/components/GradientButton";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
 import type { LocationType, NewLocationData } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type AddLocationRouteProp = RouteProp<RootStackParamList, "AddLocation">;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const locationTypes: { type: LocationType; label: string; icon: keyof typeof Feather.glyphMap; color: string }[] = [
-  { type: "rank", label: "Taxi Rank", icon: "home", color: BrandColors.primary.blue },
-  { type: "formal_stop", label: "Formal Stop", icon: "map-pin", color: BrandColors.secondary.green },
-  { type: "informal_stop", label: "Informal Stop", icon: "navigation", color: BrandColors.secondary.orange },
-  { type: "landmark", label: "Landmark", icon: "flag", color: "#9B59B6" },
-  { type: "interchange", label: "Interchange", icon: "repeat", color: "#E74C3C" },
+const LOCATION_TYPES: {
+  type: LocationType;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+}[] = [
+  { type: "rank", label: "Taxi Rank", icon: "home" },
+  { type: "formal_stop", label: "Formal Stop", icon: "map-pin" },
+  { type: "informal_stop", label: "Informal Stop", icon: "navigation" },
+  { type: "landmark", label: "Landmark", icon: "flag" },
+  { type: "interchange", label: "Interchange", icon: "repeat" },
 ];
 
 export default function AddLocationScreen() {
+  const reducedMotion = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const route = useRoute<AddLocationRouteProp>();
   const queryClient = useQueryClient();
 
@@ -46,29 +59,28 @@ export default function AddLocationScreen() {
   const [latitude, setLatitude] = useState<number | null>(passedCoords?.latitude ?? null);
   const [longitude, setLongitude] = useState<number | null>(passedCoords?.longitude ?? null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [hasPinnedLocation, setHasPinnedLocation] = useState(!!passedCoords?.latitude);
+  const hasPinnedLocation = Boolean(passedCoords?.latitude);
 
   const mutation = useMutation({
     mutationFn: async (data: NewLocationData) => {
       return apiRequest("/api/map/locations", {
         method: "POST",
         body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/map/locations"] });
       if (Platform.OS !== "web") {
-        const Haptics = require("expo-haptics");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      Alert.alert("Success", "Location added successfully! It will be reviewed by the community.", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert(
+        "Location added",
+        "Your stop has been submitted. It will appear on the map after community review.",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
     },
-    onError: (error) => {
+    onError: () => {
       Alert.alert("Error", "Failed to add location. Please try again.");
-      console.error("Error adding location:", error);
     },
   });
 
@@ -78,35 +90,33 @@ export default function AddLocationScreen() {
     }
   }, []);
 
-
   const getCurrentLocation = async () => {
     try {
       setIsLoadingLocation(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Location permission is needed to add a stop at your current location.");
+        Alert.alert(
+          "Permission required",
+          "Location permission is needed to add a stop at your current position."
+        );
         return;
       }
-      const location = await Location.getCurrentPositionAsync({
+      const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-      setLatitude(location.coords.latitude);
-      setLongitude(location.coords.longitude);
+      setLatitude(loc.coords.latitude);
+      setLongitude(loc.coords.longitude);
 
-      const [reverseGeocode] = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+      const [geocode] = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
       });
-      if (reverseGeocode) {
-        const addressParts = [
-          reverseGeocode.street,
-          reverseGeocode.city,
-          reverseGeocode.region,
-        ].filter(Boolean);
-        setAddress(addressParts.join(", "));
+      if (geocode) {
+        const parts = [geocode.street, geocode.city, geocode.region].filter(Boolean);
+        setAddress(parts.join(", "));
       }
-    } catch (error) {
-      console.error("Error getting location:", error);
+    } catch {
+      // silent — location is optional until submit
     } finally {
       setIsLoadingLocation(false);
     }
@@ -114,14 +124,13 @@ export default function AddLocationScreen() {
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      Alert.alert("Required", "Please enter a name for this location.");
+      Alert.alert("Missing name", "Please enter a name for this location.");
       return;
     }
-    if (!latitude || !longitude) {
-      Alert.alert("Required", "Location coordinates are required.");
+    if (latitude == null || longitude == null) {
+      Alert.alert("Missing coordinates", "Please capture your GPS location first.");
       return;
     }
-
     mutation.mutate({
       name: name.trim(),
       type,
@@ -135,140 +144,189 @@ export default function AddLocationScreen() {
   const isFormValid = name.trim().length > 0 && latitude !== null && longitude !== null;
 
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAwareScrollViewCompat contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <ThemedText type="label" style={styles.sectionTitle}>Location Type</ThemedText>
-          <View style={styles.typeGrid}>
-            {locationTypes.map((item) => (
-              <Pressable
-                key={item.type}
-                style={[
-                  styles.typeButton,
-                  { backgroundColor: type === item.type ? item.color : theme.backgroundElevated },
-                ]}
-                onPress={() => setType(item.type)}
-              >
-                <Feather
-                  name={item.icon}
-                  size={24}
-                  color={type === item.type ? "#FFFFFF" : item.color}
-                />
-                <ThemedText
-                  type="small"
-                  style={[
-                    styles.typeLabel,
-                    { color: type === item.type ? "#FFFFFF" : theme.text },
-                  ]}
-                >
-                  {item.label}
-                </ThemedText>
-              </Pressable>
-            ))}
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: insets.top + Spacing.md }]}
+      >
+        <View style={styles.heroTopRow}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.heroCloseButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Feather name="x" size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.heroBadge}>
+            <Feather name="map-pin" size={16} color="#FFFFFF" />
+            <ThemedText style={styles.heroBadgeText}>Add stop</ThemedText>
           </View>
+          <View style={styles.heroSpacer} />
         </View>
+        <ThemedText style={styles.heroTitle}>Pin a taxi stop.</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>
+          Help commuters find safe pickup points across Mzansi.
+        </ThemedText>
+      </LinearGradient>
 
-        <View style={styles.section}>
-          <ThemedText type="label" style={styles.sectionTitle}>Location Details</ThemedText>
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundElevated }]}>
-            <Feather name="map-pin" size={20} color={theme.textSecondary} />
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
+        ]}
+      >
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.infoCard}>
+          <Feather name="info" size={16} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.infoText}>
+            Verified stops help other commuters find safe pickup points. Your
+            submission is reviewed by the community before it goes live.
+          </ThemedText>
+        </Animated.View>
+
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(60).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Location type</ThemedText>
+          <View style={styles.typeGrid}>
+            {LOCATION_TYPES.map((item) => {
+              const selected = type === item.type;
+              return (
+                <Pressable
+                  key={item.type}
+                  style={[styles.typeButton, selected && styles.typeButtonActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setType(item.type);
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.typeIconWrap,
+                      selected && styles.typeIconWrapActive,
+                    ]}
+                  >
+                    <Feather
+                      name={item.icon}
+                      size={18}
+                      color={selected ? "#FFFFFF" : BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                  <ThemedText
+                    style={[styles.typeLabel, selected && styles.typeLabelActive]}
+                  >
+                    {item.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(120).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Location details</ThemedText>
+
+          <View style={styles.inputWrap}>
+            <Feather name="map-pin" size={16} color={BrandColors.gray[600]} />
             <TextInput
-              style={[styles.input, { color: theme.text }]}
-              placeholder="Location name (e.g., Corner Bree & Sauer)"
-              placeholderTextColor={theme.textSecondary}
+              style={styles.input}
+              placeholder="Stop name (e.g. Corner Bree & Sauer)"
+              placeholderTextColor={BrandColors.gray[500]}
               value={name}
               onChangeText={setName}
             />
           </View>
 
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundElevated }]}>
-            <Feather name="home" size={20} color={theme.textSecondary} />
+          <View style={styles.inputWrap}>
+            <Feather name="home" size={16} color={BrandColors.gray[600]} />
             <TextInput
-              style={[styles.input, { color: theme.text }]}
+              style={styles.input}
               placeholder="Address"
-              placeholderTextColor={theme.textSecondary}
+              placeholderTextColor={BrandColors.gray[500]}
               value={address}
               onChangeText={setAddress}
             />
           </View>
 
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundElevated, minHeight: 80, alignItems: "flex-start" }]}>
-            <Feather name="file-text" size={20} color={theme.textSecondary} style={{ marginTop: 4 }} />
+          <View style={[styles.inputWrap, styles.textAreaWrap]}>
+            <Feather
+              name="file-text"
+              size={16}
+              color={BrandColors.gray[600]}
+              style={{ marginTop: 14 }}
+            />
             <TextInput
-              style={[styles.input, { color: theme.text, height: 70 }]}
-              placeholder="Description (landmarks, queue location, etc.)"
-              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, styles.textArea]}
+              placeholder="Description (landmarks, queue location...)"
+              placeholderTextColor={BrandColors.gray[500]}
               value={description}
               onChangeText={setDescription}
               multiline
               textAlignVertical="top"
             />
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText type="label" style={styles.sectionTitle}>GPS Coordinates</ThemedText>
-          <View style={[styles.locationCard, { backgroundColor: theme.backgroundElevated }]}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(180).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>GPS coordinates</ThemedText>
+          <View style={styles.gpsCard}>
             {isLoadingLocation ? (
-              <View style={styles.loadingLocation}>
-                <ActivityIndicator size="small" color={BrandColors.primary.blue} />
-                <ThemedText style={{ marginLeft: Spacing.sm }}>Getting location...</ThemedText>
+              <View style={styles.gpsRow}>
+                <ActivityIndicator size="small" color={BrandColors.primary.gradientStart} />
+                <ThemedText style={styles.gpsMutedText}>Getting location...</ThemedText>
               </View>
-            ) : latitude && longitude ? (
-              <View>
-                <View style={styles.coordinateRow}>
-                  <Feather name="crosshair" size={16} color={BrandColors.secondary.green} />
-                  <ThemedText style={{ marginLeft: Spacing.sm }}>
+            ) : latitude !== null && longitude !== null ? (
+              <>
+                <View style={styles.gpsRow}>
+                  <View style={styles.gpsIconWrap}>
+                    <Feather
+                      name="crosshair"
+                      size={16}
+                      color={BrandColors.status.success}
+                    />
+                  </View>
+                  <ThemedText style={styles.gpsValue}>
                     {latitude.toFixed(6)}, {longitude.toFixed(6)}
                   </ThemedText>
                 </View>
                 <Pressable
-                  style={[styles.refreshButton, { borderColor: theme.border }]}
+                  style={styles.refreshButton}
                   onPress={getCurrentLocation}
                 >
-                  <Feather name="refresh-cw" size={14} color={theme.textSecondary} />
-                  <ThemedText type="small" style={{ marginLeft: Spacing.xs, color: theme.textSecondary }}>
-                    Update Location
-                  </ThemedText>
+                  <Feather name="refresh-cw" size={16} color={BrandColors.primary.gradientStart} />
+                  <ThemedText style={styles.refreshButtonText}>Update location</ThemedText>
                 </Pressable>
-              </View>
+              </>
             ) : (
-              <Pressable style={styles.getLocationButton} onPress={getCurrentLocation}>
-                <Feather name="navigation" size={20} color={BrandColors.primary.blue} />
-                <ThemedText style={{ marginLeft: Spacing.sm, color: BrandColors.primary.blue }}>
-                  Get Current Location
-                </ThemedText>
+              <Pressable style={styles.gpsRow} onPress={getCurrentLocation}>
+                <View style={styles.gpsIconWrap}>
+                  <Feather
+                    name="navigation"
+                    size={16}
+                    color={BrandColors.primary.gradientStart}
+                  />
+                </View>
+                <ThemedText style={styles.getGpsText}>Get current location</ThemedText>
               </Pressable>
             )}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.infoBox}>
-          <Feather name="info" size={16} color={BrandColors.primary.blue} />
-          <ThemedText type="small" style={{ flex: 1, marginLeft: Spacing.sm, color: theme.textSecondary }}>
-            Your contribution will be reviewed by the community. Verified stops help other commuters find safe pickup points.
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(240).duration(400)}>
+          <GradientButton
+            onPress={handleSubmit}
+            disabled={!isFormValid || mutation.isPending}
+            icon={mutation.isPending ? undefined : "check"}
+          >
+            {mutation.isPending ? "Submitting..." : "Submit stop"}
+          </GradientButton>
+          <ThemedText style={styles.footerNote}>
+            Your contribution will be reviewed by the community before appearing on the map.
           </ThemedText>
-        </View>
-
-        <Pressable
-          style={[
-            styles.submitButton,
-            { backgroundColor: isFormValid ? BrandColors.secondary.green : BrandColors.gray[400] },
-          ]}
-          onPress={handleSubmit}
-          disabled={!isFormValid || mutation.isPending}
-        >
-          {mutation.isPending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Feather name="check" size={20} color="#FFFFFF" />
-              <ThemedText style={styles.submitText}>Submit Location</ThemedText>
-            </>
-          )}
-        </Pressable>
+        </Animated.View>
       </KeyboardAwareScrollViewCompat>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -276,17 +334,83 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xl * 2,
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
+    borderBottomLeftRadius: BorderRadius["2xl"],
+    borderBottomRightRadius: BorderRadius["2xl"],
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  heroCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  heroBadgeText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  heroSpacer: {
+    width: 40,
+  },
+  heroTitle: {
+    ...Typography.h1,
+    color: "#FFFFFF",
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: Spacing.xs,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: -Spacing["2xl"],
+  },
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.primary.gradientStart + "0A",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "25",
+  },
+  infoText: {
+    ...Typography.small,
+    flex: 1,
+    color: BrandColors.gray[700],
   },
   section: {
-    marginBottom: Spacing.xl,
+    marginTop: Spacing.xl,
   },
-  sectionTitle: {
-    marginBottom: Spacing.md,
+  sectionLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[700],
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+    marginBottom: Spacing.md,
   },
   typeGrid: {
     flexDirection: "row",
@@ -294,73 +418,125 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   typeButton: {
-    flex: 1,
-    minWidth: "30%",
+    flexBasis: "31%",
+    flexGrow: 1,
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+  },
+  typeButtonActive: {
+    backgroundColor: BrandColors.primary.gradientStart + "0A",
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  typeIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  typeIconWrapActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
   },
   typeLabel: {
-    fontSize: 11,
+    ...Typography.label,
+    fontWeight: "600",
+    color: BrandColors.gray[700],
     textAlign: "center",
   },
-  inputContainer: {
+  typeLabelActive: {
+    color: BrandColors.primary.gradientStart,
+    fontWeight: "700",
+  },
+  inputWrap: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.sm,
     gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: "#FFFFFF",
+    marginBottom: Spacing.sm,
+  },
+  textAreaWrap: {
+    alignItems: "flex-start",
+    minHeight: 90,
   },
   input: {
+    ...Typography.body,
     flex: 1,
-    fontSize: 16,
+    height: 48,
+    color: BrandColors.gray[900],
   },
-  locationCard: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.sm,
+  textArea: {
+    minHeight: 84,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    height: undefined,
   },
-  loadingLocation: {
+  gpsCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    gap: Spacing.md,
+  },
+  gpsRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: Spacing.sm,
   },
-  coordinateRow: {
-    flexDirection: "row",
+  gpsIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
     alignItems: "center",
-    marginBottom: Spacing.md,
+    justifyContent: "center",
+  },
+  gpsValue: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.gray[900],
+    fontVariant: ["tabular-nums"],
+    flex: 1,
+  },
+  gpsMutedText: {
+    ...Typography.body,
+    color: BrandColors.gray[600],
+  },
+  getGpsText: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
   },
   refreshButton: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
     alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
   },
-  getLocationButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoBox: {
-    flexDirection: "row",
-    padding: Spacing.md,
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.xl,
-  },
-  submitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.sm,
-  },
-  submitText: {
-    color: "#FFFFFF",
+  refreshButtonText: {
+    ...Typography.small,
     fontWeight: "700",
-    fontSize: 16,
+    color: BrandColors.primary.gradientStart,
+  },
+  footerNote: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    textAlign: "center",
+    marginTop: Spacing.md,
   },
 });

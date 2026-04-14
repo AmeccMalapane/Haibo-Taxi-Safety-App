@@ -159,7 +159,11 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
         </View>
         <ThemedText style={styles.commentText}>{item.content}</ThemedText>
         <View style={styles.commentActions}>
-          <Pressable style={styles.commentAction}>
+          <Pressable
+            style={styles.commentAction}
+            accessibilityRole="button"
+            accessibilityLabel="Like comment"
+          >
             <Feather name="heart" size={14} color={theme.textSecondary} />
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
               {item.likes}
@@ -188,7 +192,12 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.modalContainer}
       >
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close comments"
+        />
         
         <GestureDetector gesture={panGesture}>
           <Animated.View
@@ -204,7 +213,12 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
               <ThemedText style={styles.title}>
                 {commentCount} Comments
               </ThemedText>
-              <Pressable onPress={handleClose} style={styles.closeButton}>
+              <Pressable
+                onPress={handleClose}
+                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
@@ -255,6 +269,9 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
                   ]}
                   onPress={handleSubmitComment}
                   disabled={!newComment.trim()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send comment"
+                  accessibilityState={{ disabled: !newComment.trim() }}
                 >
                   <Feather
                     name="send"

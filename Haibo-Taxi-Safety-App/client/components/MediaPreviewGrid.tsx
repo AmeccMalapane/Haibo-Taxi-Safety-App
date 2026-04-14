@@ -72,6 +72,8 @@ function MediaThumbnail({
         { backgroundColor: theme.backgroundDefault },
       ]}
       onPress={onView}
+      accessibilityRole="button"
+      accessibilityLabel={`Preview ${item.type} evidence`}
     >
       {item.type === "photo" && item.uri ? (
         <Image
@@ -104,7 +106,12 @@ function MediaThumbnail({
           </ThemedText>
         </View>
       ) : null}
-      <Pressable style={styles.removeButton} onPress={handleRemove}>
+      <Pressable
+        style={styles.removeButton}
+        onPress={handleRemove}
+        accessibilityRole="button"
+        accessibilityLabel="Remove evidence"
+      >
         <Feather name="x" size={14} color="#FFFFFF" />
       </Pressable>
       {item.location ? (

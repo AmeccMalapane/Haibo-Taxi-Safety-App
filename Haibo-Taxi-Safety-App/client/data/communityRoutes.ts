@@ -118,7 +118,7 @@ export const BADGE_CONFIG = {
   newcomer: { label: "Newcomer", color: "#9E9E9E", minPoints: 0 },
   contributor: { label: "Contributor", color: "#1976D2", minPoints: 50 },
   expert: { label: "Expert", color: "#FF9800", minPoints: 200 },
-  legend: { label: "Legend", color: "#E72369", minPoints: 500 },
+  legend: { label: "Legend", color: "#C81E5E", minPoints: 500 },
 };
 
 // ─── Points System ──────────────────────────────────────────────────────────

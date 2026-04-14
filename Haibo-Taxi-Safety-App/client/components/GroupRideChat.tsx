@@ -110,7 +110,11 @@ export default function GroupRideChat({ rideId, onClose }: GroupRideChatProps) {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <ThemedText style={styles.headerTitle}>Ride Chat</ThemedText>
-        <Pressable onPress={onClose}>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close chat"
+        >
           <Feather name="x" size={22} color={theme.text} />
         </Pressable>
       </View>
@@ -147,6 +151,9 @@ export default function GroupRideChat({ rideId, onClose }: GroupRideChatProps) {
           style={[styles.sendButton, { opacity: inputText.trim() ? 1 : 0.4 }]}
           onPress={handleSend}
           disabled={!inputText.trim()}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          accessibilityState={{ disabled: !inputText.trim() }}
         >
           <Feather name="send" size={20} color="#fff" />
         </Pressable>

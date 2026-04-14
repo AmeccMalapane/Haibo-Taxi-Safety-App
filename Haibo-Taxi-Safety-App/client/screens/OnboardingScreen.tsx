@@ -14,6 +14,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import type { SvgProps } from "react-native-svg";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
@@ -78,6 +79,7 @@ interface OnboardingScreenProps {
 }
 
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -157,7 +159,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       {/* Skip button overlays the gradient (top-right) — outside the carousel
           so it doesn't swipe away with the slides */}
       <Animated.View
-        entering={FadeIn.duration(300)}
+        entering={reducedMotion ? undefined : FadeIn.duration(300)}
         style={[styles.skipRow, { top: insets.top + Spacing.md }]}
       >
         <Pressable
@@ -188,7 +190,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
       {/* Anchored footer — pagination + CTA */}
       <Animated.View
-        entering={FadeInUp.duration(500).delay(200)}
+        entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
         style={[
           styles.footer,
           {
@@ -217,7 +219,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           })}
         </View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(300)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(300)}>
           <GradientButton
             onPress={handleNext}
             size="large"

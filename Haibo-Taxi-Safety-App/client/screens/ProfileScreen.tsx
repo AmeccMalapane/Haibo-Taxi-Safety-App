@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BrandColors,
@@ -50,6 +51,7 @@ const USER_ROLE_LABELS: Record<string, { label: string; icon: keyof typeof Feath
 };
 
 export default function ProfileScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { user, isAuthenticated, logout } = useAuth();
@@ -194,7 +196,7 @@ export default function ProfileScreen() {
           style={[styles.hero, { paddingTop: insets.top + Spacing.xl }]}
         >
           <Animated.View
-            entering={FadeIn.duration(400)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400)}
             style={styles.heroAvatarWrap}
           >
             <View style={styles.avatarRing}>
@@ -205,7 +207,7 @@ export default function ProfileScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(100)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(100)}
             style={styles.heroTextWrap}
           >
             <View style={styles.nameRow}>
@@ -214,7 +216,7 @@ export default function ProfileScreen() {
               </ThemedText>
               {isVerified ? (
                 <View style={styles.verifiedDot}>
-                  <Feather name="check" size={11} color={BrandColors.primary.gradientStart} />
+                  <Feather name="check" size={12} color={BrandColors.primary.gradientStart} />
                 </View>
               ) : null}
             </View>
@@ -246,7 +248,7 @@ export default function ProfileScreen() {
 
         {/* Stats strip — single rounded card with vertical dividers */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.statsCard,
             {
@@ -269,7 +271,7 @@ export default function ProfileScreen() {
         {/* Sign-in CTA when not authenticated */}
         {!isAuthenticated ? (
           <Animated.View
-            entering={FadeInDown.duration(500).delay(300)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(300)}
             style={styles.signInPrompt}
           >
             <Pressable
@@ -301,7 +303,7 @@ export default function ProfileScreen() {
 
         {/* Menu */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(300)}
           style={styles.menuSection}
         >
           <ThemedText
@@ -375,7 +377,7 @@ export default function ProfileScreen() {
         {/* Sign-out — only when authenticated */}
         {isAuthenticated ? (
           <Animated.View
-            entering={FadeInDown.duration(500).delay(400)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(400)}
             style={styles.signOutWrap}
           >
             <Pressable

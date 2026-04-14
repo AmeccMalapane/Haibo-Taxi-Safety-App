@@ -26,7 +26,6 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (phone: string, password?: string) => Promise<{ success: boolean; error?: string }>;
-  loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
   sendOTP: (phone: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (phone: string, code: string) => Promise<{ success: boolean; error?: string }>;
@@ -197,32 +196,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loginWithEmail = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      if (!getApiUrl()) return { success: false, error: "API not configured" };
-
-      const data = await apiRequest("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-
-      await persistAuth(data.token, data.refreshToken, data.user);
-      setState({
-        user: data.user,
-        token: data.token,
-        refreshToken: data.refreshToken,
-        isAuthenticated: true,
-        isLoading: false,
-        isGuest: false,
-      });
-
-      return { success: true };
-    } catch (error: any) {
-      const msg = error.message?.includes("401") ? "Invalid email or password" : "Login failed. Please try again.";
-      return { success: false, error: msg };
-    }
-  }, []);
-
   const register = useCallback(async (regData: RegisterData): Promise<{ success: boolean; error?: string }> => {
     try {
       if (!getApiUrl()) return { success: false, error: "API not configured" };
@@ -333,7 +306,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       ...state,
       login,
-      loginWithEmail,
       register,
       sendOTP,
       verifyOTP,

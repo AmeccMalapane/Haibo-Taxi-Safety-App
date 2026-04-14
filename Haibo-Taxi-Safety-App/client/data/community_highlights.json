@@ -9,7 +9,7 @@
     "time": "10:00 AM",
     "location": "Johannesburg City Hall",
     "icon": "calendar",
-    "color": "#E72369",
+    "color": "#C81E5E",
     "badge": "Upcoming Event",
     "cta": "Learn More"
   },
@@ -91,7 +91,7 @@
     "time": "2:00 PM",
     "location": "Constitution Hill, JHB",
     "icon": "shield",
-    "color": "#E72369",
+    "color": "#C81E5E",
     "badge": "Forum",
     "cta": "Register"
   }

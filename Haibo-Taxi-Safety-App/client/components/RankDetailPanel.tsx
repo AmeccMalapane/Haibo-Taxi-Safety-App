@@ -60,7 +60,12 @@ export function RankDetailPanel({ rank, onClose, onViewRoutes, onNavigate }: Ran
             </ThemedText>
           </View>
         </View>
-        <Pressable onPress={onClose} style={styles.closeButton}>
+        <Pressable
+          onPress={onClose}
+          style={styles.closeButton}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
           <Feather name="x" size={20} color={theme.textSecondary} />
         </Pressable>
       </View>

@@ -223,7 +223,12 @@ export default function NewPostModal({ visible, onClose, onSubmit }: NewPostModa
                   {MEDIA_OPTIONS.find((m) => m.id === selectedMedia)?.label} attached
                 </ThemedText>
               </View>
-              <Pressable onPress={() => setSelectedMedia(null)} style={styles.removeMediaButton}>
+              <Pressable
+                onPress={() => setSelectedMedia(null)}
+                style={styles.removeMediaButton}
+                accessibilityRole="button"
+                accessibilityLabel="Remove attached media"
+              >
                 <Feather name="x" size={20} color={theme.textSecondary} />
               </Pressable>
             </View>

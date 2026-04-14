@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   FlatList,
@@ -7,13 +7,11 @@ import {
   Alert,
   TextInput,
   Modal,
-  ActivityIndicator,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,14 +27,14 @@ import {
   generateId,
 } from "@/lib/storage";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
-import { getDeviceId } from "@/lib/deviceId";
+import { checkPaystackStatus, runPaystackTopup } from "@/lib/paystack";
 
 const TOP_UP_AMOUNTS = [50, 100, 200, 500];
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { theme } = useTheme();
+  const { isAuthenticated, user } = useAuth();
 
   const [balance, setBalance] = useState<WalletBalance>({
     amount: 0,
@@ -46,7 +44,7 @@ export default function PaymentScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(user?.email || "");
   const [paystackConfigured, setPaystackConfigured] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -78,21 +76,15 @@ export default function PaymentScreen() {
     }
   }, [isAuthenticated]);
 
-  const checkPaystackStatus = useCallback(async () => {
-    try {
-      const data = await apiRequest("/api/paystack/status", { method: "GET" });
-      setPaystackConfigured(!!data?.configured);
-    } catch (error) {
-      console.log("Paystack status check failed, using local mode");
-      setPaystackConfigured(false);
-    }
+  const refreshPaystackStatus = useCallback(async () => {
+    setPaystackConfigured(await checkPaystackStatus());
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
-      checkPaystackStatus();
-    }, [loadData, checkPaystackStatus])
+      refreshPaystackStatus();
+    }, [loadData, refreshPaystackStatus])
   );
 
   const triggerHaptics = async (type: "impact" | "success" | "error") => {
@@ -160,68 +152,32 @@ export default function PaymentScreen() {
 
     setIsLoading(true);
     triggerHaptics("impact");
+    setShowTopUpModal(false);
 
-    try {
-      const deviceId = await getDeviceId();
-      const response = await apiRequest("/api/paystack/initialize", {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          amount: selectedAmount,
-          userId: deviceId,
-          purpose: "haibo_wallet_topup",
-        }),
-      });
+    const result = await runPaystackTopup({ email, amount: selectedAmount });
 
-      if (response.success && response.authorization_url) {
-        setShowTopUpModal(false);
-        
-        const result = await WebBrowser.openBrowserAsync(response.authorization_url, {
-          showTitle: true,
-          enableBarCollapsing: true,
-        });
-
-        if (result.type === "cancel" || result.type === "dismiss") {
-          const verifyResponse = await apiRequest(
-            `/api/paystack/verify/${response.reference}`,
-            { method: "GET" }
-          );
-
-          if (verifyResponse.verified) {
-            const newBalance: WalletBalance = {
-              amount: balance.amount + selectedAmount,
-              lastUpdated: new Date().toISOString(),
-            };
-
-            const transaction: Transaction = {
-              id: generateId(),
-              type: "top_up",
-              amount: selectedAmount,
-              description: `Wallet top-up via Paystack`,
-              createdAt: new Date().toISOString(),
-            };
-
-            await saveWalletBalance(newBalance);
-            await addTransaction(transaction);
-
-            setBalance(newBalance);
-            setTransactions((prev) => [transaction, ...prev]);
-
-            triggerHaptics("success");
-            Alert.alert("Success", `R${selectedAmount} has been added to your wallet.`);
-          }
-        }
-      } else {
-        throw new Error(response.message || "Failed to initialize payment");
-      }
-    } catch (error: any) {
-      console.error("Payment error:", error);
+    // The server credits the wallet inside /verify with idempotency, so we
+    // just refetch balance + transactions instead of mutating local state.
+    if (result.status === "success") {
+      await loadData();
+      triggerHaptics("success");
+      Alert.alert(
+        "Top-up complete",
+        `R${result.amount.toFixed(2)} has been added to your wallet.`
+      );
+    } else if (result.status === "cancelled") {
       triggerHaptics("error");
-      Alert.alert("Payment Failed", error.message || "Failed to process payment. Please try again.");
-    } finally {
-      setIsLoading(false);
-      setSelectedAmount(null);
+      Alert.alert(
+        "Payment not completed",
+        "Paystack didn't confirm the payment. If you did pay, it'll show up once the bank confirms."
+      );
+    } else {
+      triggerHaptics("error");
+      Alert.alert("Payment failed", result.message);
     }
+
+    setIsLoading(false);
+    setSelectedAmount(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -364,7 +320,11 @@ export default function PaymentScreen() {
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
               <ThemedText type="h4">Top-Up Wallet</ThemedText>
-              <Pressable onPress={() => setShowTopUpModal(false)}>
+              <Pressable
+                onPress={() => setShowTopUpModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>

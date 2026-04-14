@@ -1,12 +1,13 @@
-import React, { useState, useEffect, Component, PropsWithChildren } from "react";
+import React, { useState, useEffect, Component, PropsWithChildren, useMemo } from "react";
 import { StyleSheet, View, ActivityIndicator, Text, ScrollView, Pressable } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, LinkingOptions } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
+import * as Linking from "expo-linking";
 import { Feather, Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import {
   SpaceGrotesk_500Medium,
@@ -25,11 +26,12 @@ import { queryClient } from "@/lib/query-client";
 
 SplashScreen.preventAutoHideAsync();
 
-import RootStackNavigator from "@/navigation/RootStackNavigator";
+import RootStackNavigator, { RootStackParamList } from "@/navigation/RootStackNavigator";
 import OnboardingScreen from "@/screens/OnboardingScreen";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { useAuth } from "@/hooks/useAuth";
+import { getLinkingConfig } from "@/lib/deepLinks";
 import { registerForPushNotifications, onNotificationReceived, onNotificationTapped } from "@/lib/notifications";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 
@@ -53,7 +55,7 @@ class SafeErrorBoundary extends Component<PropsWithChildren<{}>, SafeErrorState>
     if (this.state.error) {
       return (
         <View style={{ flex: 1, backgroundColor: "#ffffff", padding: 24, paddingTop: 60 }}>
-          <Text style={{ color: "#E72369", fontSize: 22, fontWeight: "bold", marginBottom: 8 }}>
+          <Text style={{ color: "#C81E5E", fontSize: 22, fontWeight: "bold", marginBottom: 8 }}>
             Something went wrong
           </Text>
           <Text style={{ color: "#333333", fontSize: 14, marginBottom: 16 }}>
@@ -62,7 +64,7 @@ class SafeErrorBoundary extends Component<PropsWithChildren<{}>, SafeErrorState>
           <Pressable
             onPress={() => this.setState({ error: null, errorInfo: "" })}
             style={{
-              backgroundColor: "#E72369",
+              backgroundColor: "#C81E5E",
               paddingVertical: 12,
               paddingHorizontal: 24,
               borderRadius: 8,
@@ -76,7 +78,7 @@ class SafeErrorBoundary extends Component<PropsWithChildren<{}>, SafeErrorState>
             <Text style={{ color: "#666666", fontSize: 11, fontFamily: "monospace" }}>
               {this.state.error.stack}
             </Text>
-            <Text style={{ color: "#E72369", fontSize: 13, fontWeight: "bold", marginTop: 16 }}>
+            <Text style={{ color: "#C81E5E", fontSize: 13, fontWeight: "bold", marginTop: 16 }}>
               Component Stack:
             </Text>
             <Text style={{ color: "#666666", fontSize: 11, fontFamily: "monospace" }}>
@@ -145,7 +147,7 @@ function AuthGatedApp() {
   if (authLoading || !onboardingChecked) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E72369" />
+        <ActivityIndicator size="large" color="#C81E5E" />
       </View>
     );
   }
@@ -155,9 +157,28 @@ function AuthGatedApp() {
     return <OnboardingScreen onComplete={handleOnboardingComplete} />;
   }
 
+  // Deep-link linking config — wires haibo-taxi:// and https://haibo.africa
+  // URLs to root-stack screens via the shared map in lib/deepLinks.ts.
+  // Supports inbound sharing from other apps (share sheet → Haibo) and
+  // opening shared links (friend shares a route → opens RouteDetail).
+  const linking = useMemo<LinkingOptions<RootStackParamList>>(
+    () => ({
+      prefixes: [
+        Linking.createURL("/"),
+        "haibo-taxi://",
+        "https://haibo.africa",
+        "https://www.haibo.africa",
+      ],
+      config: {
+        screens: getLinkingConfig() as any,
+      },
+    }),
+    []
+  );
+
   // Main app — RootStackNavigator handles auth vs main routing
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <RootStackNavigator />
       <StatusBar style="auto" />
     </NavigationContainer>
@@ -202,7 +223,7 @@ function AppWithFonts() {
   if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E72369" />
+        <ActivityIndicator size="large" color="#C81E5E" />
       </View>
     );
   }

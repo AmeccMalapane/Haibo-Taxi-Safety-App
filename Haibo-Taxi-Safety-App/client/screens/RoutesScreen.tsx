@@ -5,20 +5,21 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
   Platform,
 } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { HeroBanner } from "@/components/HeroBanner";
 import { TaxiRoute } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getTaxiRoutes, getTaxiProvinces } from "@/lib/localData";
+import { getTaxiProvinces } from "@/lib/localData";
 import { useRoutes } from "@/hooks/useApiData";
 
 type RoutesStackParamList = {
@@ -32,33 +33,44 @@ const ROUTE_TYPE_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   intercity: "globe",
 };
 
-// Memoized Route Card for smooth scrolling
-const RouteCard = memo(({ 
-  route, 
-  onPress, 
-  theme, 
-  getSafetyColor 
-}: { 
-  route: TaxiRoute; 
-  onPress: (route: TaxiRoute) => void; 
-  theme: any;
+const ROUTE_CARD_HEIGHT = 150;
+const SECTION_HEADER_HEIGHT = 50;
+
+interface RouteCardProps {
+  route: TaxiRoute;
+  onPress: (route: TaxiRoute) => void;
+  cardSurface: string;
   getSafetyColor: (score?: number) => string;
-}) => {
+}
+
+const RouteCard = memo(function RouteCard({
+  route,
+  onPress,
+  cardSurface,
+  getSafetyColor,
+}: RouteCardProps) {
   const routeTypeIcon = ROUTE_TYPE_ICONS[route.routeType || "local"] || "navigation";
   const safetyColor = getSafetyColor(route.safetyScore);
-  
+
   return (
     <Pressable
-      style={[styles.routeCard, { backgroundColor: theme.backgroundDefault }]}
+      style={[styles.routeCard, { backgroundColor: cardSurface }]}
       onPress={() => onPress(route)}
     >
       <View style={styles.routeHeader}>
         <View style={styles.routeInfo}>
-          <ThemedText style={styles.routeOrigin}>{route.origin}</ThemedText>
-          <View style={styles.arrowContainer}>
-            <Feather name="arrow-right" size={16} color={BrandColors.primary.blue} />
-          </View>
-          <ThemedText style={styles.routeDestination}>{route.destination}</ThemedText>
+          <ThemedText style={styles.routeOrigin} numberOfLines={1}>
+            {route.origin}
+          </ThemedText>
+          <Feather
+            name="arrow-right"
+            size={16}
+            color={BrandColors.primary.gradientStart}
+            style={styles.routeArrow}
+          />
+          <ThemedText style={styles.routeDestination} numberOfLines={1}>
+            {route.destination}
+          </ThemedText>
         </View>
         <View style={styles.fareContainer}>
           <ThemedText style={styles.fareLabel}>Fare</ThemedText>
@@ -72,17 +84,15 @@ const RouteCard = memo(({
         <View style={styles.detailRow}>
           {route.estimatedTime ? (
             <View style={styles.detailItem}>
-              <Feather name="clock" size={14} color={theme.textSecondary} />
-              <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 4 }}>
-                {route.estimatedTime}
-              </ThemedText>
+              <Feather name="clock" size={13} color={BrandColors.gray[600]} />
+              <ThemedText style={styles.detailText}>{route.estimatedTime}</ThemedText>
             </View>
           ) : null}
-          
+
           {route.distance ? (
             <View style={styles.detailItem}>
-              <Feather name="map-pin" size={14} color={theme.textSecondary} />
-              <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 4 }}>
+              <Feather name="map-pin" size={13} color={BrandColors.gray[600]} />
+              <ThemedText style={styles.detailText}>
                 {route.distance.toFixed(1)} km
               </ThemedText>
             </View>
@@ -90,15 +100,27 @@ const RouteCard = memo(({
         </View>
 
         <View style={styles.tagsRow}>
-          <View style={[styles.routeTypeTag, { backgroundColor: `${BrandColors.primary.blue}20` }]}>
-            <Feather name={routeTypeIcon} size={12} color={BrandColors.primary.blue} />
-            <ThemedText style={[styles.tagText, { color: BrandColors.primary.blue }]}>
-              {(route.routeType || "local").charAt(0).toUpperCase() + (route.routeType || "local").slice(1)}
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: BrandColors.primary.gradientStart + "12" },
+            ]}
+          >
+            <Feather
+              name={routeTypeIcon}
+              size={12}
+              color={BrandColors.primary.gradientStart}
+            />
+            <ThemedText
+              style={[styles.tagText, { color: BrandColors.primary.gradientStart }]}
+            >
+              {(route.routeType || "local").charAt(0).toUpperCase() +
+                (route.routeType || "local").slice(1)}
             </ThemedText>
           </View>
 
           {route.safetyScore ? (
-            <View style={[styles.safetyTag, { backgroundColor: `${safetyColor}20` }]}>
+            <View style={[styles.tag, { backgroundColor: `${safetyColor}1A` }]}>
               <Feather name="shield" size={12} color={safetyColor} />
               <ThemedText style={[styles.tagText, { color: safetyColor }]}>
                 {route.safetyScore.toFixed(1)}
@@ -113,14 +135,16 @@ const RouteCard = memo(({
 
 export default function RoutesScreen() {
   const tabBarHeight = useBottomTabBarHeight();
-  const { theme } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RoutesStackParamList & RootStackParamList>>();
+  const { theme, isDark } = useTheme();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RoutesStackParamList & RootStackParamList>>();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("All Regions");
 
   const provinces = useMemo(() => getTaxiProvinces(), []);
   const { data: allRoutes = [] } = useRoutes();
+  const cardSurface = isDark ? theme.surface : "#FFFFFF";
 
   const routes = useMemo(() => {
     if (selectedRegion === "All Regions") return allRoutes;
@@ -142,7 +166,7 @@ export default function RoutesScreen() {
   const groupedData = useMemo(() => {
     const result: { type: "header" | "route"; data: string | TaxiRoute }[] = [];
     const groups: Record<string, TaxiRoute[]> = {};
-    
+
     filteredRoutes.forEach((route) => {
       const region = route.province || route.region || "Other";
       if (!groups[region]) groups[region] = [];
@@ -158,142 +182,225 @@ export default function RoutesScreen() {
     return result;
   }, [filteredRoutes]);
 
-  const handleRoutePress = useCallback(async (route: TaxiRoute) => {
-    try {
-      const Haptics = await import("expo-haptics");
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
-    navigation.navigate("RouteDetail", { routeId: route.id });
-  }, [navigation]);
+  const handleRoutePress = useCallback(
+    (route: TaxiRoute) => {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      navigation.navigate("RouteDetail", { routeId: route.id });
+    },
+    [navigation]
+  );
 
   const getSafetyColor = useCallback((score?: number) => {
     if (!score) return BrandColors.gray[400];
-    if (score >= 4) return BrandColors.primary.green;
+    if (score >= 4) return BrandColors.status.success;
     if (score >= 3) return BrandColors.secondary.orange;
-    return "#E74C3C";
+    return BrandColors.status.emergency;
   }, []);
 
-  const renderItem = useCallback(({ item }: { item: any }) => {
-    if (item.type === "header") {
+  const renderItem = useCallback(
+    ({ item }: { item: any }) => {
+      if (item.type === "header") {
+        return (
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>{item.data}</ThemedText>
+            <View style={styles.sectionLine} />
+          </View>
+        );
+      }
       return (
-        <View style={styles.sectionHeader}>
-          <ThemedText style={styles.sectionTitle}>{item.data}</ThemedText>
-          <View style={styles.sectionLine} />
-        </View>
+        <RouteCard
+          route={item.data}
+          onPress={handleRoutePress}
+          cardSurface={cardSurface}
+          getSafetyColor={getSafetyColor}
+        />
       );
-    }
-    return (
-      <RouteCard 
-        route={item.data} 
-        onPress={handleRoutePress} 
-        theme={theme} 
-        getSafetyColor={getSafetyColor} 
-      />
-    );
-  }, [handleRoutePress, theme, getSafetyColor]);
+    },
+    [handleRoutePress, cardSurface, getSafetyColor]
+  );
 
-  const handleContributePress = useCallback(async () => {
-    try {
-      const Haptics = await import("expo-haptics");
+  const handleContributePress = useCallback(() => {
+    if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {}
+    }
     navigation.navigate("ContributeRoute");
   }, [navigation]);
 
-  const renderListHeader = useMemo(() => (
-    <>
-      <HeroBanner onContributePress={handleContributePress} />
-      <View style={[styles.searchContainer, { backgroundColor: theme.backgroundDefault }]}>
-        <Feather name="search" size={20} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search routes, destinations..."
-          placeholderTextColor={theme.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery("")}>
-            <Feather name="x" size={20} color={theme.textSecondary} />
-          </Pressable>
-        )}
-      </View>
-      <View style={styles.filterContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={provinces}
-          keyExtractor={(item) => item}
-          contentContainerStyle={styles.filterList}
-          renderItem={({ item }) => (
+  const handleSelectRegion = useCallback((region: string) => {
+    if (Platform.OS !== "web") {
+      Haptics.selectionAsync();
+    }
+    setSelectedRegion(region);
+  }, []);
+
+  const renderListHeader = useMemo(
+    () => (
+      <>
+        <HeroBanner onContributePress={handleContributePress} />
+        <View style={[styles.searchContainer, { backgroundColor: cardSurface }]}>
+          <Feather name="search" size={18} color={BrandColors.gray[600]} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search routes, destinations..."
+            placeholderTextColor={BrandColors.gray[500]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 ? (
             <Pressable
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: selectedRegion === item ? BrandColors.primary.blue : theme.backgroundDefault,
-                },
-              ]}
-              onPress={async () => {
-                try {
-                  const Haptics = await import("expo-haptics");
-                  Haptics.selectionAsync();
-                } catch {}
-                setSelectedRegion(item);
-              }}
+              onPress={() => setSearchQuery("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
             >
-              <ThemedText style={[styles.filterChipText, { color: selectedRegion === item ? "#FFFFFF" : theme.text }]}>
-                {item}
-              </ThemedText>
+              <Feather name="x" size={18} color={BrandColors.gray[600]} />
             </Pressable>
-          )}
-        />
+          ) : null}
+        </View>
+        <View style={styles.filterContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={provinces}
+            keyExtractor={(item) => item}
+            contentContainerStyle={styles.filterList}
+            renderItem={({ item }) => {
+              const active = selectedRegion === item;
+              return (
+                <Pressable
+                  style={[
+                    styles.filterChip,
+                    active ? styles.filterChipActive : { backgroundColor: cardSurface },
+                  ]}
+                  onPress={() => handleSelectRegion(item)}
+                >
+                  <ThemedText
+                    style={[
+                      styles.filterChipText,
+                      active && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {item}
+                  </ThemedText>
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+      </>
+    ),
+    [
+      handleContributePress,
+      handleSelectRegion,
+      cardSurface,
+      theme.text,
+      searchQuery,
+      selectedRegion,
+      provinces,
+    ]
+  );
+
+  const renderEmpty = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconWrap}>
+          <Feather name="search" size={28} color={BrandColors.primary.gradientStart} />
+        </View>
+        <ThemedText style={styles.emptyTitle}>No routes found</ThemedText>
+        <ThemedText style={styles.emptySubtitle}>
+          {searchQuery
+            ? `Try a different search or clear filters.`
+            : `No routes for ${selectedRegion} yet. Be the first to contribute one.`}
+        </ThemedText>
+        <Pressable onPress={handleContributePress} style={styles.emptyCta}>
+          <Feather name="plus-circle" size={16} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.emptyCtaText}>Contribute a route</ThemedText>
+        </Pressable>
       </View>
-    </>
-  ), [handleContributePress, theme, searchQuery, selectedRegion, provinces]);
+    ),
+    [searchQuery, selectedRegion, handleContributePress]
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
       <FlatList
         data={groupedData}
-        keyExtractor={(item, index) => item.type === "header" ? `h-${item.data}` : `r-${(item.data as TaxiRoute).id}-${index}`}
+        keyExtractor={(item, index) =>
+          item.type === "header"
+            ? `h-${item.data}`
+            : `r-${(item.data as TaxiRoute).id}-${index}`
+        }
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}
+        ListEmptyComponent={renderEmpty}
         contentContainerStyle={{ paddingBottom: tabBarHeight + Spacing.xl }}
-        // Performance optimizations
         initialNumToRender={8}
         maxToRenderPerBatch={10}
         windowSize={5}
-        removeClippedSubviews={Platform.OS === 'android'}
-        getItemLayout={(data, index) => ({
-          length: data?.[index]?.type === 'header' ? 50 : 160,
-          offset: (data?.[index]?.type === 'header' ? 50 : 160) * index,
-          index,
-        })}
+        removeClippedSubviews={Platform.OS === "android"}
+        getItemLayout={(data, index) => {
+          const isHeader = data?.[index]?.type === "header";
+          const length = isHeader ? SECTION_HEADER_HEIGHT : ROUTE_CARD_HEIGHT;
+          return { length, offset: length * index, index };
+        }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    margin: Spacing.lg,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
     paddingHorizontal: Spacing.md,
     height: 50,
     borderRadius: BorderRadius.md,
-    elevation: 2,
+    gap: Spacing.sm,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  searchInput: { flex: 1, marginLeft: Spacing.sm, fontSize: 16 },
-  filterContainer: { marginBottom: Spacing.md },
-  filterList: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  filterChipText: { fontSize: 14, fontWeight: "600" },
+  searchInput: {
+    ...Typography.body,
+    flex: 1,
+  },
+  filterContainer: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  filterList: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  filterChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+  },
+  filterChipActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  filterChipText: {
+    ...Typography.small,
+    fontWeight: "600",
+    color: BrandColors.gray[700],
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -302,33 +409,142 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     height: 30,
   },
-  sectionTitle: { fontSize: 13, fontWeight: "800", color: BrandColors.primary.blue, textTransform: "uppercase", letterSpacing: 1 },
-  sectionLine: { flex: 1, height: 1, backgroundColor: BrandColors.primary.blue, opacity: 0.1, marginLeft: Spacing.md },
+  sectionTitle: {
+    ...Typography.label,
+    fontWeight: "800",
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: BrandColors.gray[200],
+    marginLeft: Spacing.md,
+  },
   routeCard: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    elevation: 3,
+    height: ROUTE_CARD_HEIGHT - Spacing.md,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    height: 145,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  routeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.md },
-  routeInfo: { flex: 1, flexDirection: "row", alignItems: "center" },
-  routeOrigin: { fontSize: 16, fontWeight: "700", flexShrink: 1 },
-  arrowContainer: { marginHorizontal: 8 },
-  routeDestination: { fontSize: 16, fontWeight: "700", flexShrink: 1 },
-  fareContainer: { alignItems: "flex-end", marginLeft: Spacing.md },
-  fareLabel: { fontSize: 10, opacity: 0.5, fontWeight: "700", textTransform: "uppercase" },
-  fareAmount: { fontSize: 18, fontWeight: "800", color: BrandColors.primary.green },
-  routeDetails: { gap: Spacing.md },
-  detailRow: { flexDirection: "row", gap: Spacing.lg },
-  detailItem: { flexDirection: "row", alignItems: "center" },
-  tagsRow: { flexDirection: "row", gap: Spacing.sm },
-  routeTypeTag: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 4 },
-  safetyTag: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 4 },
-  tagText: { fontSize: 11, fontWeight: "700" },
+  routeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: Spacing.md,
+  },
+  routeInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  routeOrigin: {
+    ...Typography.body,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+  routeArrow: {
+    marginHorizontal: 8,
+  },
+  routeDestination: {
+    ...Typography.body,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+  fareContainer: {
+    alignItems: "flex-end",
+    marginLeft: Spacing.md,
+  },
+  fareLabel: {
+    ...Typography.label,
+    fontWeight: "700",
+    color: BrandColors.gray[500],
+    textTransform: "uppercase",
+  },
+  fareAmount: {
+    ...Typography.h3,
+    fontWeight: "800",
+    color: BrandColors.primary.gradientStart,
+  },
+  routeDetails: {
+    gap: Spacing.sm,
+  },
+  detailRow: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+  },
+  detailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  detailText: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+  },
+  tagsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  tag: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+  },
+  tagText: {
+    ...Typography.label,
+    fontWeight: "700",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing["2xl"],
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+  },
+  emptyTitle: {
+    ...Typography.h3,
+    fontWeight: "800",
+  },
+  emptySubtitle: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    textAlign: "center",
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+  },
+  emptyCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "33",
+  },
+  emptyCtaText: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
 });

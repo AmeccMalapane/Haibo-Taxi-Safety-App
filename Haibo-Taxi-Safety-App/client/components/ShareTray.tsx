@@ -168,7 +168,12 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
       onRequestClose={handleClose}
     >
       <View style={styles.modalContainer}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close share tray"
+        />
         
         <GestureDetector gesture={panGesture}>
           <Animated.View
@@ -182,7 +187,12 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
             
             <View style={styles.header}>
               <ThemedText style={styles.title}>Share</ThemedText>
-              <Pressable onPress={handleClose} style={styles.closeButton}>
+              <Pressable
+                onPress={handleClose}
+                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>

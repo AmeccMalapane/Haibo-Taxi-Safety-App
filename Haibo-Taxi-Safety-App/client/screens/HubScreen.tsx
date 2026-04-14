@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BorderRadius,
@@ -66,6 +67,7 @@ function QuickAction({
   index,
   theme,
 }: QuickActionProps) {
+  const reducedMotion = useReducedMotion();
   const handlePress = async () => {
     if (Platform.OS !== "web") {
       try {
@@ -78,7 +80,7 @@ function QuickAction({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(400).delay(300 + index * 60)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(300 + index * 60)}
     >
       <Pressable
         onPress={handlePress}
@@ -142,6 +144,7 @@ function StatsCell({
 }
 
 export default function HubScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
@@ -180,7 +183,7 @@ export default function HubScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -193,7 +196,7 @@ export default function HubScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -206,7 +209,7 @@ export default function HubScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Haibo! Hub</ThemedText>
@@ -218,7 +221,7 @@ export default function HubScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },

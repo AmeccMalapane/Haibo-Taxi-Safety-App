@@ -9,7 +9,19 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.haibo.africa.haiboapp"
+      "bundleIdentifier": "com.haibo.africa.haiboapp",
+      "associatedDomains": [
+        "applinks:haibo.africa",
+        "applinks:www.haibo.africa"
+      ],
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["haibo-taxi"]
+          }
+        ],
+        "LSApplicationQueriesSchemes": ["haibo-taxi"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +30,44 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.haibo.africa.haiboapp"
+      "package": "com.haibo.africa.haiboapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "haibo.africa",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.haibo.africa",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "haibo-taxi"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "data": [
+            {
+              "mimeType": "text/plain"
+            }
+          ],
+          "category": ["DEFAULT"]
+        }
+      ]
     },
     "web": {
       "output": "single",

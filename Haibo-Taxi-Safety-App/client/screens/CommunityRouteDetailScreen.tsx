@@ -1,12 +1,8 @@
-/**
- * CommunityRouteDetailScreen — Full route viewer with map, stops, metadata, comments, and voting
- */
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
   Pressable,
-  Text,
   TextInput,
   ScrollView,
   Alert,
@@ -18,13 +14,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { MAPBOX_ACCESS_TOKEN, MAPBOX_STYLES } from "@/constants/mapbox";
+import { MAPBOX_STYLES } from "@/constants/mapbox";
+import { createRouteLink, getAppStoreLink } from "@/lib/deepLinks";
 import {
   CommunityRoute,
   RouteComment,
@@ -44,9 +45,10 @@ import {
 } from "@/data/communityRoutes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const MAP_HEIGHT = 280;
+const MAP_HEIGHT = 300;
 
 export default function CommunityRouteDetailScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -58,7 +60,6 @@ export default function CommunityRouteDetailScreen() {
   const [myVote, setMyVote] = useState<"up" | "down" | null>(null);
   const [isStarred, setIsStarred] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const mapRef = useRef<any>(null);
 
   useEffect(() => {
     loadRoute();
@@ -70,7 +71,7 @@ export default function CommunityRouteDetailScreen() {
     if (found) setRoute(found);
 
     const votes = await getMyVotes();
-    if (votes[routeId]) setMyVote(votes[routeId]);
+    setMyVote(votes[routeId] || null);
 
     const stars = await getMyStars();
     setIsStarred(stars.includes(routeId));
@@ -83,13 +84,10 @@ export default function CommunityRouteDetailScreen() {
     async (vote: "up" | "down") => {
       if (!route) return;
       if (Platform.OS !== "web") {
-        try {
-          const Haptics = require("expo-haptics");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch {}
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
-      let updated = { ...route };
+      const updated = { ...route };
       if (myVote === vote) {
         if (vote === "up") updated.upvotes = Math.max(0, updated.upvotes - 1);
         else updated.downvotes = Math.max(0, updated.downvotes - 1);
@@ -113,10 +111,7 @@ export default function CommunityRouteDetailScreen() {
   const handleStar = useCallback(async () => {
     if (!route) return;
     if (Platform.OS !== "web") {
-      try {
-        const Haptics = require("expo-haptics");
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch {}
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     const starred = await toggleStar(routeId);
     setIsStarred(starred);
@@ -130,6 +125,9 @@ export default function CommunityRouteDetailScreen() {
 
   const handleAddComment = useCallback(async () => {
     if (!newComment.trim() || !route) return;
+    if (Platform.OS !== "web") {
+      Haptics.selectionAsync();
+    }
     const profile = await getContributorProfile();
     const comment: RouteComment = {
       id: generateId(),
@@ -143,16 +141,43 @@ export default function CommunityRouteDetailScreen() {
     setComments((prev) => [comment, ...prev]);
     setNewComment("");
 
-    // Update comment count
     const updated = { ...route, commentCount: route.commentCount + 1 };
     setRoute(updated);
     await saveCommunityRoute(updated);
   }, [newComment, route]);
 
+  const handleShare = useCallback(async () => {
+    if (!route) return;
+    try {
+      const stops = route.waypoints.filter((w) => w.isStop);
+      const origin = stops[0]?.name || "Unknown";
+      const dest = stops[stops.length - 1]?.name || "Unknown";
+      const openLink = createRouteLink(route.id);
+      await Share.share({
+        message: `Check out this taxi route on Haibo!\n\n${route.name}\n${origin} → ${dest}\nR${route.fare} · ${route.upvotes} upvotes\n\nOpen in Haibo: ${openLink}\nGet the app: ${getAppStoreLink()}`,
+        title: `${route.name} · Haibo route`,
+      });
+    } catch {}
+  }, [route]);
+
+  const handleReport = useCallback(() => {
+    Alert.alert("Report route", "Why are you reporting this route?", [
+      {
+        text: "Inaccurate info",
+        onPress: () => Alert.alert("Reported", "Thank you. We'll review this route."),
+      },
+      {
+        text: "Spam or fake",
+        onPress: () => Alert.alert("Reported", "Thank you. We'll review this route."),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, []);
+
   if (!route) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ThemedText>Loading route...</ThemedText>
+        <ThemedText style={styles.loadingText}>Loading route...</ThemedText>
       </ThemedView>
     );
   }
@@ -163,7 +188,6 @@ export default function CommunityRouteDetailScreen() {
   const badge = getBadge(route.points);
   const badgeConfig = BADGE_CONFIG[badge];
 
-  // Build GeoJSON for the map
   const routeLineGeoJSON = {
     type: "FeatureCollection" as const,
     features: [
@@ -190,12 +214,11 @@ export default function CommunityRouteDetailScreen() {
     })),
   };
 
-  // Calculate bounds for the camera
   const lngs = route.waypoints.map((w) => w.longitude);
   const lats = route.waypoints.map((w) => w.latitude);
   const bounds = {
-    ne: [Math.max(...lngs) + 0.01, Math.max(...lats) + 0.01],
-    sw: [Math.min(...lngs) - 0.01, Math.min(...lats) - 0.01],
+    ne: [Math.max(...lngs) + 0.01, Math.max(...lats) + 0.01] as [number, number],
+    sw: [Math.min(...lngs) - 0.01, Math.min(...lats) - 0.01] as [number, number],
   };
 
   const renderNativeMap = () => {
@@ -205,7 +228,6 @@ export default function CommunityRouteDetailScreen() {
 
       return (
         <MapView
-          ref={mapRef}
           style={{ width: SCREEN_WIDTH, height: MAP_HEIGHT }}
           styleURL={isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light}
           scrollEnabled={false}
@@ -215,8 +237,8 @@ export default function CommunityRouteDetailScreen() {
         >
           <Camera
             defaultSettings={{
-              bounds: { ne: bounds.ne as [number, number], sw: bounds.sw as [number, number] },
-              padding: { paddingTop: 40, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 },
+              bounds,
+              padding: { paddingTop: 60, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 },
             }}
           />
           <ShapeSource id="route-line" shape={routeLineGeoJSON}>
@@ -259,316 +281,424 @@ export default function CommunityRouteDetailScreen() {
       );
     } catch {
       return (
-        <View style={[styles.mapPlaceholder, { backgroundColor: isDark ? "#1a1a2e" : "#e8f4f8" }]}>
-          <Feather name="map" size={32} color={BrandColors.gray[400]} />
-          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Map preview</Text>
+        <View
+          style={[
+            styles.mapPlaceholder,
+            { backgroundColor: isDark ? "#1a1a2e" : BrandColors.gray[100] },
+          ]}
+        >
+          <Feather name="map" size={32} color={BrandColors.gray[600]} />
+          <ThemedText style={styles.mapPlaceholderText}>Map preview</ThemedText>
         </View>
       );
     }
   };
 
+  const cardSurface = isDark ? theme.surface : "#FFFFFF";
+
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
-        {/* Map */}
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.mapContainer}>
           {Platform.OS === "web" ? (
-            <View style={[styles.mapPlaceholder, { backgroundColor: isDark ? "#1a1a2e" : "#e8f4f8" }]}>
-              <Feather name="map" size={32} color={BrandColors.gray[400]} />
+            <View
+              style={[
+                styles.mapPlaceholder,
+                { backgroundColor: isDark ? "#1a1a2e" : BrandColors.gray[100] },
+              ]}
+            >
+              <Feather name="map" size={32} color={BrandColors.gray[600]} />
             </View>
           ) : (
             renderNativeMap()
           )}
-          {/* Status badge */}
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  route.status === "verified"
-                    ? BrandColors.status.success
-                    : route.status === "pending"
-                    ? BrandColors.status.warning
-                    : BrandColors.status.emergency,
-              },
-            ]}
+
+          <LinearGradient
+            colors={["rgba(0,0,0,0.55)", "rgba(0,0,0,0)"]}
+            style={[styles.topBarGradient, { paddingTop: insets.top + Spacing.sm }]}
           >
-            <Feather
-              name={route.status === "verified" ? "check-circle" : "clock"}
-              size={12}
-              color="#FFFFFF"
-            />
-            <Text style={styles.statusText}>
-              {route.status.charAt(0).toUpperCase() + route.status.slice(1)}
-            </Text>
-          </View>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.glassButton}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={20} color="#FFFFFF" />
+            </Pressable>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    route.status === "verified"
+                      ? BrandColors.status.success
+                      : route.status === "pending"
+                      ? BrandColors.status.warning
+                      : BrandColors.status.emergency,
+                },
+              ]}
+            >
+              <Feather
+                name={route.status === "verified" ? "check-circle" : "clock"}
+                size={12}
+                color="#FFFFFF"
+              />
+              <ThemedText style={styles.statusText}>
+                {route.status.charAt(0).toUpperCase() + route.status.slice(1)}
+              </ThemedText>
+            </View>
+          </LinearGradient>
         </View>
 
-        {/* Route info */}
         <View style={styles.content}>
-          {/* Title + vote */}
-          <View style={styles.titleRow}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.routeTitle}>{route.name}</ThemedText>
-              <Text style={[styles.routeSubtitle, { color: theme.textSecondary }]}>
-                {route.province} · {route.routeType} · {route.vehicleType}
-              </Text>
-            </View>
-            <View style={styles.voteColumn}>
-              <Pressable
-                style={[
-                  styles.voteBtn,
-                  myVote === "up" && { backgroundColor: `${BrandColors.status.success}15` },
-                ]}
-                onPress={() => handleVote("up")}
-              >
-                <Feather
-                  name="arrow-up"
-                  size={20}
-                  color={myVote === "up" ? BrandColors.status.success : BrandColors.gray[500]}
-                />
-              </Pressable>
-              <Text
-                style={[
-                  styles.voteNumber,
-                  {
-                    color:
-                      netVotes > 0
-                        ? BrandColors.status.success
-                        : netVotes < 0
+          <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)}>
+            <View style={styles.titleRow}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.routeTitle}>{route.name}</ThemedText>
+                <ThemedText style={styles.routeSubtitle}>
+                  {route.province} · {route.routeType} · {route.vehicleType}
+                </ThemedText>
+              </View>
+              <View style={[styles.voteColumn, { backgroundColor: cardSurface }]}>
+                <Pressable
+                  style={[
+                    styles.voteBtn,
+                    myVote === "up" && {
+                      backgroundColor: `${BrandColors.status.success}1A`,
+                    },
+                  ]}
+                  onPress={() => handleVote("up")}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upvote route"
+                >
+                  <Feather
+                    name="arrow-up"
+                    size={18}
+                    color={
+                      myVote === "up" ? BrandColors.status.success : BrandColors.gray[600]
+                    }
+                  />
+                </Pressable>
+                <ThemedText
+                  style={[
+                    styles.voteNumber,
+                    {
+                      color:
+                        netVotes > 0
+                          ? BrandColors.status.success
+                          : netVotes < 0
+                          ? BrandColors.status.emergency
+                          : BrandColors.gray[500],
+                    },
+                  ]}
+                >
+                  {netVotes}
+                </ThemedText>
+                <Pressable
+                  style={[
+                    styles.voteBtn,
+                    myVote === "down" && {
+                      backgroundColor: `${BrandColors.status.emergency}1A`,
+                    },
+                  ]}
+                  onPress={() => handleVote("down")}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Downvote route"
+                >
+                  <Feather
+                    name="arrow-down"
+                    size={18}
+                    color={
+                      myVote === "down"
                         ? BrandColors.status.emergency
-                        : theme.textSecondary,
-                  },
-                ]}
-              >
-                {netVotes}
-              </Text>
-              <Pressable
-                style={[
-                  styles.voteBtn,
-                  myVote === "down" && { backgroundColor: `${BrandColors.status.emergency}15` },
-                ]}
-                onPress={() => handleVote("down")}
-              >
-                <Feather
-                  name="arrow-down"
-                  size={20}
-                  color={myVote === "down" ? BrandColors.status.emergency : BrandColors.gray[500]}
-                />
-              </Pressable>
+                        : BrandColors.gray[600]
+                    }
+                  />
+                </Pressable>
+              </View>
             </View>
-          </View>
 
-          {/* Description */}
-          {route.description ? (
-            <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
-              {route.description}
-            </ThemedText>
-          ) : null}
+            {route.description ? (
+              <ThemedText style={styles.description}>{route.description}</ThemedText>
+            ) : null}
+          </Animated.View>
 
-          {/* Quick stats */}
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-              <Text style={[styles.statValue, { color: route.color }]}>R{route.fare}</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Fare</Text>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(60).duration(400)}
+            style={styles.statsRow}
+          >
+            <View style={[styles.statCard, { backgroundColor: cardSurface }]}>
+              <ThemedText style={[styles.statValue, { color: route.color }]}>
+                R{route.fare}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Fare</ThemedText>
             </View>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-              <Text style={[styles.statValue, { color: route.color }]}>{stops.length}</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Stops</Text>
+            <View style={[styles.statCard, { backgroundColor: cardSurface }]}>
+              <ThemedText style={[styles.statValue, { color: route.color }]}>
+                {stops.length}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Stops</ThemedText>
             </View>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-              <Text style={[styles.statValue, { color: route.color }]}>{route.stars}</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Stars</Text>
+            <View style={[styles.statCard, { backgroundColor: cardSurface }]}>
+              <ThemedText style={[styles.statValue, { color: route.color }]}>
+                {route.stars}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Stars</ThemedText>
             </View>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-              <Text style={[styles.statValue, { color: route.color }]}>{route.upvotes}</Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Votes</Text>
+            <View style={[styles.statCard, { backgroundColor: cardSurface }]}>
+              <ThemedText style={[styles.statValue, { color: route.color }]}>
+                {route.upvotes}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Votes</ThemedText>
             </View>
-          </View>
+          </Animated.View>
 
-          {/* Stops list */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Stops</ThemedText>
-            {stops.map((stop, i) => (
-              <View key={stop.id} style={styles.stopItem}>
-                <View style={styles.stopTimeline}>
-                  <View style={[styles.stopDot, { backgroundColor: route.color }]}>
-                    <Text style={styles.stopNumber}>{i + 1}</Text>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(120).duration(400)}
+            style={styles.section}
+          >
+            <ThemedText style={styles.sectionLabel}>Stops</ThemedText>
+            <View style={[styles.stopsCard, { backgroundColor: cardSurface }]}>
+              {stops.map((stop, i) => (
+                <View key={stop.id} style={styles.stopItem}>
+                  <View style={styles.stopTimeline}>
+                    <View style={[styles.stopDot, { backgroundColor: route.color }]}>
+                      <ThemedText style={styles.stopNumber}>{i + 1}</ThemedText>
+                    </View>
+                    {i < stops.length - 1 && (
+                      <View
+                        style={[styles.stopLine, { backgroundColor: route.color }]}
+                      />
+                    )}
                   </View>
-                  {i < stops.length - 1 && (
-                    <View style={[styles.stopLine, { backgroundColor: route.color }]} />
-                  )}
+                  <View style={styles.stopInfo}>
+                    <ThemedText style={styles.stopName}>{stop.name}</ThemedText>
+                    <ThemedText style={styles.stopCoords}>
+                      {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
+                    </ThemedText>
+                  </View>
                 </View>
-                <View style={styles.stopInfo}>
-                  <ThemedText style={styles.stopName}>{stop.name}</ThemedText>
-                  <Text style={[styles.stopCoords, { color: theme.textSecondary }]}>
-                    {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          </Animated.View>
 
-          {/* Taxi details */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Taxi Details</ThemedText>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(180).duration(400)}
+            style={styles.section}
+          >
+            <ThemedText style={styles.sectionLabel}>Taxi details</ThemedText>
             <View style={styles.detailGrid}>
-              <View style={[styles.detailCard, { backgroundColor: theme.backgroundDefault }]}>
-                <Text style={styles.detailEmoji}>{handSignal?.emoji || "🤚"}</Text>
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Hand Signal</Text>
-                <ThemedText style={styles.detailValue}>{handSignal?.label || route.handSignal}</ThemedText>
+              <View style={[styles.detailCard, { backgroundColor: cardSurface }]}>
+                <ThemedText style={styles.detailEmoji}>{handSignal?.emoji || "✋"}</ThemedText>
+                <ThemedText style={styles.detailLabel}>Hand signal</ThemedText>
+                <ThemedText style={styles.detailValue}>
+                  {handSignal?.label || route.handSignal}
+                </ThemedText>
               </View>
-              <View style={[styles.detailCard, { backgroundColor: theme.backgroundDefault }]}>
-                <Feather name="clock" size={20} color={route.color} />
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Hours</Text>
+              <View style={[styles.detailCard, { backgroundColor: cardSurface }]}>
+                <View style={[styles.detailIconWrap, { backgroundColor: `${route.color}15` }]}>
+                  <Feather name="clock" size={18} color={route.color} />
+                </View>
+                <ThemedText style={styles.detailLabel}>Hours</ThemedText>
                 <ThemedText style={styles.detailValue}>{route.operatingHours}</ThemedText>
               </View>
-              <View style={[styles.detailCard, { backgroundColor: theme.backgroundDefault }]}>
-                <Feather name="repeat" size={20} color={route.color} />
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Frequency</Text>
+              <View style={[styles.detailCard, { backgroundColor: cardSurface }]}>
+                <View style={[styles.detailIconWrap, { backgroundColor: `${route.color}15` }]}>
+                  <Feather name="repeat" size={18} color={route.color} />
+                </View>
+                <ThemedText style={styles.detailLabel}>Frequency</ThemedText>
                 <ThemedText style={styles.detailValue}>{route.frequency}</ThemedText>
               </View>
-              <View style={[styles.detailCard, { backgroundColor: theme.backgroundDefault }]}>
-                <Feather name="shield" size={20} color={route.color} />
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Association</Text>
+              <View style={[styles.detailCard, { backgroundColor: cardSurface }]}>
+                <View style={[styles.detailIconWrap, { backgroundColor: `${route.color}15` }]}>
+                  <Feather name="shield" size={18} color={route.color} />
+                </View>
+                <ThemedText style={styles.detailLabel}>Association</ThemedText>
                 <ThemedText style={styles.detailValue}>{route.association}</ThemedText>
               </View>
             </View>
             {route.handSignalDescription ? (
               <View style={[styles.signalDesc, { backgroundColor: `${route.color}10` }]}>
-                <Feather name="info" size={14} color={route.color} />
-                <Text style={[styles.signalDescText, { color: theme.text }]}>
+                <Feather name="info" size={16} color={route.color} />
+                <ThemedText style={styles.signalDescText}>
                   {route.handSignalDescription}
-                </Text>
+                </ThemedText>
               </View>
             ) : null}
-          </View>
+          </Animated.View>
 
-          {/* Contributor */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Contributor</ThemedText>
-            <View style={[styles.contributorCard, { backgroundColor: theme.backgroundDefault }]}>
-              <View style={[styles.contributorAvatar, { backgroundColor: badgeConfig.color }]}>
-                <Text style={styles.contributorAvatarText}>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(240).duration(400)}
+            style={styles.section}
+          >
+            <ThemedText style={styles.sectionLabel}>Contributor</ThemedText>
+            <View style={[styles.contributorCard, { backgroundColor: cardSurface }]}>
+              <View
+                style={[styles.contributorAvatar, { backgroundColor: badgeConfig.color }]}
+              >
+                <ThemedText style={styles.contributorAvatarText}>
                   {route.contributorName.charAt(0).toUpperCase()}
-                </Text>
+                </ThemedText>
               </View>
               <View style={{ flex: 1 }}>
-                <ThemedText style={styles.contributorCardName}>{route.contributorName}</ThemedText>
+                <ThemedText style={styles.contributorCardName}>
+                  {route.contributorName}
+                </ThemedText>
                 <View style={styles.contributorBadgeRow}>
-                  <View style={[styles.badgePill, { backgroundColor: `${badgeConfig.color}20` }]}>
-                    <Text style={[styles.badgePillText, { color: badgeConfig.color }]}>
+                  <View
+                    style={[
+                      styles.badgePill,
+                      { backgroundColor: `${badgeConfig.color}20` },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[styles.badgePillText, { color: badgeConfig.color }]}
+                    >
                       {badgeConfig.label}
-                    </Text>
+                    </ThemedText>
                   </View>
-                  <Text style={[styles.contributorPoints, { color: theme.textSecondary }]}>
+                  <ThemedText style={styles.contributorPoints}>
                     {route.points} pts
-                  </Text>
+                  </ThemedText>
                 </View>
               </View>
-              <Pressable onPress={handleStar} hitSlop={8}>
+              <Pressable
+                onPress={handleStar}
+                hitSlop={8}
+                style={styles.starButton}
+                accessibilityRole="button"
+                accessibilityLabel={isStarred ? "Unstar route" : "Star route"}
+              >
                 <Feather
                   name="star"
-                  size={24}
-                  color={isStarred ? BrandColors.secondary.orange : BrandColors.gray[400]}
+                  size={22}
+                  color={isStarred ? BrandColors.secondary.orange : BrandColors.gray[600]}
                 />
               </Pressable>
             </View>
-          </View>
+          </Animated.View>
 
-          {/* Action buttons */}
-          <View style={styles.actionRow}>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(300).duration(400)}
+            style={styles.actionRow}
+          >
             <Pressable
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundDefault }]}
-              onPress={async () => {
-                try {
-                  const stops = route.waypoints.filter((w) => w.isStop);
-                  const origin = stops[0]?.name || "Unknown";
-                  const dest = stops[stops.length - 1]?.name || "Unknown";
-                  await Share.share({
-                    message: `Check out this taxi route on Haibo!\n\n🚐 ${route.name}\n📍 ${origin} → ${dest}\n💰 R${route.fare}\n⭐ ${route.upvotes} upvotes\n\nShared via Haibo App`,
-                  });
-                } catch {}
-              }}
+              style={[styles.actionBtn, { backgroundColor: cardSurface }]}
+              onPress={handleShare}
             >
-              <Feather name="share-2" size={18} color={theme.text} />
-              <Text style={[styles.actionBtnText, { color: theme.text }]}>Share</Text>
+              <Feather name="share-2" size={18} color={BrandColors.primary.gradientStart} />
+              <ThemedText style={styles.actionBtnText}>Share</ThemedText>
             </Pressable>
             <Pressable
-              style={[styles.actionBtn, { backgroundColor: theme.backgroundDefault }]}
-              onPress={() => {
-                Alert.alert(
-                  "Report Route",
-                  "Why are you reporting this route?",
-                  [
-                    { text: "Inaccurate info", onPress: () => Alert.alert("Reported", "Thank you for your feedback. We'll review this route.") },
-                    { text: "Spam/Fake", onPress: () => Alert.alert("Reported", "Thank you for your feedback. We'll review this route.") },
-                    { text: "Cancel", style: "cancel" },
-                  ]
-                );
-              }}
+              style={[styles.actionBtn, { backgroundColor: cardSurface }]}
+              onPress={handleReport}
             >
               <Feather name="flag" size={18} color={BrandColors.status.emergency} />
-              <Text style={[styles.actionBtnText, { color: theme.text }]}>Report</Text>
+              <ThemedText style={styles.actionBtnText}>Report</ThemedText>
             </Pressable>
-          </View>
+          </Animated.View>
 
-          {/* Comments */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.delay(360).duration(400)}
+            style={styles.section}
+          >
+            <ThemedText style={styles.sectionLabel}>
               Comments ({comments.length})
             </ThemedText>
             {comments.map((comment) => (
-              <View key={comment.id} style={[styles.commentCard, { backgroundColor: theme.backgroundDefault }]}>
+              <View
+                key={comment.id}
+                style={[styles.commentCard, { backgroundColor: cardSurface }]}
+              >
                 <View style={styles.commentHeader}>
                   <ThemedText style={styles.commentAuthor}>{comment.userName}</ThemedText>
-                  <Text style={[styles.commentTime, { color: theme.textSecondary }]}>
+                  <ThemedText style={styles.commentTime}>
                     {getTimeAgo(comment.createdAt)}
-                  </Text>
+                  </ThemedText>
                 </View>
-                <ThemedText style={[styles.commentText, { color: theme.textSecondary }]}>
-                  {comment.text}
-                </ThemedText>
+                <ThemedText style={styles.commentText}>{comment.text}</ThemedText>
               </View>
             ))}
             {comments.length === 0 && (
-              <Text style={[styles.noComments, { color: theme.textSecondary }]}>
-                No comments yet. Be the first to share your experience!
-              </Text>
+              <View style={[styles.noCommentsCard, { backgroundColor: cardSurface }]}>
+                <Feather
+                  name="message-circle"
+                  size={20}
+                  color={BrandColors.gray[600]}
+                />
+                <ThemedText style={styles.noComments}>
+                  No comments yet. Be the first to share your experience.
+                </ThemedText>
+              </View>
             )}
-          </View>
+          </Animated.View>
         </View>
       </ScrollView>
 
-      {/* Comment input bar */}
-      <View style={[styles.commentBar, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
+      <View
+        style={[
+          styles.commentBar,
+          {
+            backgroundColor: theme.backgroundDefault,
+            paddingBottom: insets.bottom + Spacing.sm,
+            borderTopColor: BrandColors.gray[100],
+          },
+        ]}
+      >
         <TextInput
-          style={[styles.commentInput, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+          style={[
+            styles.commentInput,
+            {
+              backgroundColor: cardSurface,
+              color: theme.text,
+              borderColor: BrandColors.gray[200],
+            },
+          ]}
           placeholder="Add a comment..."
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={BrandColors.gray[500]}
           value={newComment}
           onChangeText={setNewComment}
           multiline
           maxLength={300}
         />
         <Pressable
-          style={[
-            styles.commentSendBtn,
-            { backgroundColor: newComment.trim() ? route.color : BrandColors.gray[400] },
-          ]}
           onPress={handleAddComment}
           disabled={!newComment.trim()}
+          style={({ pressed }) => [
+            styles.commentSendBtn,
+            pressed && { opacity: 0.85 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Post comment"
         >
-          <Feather name="send" size={16} color="#FFFFFF" />
+          <LinearGradient
+            colors={
+              newComment.trim()
+                ? BrandColors.gradient.primary
+                : [BrandColors.gray[300], BrandColors.gray[400]]
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.commentSendBtnInner}
+          >
+            <Feather name="send" size={16} color="#FFFFFF" />
+          </LinearGradient>
         </Pressable>
       </View>
-    </ThemedView>
+    </View>
   );
 }
 
 function getTimeAgo(timestamp: number): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -577,71 +707,166 @@ function getTimeAgo(timestamp: number): string {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
-  // Map
-  mapContainer: { position: "relative" },
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    ...Typography.body,
+    color: BrandColors.gray[600],
+  },
+  mapContainer: {
+    position: "relative",
+  },
   mapPlaceholder: {
     width: SCREEN_WIDTH,
     height: MAP_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
+    gap: Spacing.xs,
   },
-  statusBadge: {
+  mapPlaceholderText: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+  },
+  topBarGradient: {
     position: "absolute",
-    top: 12,
-    right: 12,
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.full,
-    gap: 4,
+    justifyContent: "space-between",
   },
-  statusText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
-  // Content
-  content: { padding: Spacing.lg },
-  titleRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 12 },
-  routeTitle: { fontSize: 22, fontWeight: "800" },
-  routeSubtitle: { fontSize: 13, marginTop: 4 },
-  voteColumn: { alignItems: "center", marginLeft: 12 },
-  voteBtn: {
+  glassButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
     alignItems: "center",
     justifyContent: "center",
   },
-  voteNumber: { fontSize: 16, fontWeight: "800" },
-  description: { fontSize: 14, lineHeight: 22, marginBottom: 16 },
-  // Action buttons
-  actionRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
-  actionBtn: {
-    flex: 1,
+  statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    gap: 4,
   },
-  actionBtnText: { fontSize: 14, fontWeight: "600" },
-  // Stats
-  statsRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  statusText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  content: {
+    padding: Spacing.lg,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  routeTitle: {
+    ...Typography.h2,
+    fontWeight: "800",
+  },
+  routeSubtitle: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    marginTop: 4,
+    textTransform: "capitalize",
+  },
+  voteColumn: {
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: BorderRadius.full,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  voteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voteNumber: {
+    ...Typography.small,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+    marginVertical: 2,
+  },
+  description: {
+    ...Typography.body,
+    color: BrandColors.gray[700],
+    lineHeight: 22,
+    marginBottom: Spacing.md,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
   statCard: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 12,
-    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  statValue: { fontSize: 18, fontWeight: "800" },
-  statLabel: { fontSize: 11, marginTop: 2 },
-  // Sections
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 12 },
-  // Stops
-  stopItem: { flexDirection: "row", minHeight: 56 },
-  stopTimeline: { width: 36, alignItems: "center" },
+  statValue: {
+    ...Typography.h3,
+    fontWeight: "800",
+  },
+  statLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    marginTop: 2,
+  },
+  section: {
+    marginBottom: Spacing.xl,
+  },
+  sectionLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: Spacing.md,
+    fontWeight: "700",
+  },
+  stopsCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  stopItem: {
+    flexDirection: "row",
+    minHeight: 56,
+  },
+  stopTimeline: {
+    width: 36,
+    alignItems: "center",
+  },
   stopDot: {
     width: 28,
     height: 28,
@@ -650,39 +875,94 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 1,
   },
-  stopNumber: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
-  stopLine: { width: 3, flex: 1, marginTop: -2, marginBottom: -2 },
-  stopInfo: { flex: 1, paddingLeft: 8, paddingBottom: 16 },
-  stopName: { fontSize: 15, fontWeight: "600" },
-  stopCoords: { fontSize: 11, marginTop: 2 },
-  // Detail grid
-  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  detailCard: {
-    width: "47%",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: BorderRadius.sm,
-    gap: 4,
+  stopNumber: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
-  detailEmoji: { fontSize: 24 },
-  detailLabel: { fontSize: 11 },
-  detailValue: { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  stopLine: {
+    width: 3,
+    flex: 1,
+    marginTop: -2,
+    marginBottom: -2,
+  },
+  stopInfo: {
+    flex: 1,
+    paddingLeft: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  stopName: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  stopCoords: {
+    ...Typography.label,
+    color: BrandColors.gray[500],
+    marginTop: 2,
+    fontVariant: ["tabular-nums"],
+  },
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  detailCard: {
+    flexBasis: "48%",
+    flexGrow: 1,
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  detailEmoji: {
+    fontSize: 24,
+  },
+  detailIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+  },
+  detailValue: {
+    ...Typography.small,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   signalDesc: {
     flexDirection: "row",
     alignItems: "flex-start",
-    padding: 10,
-    borderRadius: BorderRadius.sm,
-    gap: 8,
-    marginTop: 8,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
-  signalDescText: { flex: 1, fontSize: 13, lineHeight: 20 },
-  // Contributor
+  signalDescText: {
+    ...Typography.small,
+    flex: 1,
+    color: BrandColors.gray[700],
+    lineHeight: 20,
+  },
   contributorCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    gap: 12,
+    gap: Spacing.md,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   contributorAvatar: {
     width: 44,
@@ -691,45 +971,135 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  contributorAvatarText: { color: "#FFFFFF", fontSize: 18, fontWeight: "700" },
-  contributorCardName: { fontSize: 15, fontWeight: "600" },
-  contributorBadgeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
-  badgePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: BorderRadius.full },
-  badgePillText: { fontSize: 11, fontWeight: "600" },
-  contributorPoints: { fontSize: 12 },
-  // Comments
+  contributorAvatarText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  contributorCardName: {
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  contributorBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  badgePill: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  badgePillText: {
+    ...Typography.label,
+    fontWeight: "700",
+  },
+  contributorPoints: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+  },
+  starButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  actionBtnText: {
+    ...Typography.small,
+    fontWeight: "700",
+  },
   commentCard: {
     padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginBottom: 8,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  commentHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  commentAuthor: { fontSize: 13, fontWeight: "600" },
-  commentTime: { fontSize: 11 },
-  commentText: { fontSize: 14, lineHeight: 20 },
-  noComments: { fontSize: 13, fontStyle: "italic", textAlign: "center", paddingVertical: 16 },
-  // Comment bar
+  commentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  commentAuthor: {
+    ...Typography.small,
+    fontWeight: "700",
+  },
+  commentTime: {
+    ...Typography.label,
+    color: BrandColors.gray[500],
+  },
+  commentText: {
+    ...Typography.body,
+    color: BrandColors.gray[700],
+    lineHeight: 20,
+  },
+  noCommentsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  noComments: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    flex: 1,
+  },
   commentBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    padding: Spacing.md,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.08)",
   },
   commentInput: {
+    ...Typography.body,
     flex: 1,
-    minHeight: 40,
-    maxHeight: 80,
+    minHeight: 44,
+    maxHeight: 100,
     borderRadius: BorderRadius.md,
+    borderWidth: 1,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    fontSize: 15,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   commentSendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  commentSendBtnInner: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },

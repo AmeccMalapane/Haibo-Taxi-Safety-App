@@ -17,6 +17,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BrandColors,
@@ -33,16 +34,15 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 // phone OTP, biometric, social) that all bypassed our reworked
 // OTPVerificationScreen + ProfileSetupScreen pipeline. This rewrite:
 //
-//   1. Visually matches LoginScreen / OTPVerification / ProfileSetup —
-//      rose gradient hero, white floating form card, brand badge, the
-//      whole shelf-overlap pattern
+//   1. Visually matches OTPVerification / ProfileSetup — rose gradient
+//      hero, white floating form card, brand badge, the whole
+//      shelf-overlap pattern
 //   2. Keeps the phone-OTP flow as the only primary entry — SA market
 //      is phone-first, and OTP is what AuthContext.sendOTP actually
 //      supports server-side
-//   3. Routes successful OTP requests to OTPVerification (the typeui-clean
-//      reworked screen) instead of VerifyOTPScreen (the unbranded
-//      legacy one). OTPVerification then forwards to ProfileSetup if
-//      displayName is empty, completing the full reworked auth journey.
+//   3. Routes successful OTP requests to OTPVerification, which then
+//      forwards to ProfileSetup if displayName is empty, completing the
+//      full reworked auth journey.
 //   4. Keeps biometric quick-login as a secondary CTA when the device
 //      supports it AND the user has previously signed in
 //   5. Keeps "Continue as guest" via skipAuth() for users who don't
@@ -65,6 +65,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 //     tap into a dead end.
 
 export default function AuthScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const { sendOTP, skipAuth } = useAuth();
   const insets = useSafeAreaInsets();
@@ -174,7 +175,7 @@ export default function AuthScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.gradientBand, { paddingTop: insets.top + Spacing["2xl"] }]}
       >
-        <Animated.View entering={FadeIn.duration(400)} style={styles.badgeWrap}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.badgeWrap}>
           <View style={styles.badge}>
             <Feather
               name="shield"
@@ -185,7 +186,7 @@ export default function AuthScreen() {
         </Animated.View>
 
         <Animated.View
-          entering={FadeInDown.duration(500).delay(150)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
           style={styles.heroText}
         >
           <ThemedText style={styles.title}>Welcome to Haibo!</ThemedText>
@@ -203,7 +204,7 @@ export default function AuthScreen() {
         ]}
       >
         <Animated.View
-          entering={FadeInUp.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
           style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
         >
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>

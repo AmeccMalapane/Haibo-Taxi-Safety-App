@@ -19,6 +19,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BorderRadius,
@@ -60,7 +61,7 @@ function FormSection({ title, icon, children, theme }: FormSectionProps) {
         >
           <Feather
             name={icon}
-            size={14}
+            size={16}
             color={BrandColors.primary.gradientStart}
           />
         </View>
@@ -130,6 +131,7 @@ function InputField({
 }
 
 export default function SendPackageScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
@@ -267,7 +269,7 @@ export default function SendPackageScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -280,7 +282,7 @@ export default function SendPackageScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -293,7 +295,7 @@ export default function SendPackageScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Send a package</ThemedText>
@@ -305,7 +307,7 @@ export default function SendPackageScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -394,7 +396,7 @@ export default function SendPackageScreen() {
 
           {/* Fare card — rose gradient */}
           <Animated.View
-            entering={FadeInUp.duration(500).delay(300)}
+            entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
             style={styles.fareCardWrap}
           >
             <LinearGradient
@@ -407,7 +409,7 @@ export default function SendPackageScreen() {
                 <ThemedText style={styles.fareLabel}>ESTIMATED FARE</ThemedText>
                 <Feather
                   name="info"
-                  size={14}
+                  size={16}
                   color="rgba(255,255,255,0.7)"
                 />
               </View>

@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
-  ScrollView,
   Pressable,
   TextInput,
   Alert,
@@ -10,25 +9,33 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withRepeat,
   withSequence,
   withTiming,
-  FadeIn,
   FadeInDown,
 } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 
-import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
+import { GradientButton } from "@/components/GradientButton";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, BrandColors } from "@/constants/theme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { Spacing, BorderRadius, BrandColors, Typography } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
+import { getDeviceId } from "@/lib/deviceId";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface ExplorerProgress {
   id: string;
@@ -53,42 +60,74 @@ interface FareQuestion {
 
 type SurveyStep = "welcome" | "fare" | "stop" | "photo" | "complete";
 
-const BADGE_INFO = {
-  "fare-detective": { icon: "dollar-sign", label: "Fare Detective", color: "#4CAF50" },
-  "stop-spotter": { icon: "map-pin", label: "Stop Spotter", color: "#2196F3" },
-  "direction-hero": { icon: "camera", label: "Direction Hero", color: "#FF9800" },
+const BADGE_INFO: Record<
+  string,
+  { icon: keyof typeof Feather.glyphMap; label: string; color: string }
+> = {
+  "fare-detective": {
+    icon: "dollar-sign",
+    label: "Fare Detective",
+    color: BrandColors.status.success,
+  },
+  "stop-spotter": {
+    icon: "map-pin",
+    label: "Stop Spotter",
+    color: BrandColors.primary.gradientStart,
+  },
+  "direction-hero": {
+    icon: "camera",
+    label: "Direction Hero",
+    color: BrandColors.secondary.orange,
+  },
 };
 
+function fireSuccessHaptic() {
+  if (Platform.OS !== "web") {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }
+}
+
+function fireSelectionHaptic() {
+  if (Platform.OS !== "web") {
+    Haptics.selectionAsync();
+  }
+}
+
 export default function CityExplorerScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
-  
+
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<SurveyStep>("welcome");
   const [fareAmount, setFareAmount] = useState("");
-  const [fareResponse, setFareResponse] = useState<"known" | "guessed" | "new_route" | null>(null);
+  const [fareResponse, setFareResponse] = useState<
+    "known" | "guessed" | "new_route" | null
+  >(null);
   const [stopName, setStopName] = useState("");
   const [stopTip, setStopTip] = useState("");
   const [stopLandmark, setStopLandmark] = useState("");
-  const [bestTime, setBestTime] = useState<"morning" | "afternoon" | "evening" | null>(null);
+  const [bestTime, setBestTime] = useState<"morning" | "afternoon" | "evening" | null>(
+    null
+  );
   const [photoDescription, setPhotoDescription] = useState("");
   const [earnedPoints, setEarnedPoints] = useState(0);
   const [newBadges, setNewBadges] = useState<string[]>([]);
-  
+
+  const sessionFlags = useRef({ fare: false, stop: false, photo: false });
+  const initialCounts = useRef<{
+    faresVerified: number;
+    stopsAdded: number;
+    photosUploaded: number;
+  } | null>(null);
+
   const pulseAnim = useSharedValue(1);
-  const progressAnim = useSharedValue(0);
+  const cardSurface = isDark ? theme.surface : "#FFFFFF";
 
   useEffect(() => {
-    const getDeviceId = async () => {
-      let id = await AsyncStorage.getItem("deviceId");
-      if (!id) {
-        id = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        await AsyncStorage.setItem("deviceId", id);
-      }
-      setDeviceId(id);
-    };
-    getDeviceId();
+    getDeviceId().then(setDeviceId).catch(() => setDeviceId(null));
 
     pulseAnim.value = withRepeat(
       withSequence(
@@ -105,6 +144,16 @@ export default function CityExplorerScreen() {
     enabled: !!deviceId,
   });
 
+  useEffect(() => {
+    if (progress && initialCounts.current === null) {
+      initialCounts.current = {
+        faresVerified: progress.faresVerified || 0,
+        stopsAdded: progress.stopsAdded || 0,
+        photosUploaded: progress.photosUploaded || 0,
+      };
+    }
+  }, [progress]);
+
   const { data: fareQuestion } = useQuery<FareQuestion>({
     queryKey: ["/api/explorer/fare-question"],
     enabled: currentStep === "fare",
@@ -112,87 +161,157 @@ export default function CityExplorerScreen() {
 
   const fareMutation = useMutation({
     mutationFn: async (data: { fareAmount?: number; responseType: string }) => {
-      const response = await apiRequest("POST", "/api/explorer/fare-survey", {
-        deviceId,
-        originName: fareQuestion?.origin || "Unknown",
-        destinationName: fareQuestion?.destination || "Unknown",
-        fareAmount: data.fareAmount,
-        responseType: data.responseType,
+      return apiRequest("/api/explorer/fare-survey", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId,
+          originName: fareQuestion?.origin || "Unknown",
+          destinationName: fareQuestion?.destination || "Unknown",
+          fareAmount: data.fareAmount,
+          responseType: data.responseType,
+        }),
       });
-      return response.json();
     },
-    onSuccess: (data) => {
-      setEarnedPoints((prev) => prev + (data.pointsEarned || 10));
+    onSuccess: (data: any) => {
+      sessionFlags.current.fare = true;
+      setEarnedPoints((prev) => prev + (data?.pointsEarned || 10));
       queryClient.invalidateQueries({ queryKey: [`/api/explorer/progress/${deviceId}`] });
-      triggerHaptic();
+      fireSuccessHaptic();
       setCurrentStep("stop");
+    },
+    onError: () => {
+      Alert.alert("Could not save", "Please try again in a moment.");
     },
   });
 
   const stopMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/explorer/stop", {
-        deviceId,
-        stopName,
-        latitude: -26.2041 + (Math.random() * 0.1 - 0.05),
-        longitude: 28.0473 + (Math.random() * 0.1 - 0.05),
-        tip: stopTip,
-        landmark: stopLandmark,
-        bestTime,
+      let coords: { latitude: number; longitude: number } | null = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          coords = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          };
+        }
+      } catch {
+        // GPS optional — server accepts null lat/lng for "unknown location"
+      }
+
+      return apiRequest("/api/explorer/stop", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId,
+          stopName,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          tip: stopTip,
+          landmark: stopLandmark,
+          bestTime,
+        }),
       });
-      return response.json();
     },
-    onSuccess: (data) => {
-      setEarnedPoints((prev) => prev + (data.pointsEarned || 30));
+    onSuccess: (data: any) => {
+      sessionFlags.current.stop = true;
+      setEarnedPoints((prev) => prev + (data?.pointsEarned || 30));
       queryClient.invalidateQueries({ queryKey: [`/api/explorer/progress/${deviceId}`] });
-      triggerHaptic();
+      fireSuccessHaptic();
       setCurrentStep("photo");
+    },
+    onError: () => {
+      Alert.alert("Could not save", "Please try again in a moment.");
     },
   });
 
   const photoMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/explorer/photo", {
-        deviceId,
-        description: photoDescription,
-        landmark: stopLandmark,
-        bestTime,
+      return apiRequest("/api/explorer/photo", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId,
+          description: photoDescription,
+          landmark: stopLandmark,
+          bestTime,
+        }),
       });
-      return response.json();
     },
-    onSuccess: (data) => {
-      setEarnedPoints((prev) => prev + (data.pointsEarned || 20));
+    onSuccess: (data: any) => {
+      sessionFlags.current.photo = true;
+      setEarnedPoints((prev) => prev + (data?.pointsEarned || 20));
       queryClient.invalidateQueries({ queryKey: [`/api/explorer/progress/${deviceId}`] });
-      triggerHaptic();
-      checkForNewBadges();
+      fireSuccessHaptic();
+      computeBadges();
       setCurrentStep("complete");
+    },
+    onError: () => {
+      Alert.alert("Could not save", "Please try again in a moment.");
     },
   });
 
-  const checkForNewBadges = () => {
+  const computeBadges = () => {
+    const initial = initialCounts.current || {
+      faresVerified: 0,
+      stopsAdded: 0,
+      photosUploaded: 0,
+    };
     const badges: string[] = [];
-    if ((progress?.faresVerified || 0) === 0) badges.push("fare-detective");
-    if ((progress?.stopsAdded || 0) === 0) badges.push("stop-spotter");
-    if ((progress?.photosUploaded || 0) === 0) badges.push("direction-hero");
+    if (sessionFlags.current.fare && initial.faresVerified === 0) {
+      badges.push("fare-detective");
+    }
+    if (sessionFlags.current.stop && initial.stopsAdded === 0) {
+      badges.push("stop-spotter");
+    }
+    if (sessionFlags.current.photo && initial.photosUploaded === 0) {
+      badges.push("direction-hero");
+    }
     setNewBadges(badges);
   };
 
-  const triggerHaptic = async () => {
-    if (Platform.OS !== "web") {
-      try {
-        const Haptics = await import("expo-haptics");
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
-    }
-  };
-
   const handleSkipStop = () => {
+    fireSelectionHaptic();
     setCurrentStep("photo");
   };
 
   const handleSkipPhoto = () => {
-    checkForNewBadges();
+    fireSelectionHaptic();
+    computeBadges();
     setCurrentStep("complete");
+  };
+
+  const handleSubmitFare = () => {
+    if (!fareResponse) return;
+    fareMutation.mutate({
+      fareAmount:
+        fareResponse === "known" && fareAmount ? parseFloat(fareAmount) : undefined,
+      responseType: fareResponse,
+    });
+  };
+
+  const handleStartOver = () => {
+    fireSelectionHaptic();
+    setCurrentStep("welcome");
+    setEarnedPoints(0);
+    setNewBadges([]);
+    setFareResponse(null);
+    setFareAmount("");
+    setStopName("");
+    setStopTip("");
+    setStopLandmark("");
+    setBestTime(null);
+    setPhotoDescription("");
+    sessionFlags.current = { fare: false, stop: false, photo: false };
+    initialCounts.current = progress
+      ? {
+          faresVerified: progress.faresVerified || 0,
+          stopsAdded: progress.stopsAdded || 0,
+          photosUploaded: progress.photosUploaded || 0,
+        }
+      : null;
+    queryClient.invalidateQueries({ queryKey: [`/api/explorer/progress/${deviceId}`] });
   };
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -201,515 +320,627 @@ export default function CityExplorerScreen() {
 
   const getProgressPercent = () => {
     switch (currentStep) {
-      case "welcome": return 0;
-      case "fare": return 33;
-      case "stop": return 66;
-      case "photo": return 85;
-      case "complete": return 100;
-      default: return 0;
+      case "welcome":
+        return 0;
+      case "fare":
+        return 33;
+      case "stop":
+        return 66;
+      case "photo":
+        return 85;
+      case "complete":
+        return 100;
+      default:
+        return 0;
     }
   };
 
   const renderWelcome = () => (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.stepContainer}>
-      <View style={[styles.heroCard, { backgroundColor: BrandColors.secondary.orange }]}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500)} style={styles.stepContainer}>
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroCard}
+      >
         <Animated.View style={[styles.iconCircle, pulseStyle]}>
           <Feather name="map" size={48} color="#FFFFFF" />
         </Animated.View>
         <ThemedText style={styles.heroTitle}>Welcome, Explorer!</ThemedText>
         <ThemedText style={styles.heroSubtitle}>
-          Help build the safest, smartest taxi network in the city. Every answer helps a fellow traveler!
+          Help build the safest, smartest taxi network in the city. Every answer helps a
+          fellow traveller.
         </ThemedText>
-      </View>
+      </LinearGradient>
 
-      <View style={[styles.infoCard, { backgroundColor: theme.backgroundSecondary }]}>
+      <View style={[styles.infoCard, { backgroundColor: cardSurface }]}>
         <View style={styles.infoRow}>
-          <View style={[styles.badge, { backgroundColor: "#4CAF50" }]}>
-            <Feather name="star" size={16} color="#FFFFFF" />
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: BrandColors.primary.gradientStart + "15" },
+            ]}
+          >
+            <Feather name="star" size={16} color={BrandColors.primary.gradientStart} />
           </View>
           <View style={styles.infoText}>
-            <ThemedText style={styles.infoLabel}>Your Points</ThemedText>
+            <ThemedText style={styles.infoLabel}>Your points</ThemedText>
             <ThemedText style={styles.infoValue}>{progress?.totalPoints || 0}</ThemedText>
           </View>
         </View>
+        <View style={styles.infoDivider} />
         <View style={styles.infoRow}>
-          <View style={[styles.badge, { backgroundColor: "#2196F3" }]}>
-            <Feather name="award" size={16} color="#FFFFFF" />
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: BrandColors.primary.gradientStart + "15" },
+            ]}
+          >
+            <Feather name="award" size={16} color={BrandColors.primary.gradientStart} />
           </View>
           <View style={styles.infoText}>
-            <ThemedText style={styles.infoLabel}>Badges Earned</ThemedText>
-            <ThemedText style={styles.infoValue}>{progress?.badges?.length || 0}/3</ThemedText>
+            <ThemedText style={styles.infoLabel}>Badges earned</ThemedText>
+            <ThemedText style={styles.infoValue}>
+              {progress?.badges?.length || 0}/3
+            </ThemedText>
           </View>
         </View>
+        <View style={styles.infoDivider} />
         <View style={styles.infoRow}>
-          <View style={[styles.badge, { backgroundColor: "#FF9800" }]}>
-            <Feather name="trending-up" size={16} color="#FFFFFF" />
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: BrandColors.primary.gradientStart + "15" },
+            ]}
+          >
+            <Feather
+              name="trending-up"
+              size={16}
+              color={BrandColors.primary.gradientStart}
+            />
           </View>
           <View style={styles.infoText}>
             <ThemedText style={styles.infoLabel}>Level</ThemedText>
-            <ThemedText style={styles.infoValue}>{progress?.currentLevel || 1}</ThemedText>
+            <ThemedText style={styles.infoValue}>
+              {progress?.currentLevel || 1}
+            </ThemedText>
           </View>
         </View>
       </View>
 
-      <View style={styles.rewardsPreview}>
-        <ThemedText style={styles.rewardsTitle}>What you can earn:</ThemedText>
+      <View style={[styles.rewardsPreview, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.rewardsTitle}>What you can earn</ThemedText>
         <View style={styles.rewardItem}>
-          <Feather name="gift" size={18} color={BrandColors.secondary.orange} />
+          <Feather name="gift" size={18} color={BrandColors.primary.gradientStart} />
           <ThemedText style={styles.rewardText}>Entry into Weekly Haibo Raffle</ThemedText>
         </View>
         <View style={styles.rewardItem}>
-          <Feather name="bar-chart-2" size={18} color={BrandColors.primary.blue} />
+          <Feather
+            name="bar-chart-2"
+            size={18}
+            color={BrandColors.primary.gradientStart}
+          />
           <ThemedText style={styles.rewardText}>Compare your fares with others</ThemedText>
         </View>
         <View style={styles.rewardItem}>
-          <Feather name="award" size={18} color={BrandColors.primary.green} />
-          <ThemedText style={styles.rewardText}>Climb the City Explorer Leaderboard</ThemedText>
+          <Feather name="award" size={18} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.rewardText}>
+            Climb the City Explorer leaderboard
+          </ThemedText>
         </View>
       </View>
 
-      <Pressable
-        style={[styles.primaryButton, { backgroundColor: BrandColors.secondary.orange }]}
-        onPress={() => setCurrentStep("fare")}
+      <GradientButton
+        onPress={() => {
+          fireSelectionHaptic();
+          setCurrentStep("fare");
+        }}
+        icon="arrow-right"
+        iconPosition="right"
       >
-        <ThemedText style={styles.primaryButtonText}>Start Challenge</ThemedText>
-        <Feather name="arrow-right" size={20} color="#FFFFFF" />
-      </Pressable>
+        Start challenge
+      </GradientButton>
     </Animated.View>
   );
 
   const renderFareStep = () => (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.stepContainer}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500)} style={styles.stepContainer}>
       <View style={styles.levelHeader}>
-        <View style={[styles.levelBadge, { backgroundColor: "#4CAF50" }]}>
+        <View style={styles.levelBadge}>
           <ThemedText style={styles.levelNumber}>1</ThemedText>
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <ThemedText style={styles.levelTitle}>Fare Detective</ThemedText>
-          <ThemedText style={[styles.levelSubtitle, { color: theme.textSecondary }]}>
-            Quick & easy - earn your first badge!
+          <ThemedText style={styles.levelSubtitle}>
+            Quick & easy — earn your first badge
           </ThemedText>
         </View>
       </View>
 
-      <View style={[styles.questionCard, { backgroundColor: theme.backgroundSecondary }]}>
-        <ThemedText style={styles.questionLabel}>Quick Fare Check</ThemedText>
-        <ThemedText style={styles.questionText}>
-          If you were taking a taxi from:
-        </ThemedText>
+      <View style={[styles.questionCard, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.questionLabel}>Quick fare check</ThemedText>
+        <ThemedText style={styles.questionText}>If you took a taxi from:</ThemedText>
         <View style={[styles.routeBox, { backgroundColor: theme.backgroundDefault }]}>
-          <Feather name="map-pin" size={16} color={BrandColors.secondary.orange} />
-          <ThemedText style={styles.routeText}>{fareQuestion?.origin || "Loading..."}</ThemedText>
+          <Feather name="map-pin" size={16} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.routeText}>
+            {fareQuestion?.origin || "Loading..."}
+          </ThemedText>
         </View>
         <ThemedText style={styles.questionText}>to:</ThemedText>
         <View style={[styles.routeBox, { backgroundColor: theme.backgroundDefault }]}>
-          <Feather name="navigation" size={16} color={BrandColors.primary.blue} />
-          <ThemedText style={styles.routeText}>{fareQuestion?.destination || "Loading..."}</ThemedText>
+          <Feather name="navigation" size={16} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.routeText}>
+            {fareQuestion?.destination || "Loading..."}
+          </ThemedText>
         </View>
-        <ThemedText style={[styles.hint, { color: theme.textSecondary }]}>
-          Hint: {fareQuestion?.hint || ""}
-        </ThemedText>
+        {fareQuestion?.hint ? (
+          <View style={styles.hintRow}>
+            <Feather name="info" size={12} color={BrandColors.gray[600]} />
+            <ThemedText style={styles.hint}>{fareQuestion.hint}</ThemedText>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.optionsContainer}>
-        <Pressable
-          style={[
-            styles.optionButton,
-            { backgroundColor: theme.backgroundSecondary },
-            fareResponse === "known" && { borderColor: BrandColors.primary.green, borderWidth: 2 },
-          ]}
-          onPress={() => setFareResponse("known")}
-        >
-          <Feather name="check-circle" size={24} color={BrandColors.primary.green} />
-          <ThemedText style={styles.optionText}>Yes, I know the fare</ThemedText>
-        </Pressable>
+        {(
+          [
+            { id: "known", icon: "check-circle", label: "Yes, I know the fare" },
+            { id: "guessed", icon: "help-circle", label: "No, but I can guess" },
+            { id: "new_route", icon: "plus-circle", label: "This route is new to me" },
+          ] as const
+        ).map((opt) => {
+          const selected = fareResponse === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[
+                styles.optionButton,
+                {
+                  backgroundColor: cardSurface,
+                  borderColor: selected
+                    ? BrandColors.primary.gradientStart
+                    : BrandColors.gray[200],
+                },
+              ]}
+              onPress={() => {
+                fireSelectionHaptic();
+                setFareResponse(opt.id);
+              }}
+            >
+              <Feather
+                name={opt.icon}
+                size={22}
+                color={
+                  selected ? BrandColors.primary.gradientStart : BrandColors.gray[600]
+                }
+              />
+              <ThemedText
+                style={[
+                  styles.optionText,
+                  selected && {
+                    color: BrandColors.primary.gradientStart,
+                    fontWeight: "700",
+                  },
+                ]}
+              >
+                {opt.label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
 
-        {fareResponse === "known" && (
-          <View style={styles.fareInput}>
-            <ThemedText style={styles.fareLabel}>Approximate fare (R):</ThemedText>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
-              value={fareAmount}
-              onChangeText={setFareAmount}
-              keyboardType="numeric"
-              placeholder="e.g., 50"
-              placeholderTextColor={theme.textSecondary}
-            />
+        {fareResponse === "known" ? (
+          <View style={[styles.fareInputCard, { backgroundColor: cardSurface }]}>
+            <ThemedText style={styles.fareLabel}>Approximate fare</ThemedText>
+            <View
+              style={[
+                styles.inputWrap,
+                { backgroundColor: theme.backgroundDefault },
+              ]}
+            >
+              <ThemedText style={styles.farePrefix}>R</ThemedText>
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                value={fareAmount}
+                onChangeText={setFareAmount}
+                keyboardType="decimal-pad"
+                placeholder="50"
+                placeholderTextColor={BrandColors.gray[500]}
+              />
+            </View>
           </View>
-        )}
-
-        <Pressable
-          style={[
-            styles.optionButton,
-            { backgroundColor: theme.backgroundSecondary },
-            fareResponse === "guessed" && { borderColor: BrandColors.secondary.orange, borderWidth: 2 },
-          ]}
-          onPress={() => setFareResponse("guessed")}
-        >
-          <Feather name="help-circle" size={24} color={BrandColors.secondary.orange} />
-          <ThemedText style={styles.optionText}>No, but I can guess!</ThemedText>
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.optionButton,
-            { backgroundColor: theme.backgroundSecondary },
-            fareResponse === "new_route" && { borderColor: BrandColors.primary.blue, borderWidth: 2 },
-          ]}
-          onPress={() => setFareResponse("new_route")}
-        >
-          <Feather name="plus-circle" size={24} color={BrandColors.primary.blue} />
-          <ThemedText style={styles.optionText}>This route is new to me</ThemedText>
-        </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.pointsIndicator}>
-        <Feather name="zap" size={16} color={BrandColors.secondary.orange} />
-        <ThemedText style={[styles.pointsText, { color: BrandColors.secondary.orange }]}>
-          +10 points for answering
-        </ThemedText>
+        <Feather name="zap" size={16} color={BrandColors.primary.gradientStart} />
+        <ThemedText style={styles.pointsText}>+10 points for answering</ThemedText>
       </View>
 
-      <Pressable
-        style={[
-          styles.primaryButton,
-          { backgroundColor: fareResponse ? BrandColors.secondary.orange : theme.textSecondary },
-        ]}
-        onPress={() => {
-          if (fareResponse) {
-            fareMutation.mutate({
-              fareAmount: fareAmount ? parseFloat(fareAmount) : undefined,
-              responseType: fareResponse,
-            });
-          }
-        }}
+      <GradientButton
+        onPress={handleSubmitFare}
         disabled={!fareResponse || fareMutation.isPending}
+        icon={fareMutation.isPending ? undefined : "arrow-right"}
+        iconPosition="right"
       >
-        {fareMutation.isPending ? (
-          <ActivityIndicator color="#FFFFFF" />
-        ) : (
-          <>
-            <ThemedText style={styles.primaryButtonText}>Continue</ThemedText>
-            <Feather name="arrow-right" size={20} color="#FFFFFF" />
-          </>
-        )}
-      </Pressable>
+        {fareMutation.isPending ? "Submitting..." : "Continue"}
+      </GradientButton>
     </Animated.View>
   );
 
   const renderStopStep = () => (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.stepContainer}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500)} style={styles.stepContainer}>
       <View style={styles.levelHeader}>
-        <View style={[styles.levelBadge, { backgroundColor: "#2196F3" }]}>
+        <View style={styles.levelBadge}>
           <ThemedText style={styles.levelNumber}>2</ThemedText>
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <ThemedText style={styles.levelTitle}>Stop Spotter</ThemedText>
-          <ThemedText style={[styles.levelSubtitle, { color: theme.textSecondary }]}>
-            Help us map missing stops!
-          </ThemedText>
+          <ThemedText style={styles.levelSubtitle}>Help us map missing stops</ThemedText>
         </View>
       </View>
 
-      <View style={[styles.questionCard, { backgroundColor: theme.backgroundSecondary }]}>
-        <ThemedText style={styles.questionLabel}>Missing Stop Scout</ThemedText>
+      <View style={[styles.questionCard, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.questionLabel}>Missing stop scout</ThemedText>
         <ThemedText style={styles.questionText}>
-          Is there a taxi stop or pickup spot near you that's NOT on our map?
+          Is there a taxi stop or pickup spot near you that's not on our map?
         </ThemedText>
       </View>
 
       <View style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>Name this stop:</ThemedText>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-          value={stopName}
-          onChangeText={setStopName}
-          placeholder="e.g., Corner of Main and Oak"
-          placeholderTextColor={theme.textSecondary}
-        />
+        <ThemedText style={styles.inputLabel}>Name this stop</ThemedText>
+        <View style={[styles.inputWrap, { backgroundColor: cardSurface }]}>
+          <Feather name="map-pin" size={16} color={BrandColors.gray[600]} />
+          <TextInput
+            style={[styles.input, { color: theme.text }]}
+            value={stopName}
+            onChangeText={setStopName}
+            placeholder="e.g. Corner of Main and Oak"
+            placeholderTextColor={BrandColors.gray[500]}
+          />
+        </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>Quick tip for travelers:</ThemedText>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-          value={stopTip}
-          onChangeText={setStopTip}
-          placeholder="e.g., Only taxis after 5 PM"
-          placeholderTextColor={theme.textSecondary}
-        />
+        <ThemedText style={styles.inputLabel}>Quick tip for travellers</ThemedText>
+        <View style={[styles.inputWrap, { backgroundColor: cardSurface }]}>
+          <Feather name="message-circle" size={16} color={BrandColors.gray[600]} />
+          <TextInput
+            style={[styles.input, { color: theme.text }]}
+            value={stopTip}
+            onChangeText={setStopTip}
+            placeholder="e.g. Only taxis after 5 PM"
+            placeholderTextColor={BrandColors.gray[500]}
+          />
+        </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>Nearby landmark:</ThemedText>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text }]}
-          value={stopLandmark}
-          onChangeText={setStopLandmark}
-          placeholder="e.g., Next to KFC"
-          placeholderTextColor={theme.textSecondary}
-        />
+        <ThemedText style={styles.inputLabel}>Nearby landmark</ThemedText>
+        <View style={[styles.inputWrap, { backgroundColor: cardSurface }]}>
+          <Feather name="flag" size={16} color={BrandColors.gray[600]} />
+          <TextInput
+            style={[styles.input, { color: theme.text }]}
+            value={stopLandmark}
+            onChangeText={setStopLandmark}
+            placeholder="e.g. Next to KFC"
+            placeholderTextColor={BrandColors.gray[500]}
+          />
+        </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>Best time to find taxis:</ThemedText>
+        <ThemedText style={styles.inputLabel}>Best time to find taxis</ThemedText>
         <View style={styles.timeOptions}>
-          {(["morning", "afternoon", "evening"] as const).map((time) => (
-            <Pressable
-              key={time}
-              style={[
-                styles.timeOption,
-                { backgroundColor: theme.backgroundSecondary },
-                bestTime === time && { borderColor: BrandColors.primary.blue, borderWidth: 2 },
-              ]}
-              onPress={() => setBestTime(time)}
-            >
-              <Feather
-                name={time === "morning" ? "sunrise" : time === "afternoon" ? "sun" : "sunset"}
-                size={20}
-                color={bestTime === time ? BrandColors.primary.blue : theme.text}
-              />
-              <ThemedText style={styles.timeText}>
-                {time.charAt(0).toUpperCase() + time.slice(1)}
-              </ThemedText>
-            </Pressable>
-          ))}
+          {(["morning", "afternoon", "evening"] as const).map((time) => {
+            const selected = bestTime === time;
+            return (
+              <Pressable
+                key={time}
+                style={[
+                  styles.timeOption,
+                  {
+                    backgroundColor: cardSurface,
+                    borderColor: selected
+                      ? BrandColors.primary.gradientStart
+                      : BrandColors.gray[200],
+                  },
+                  selected && {
+                    backgroundColor: BrandColors.primary.gradientStart + "10",
+                  },
+                ]}
+                onPress={() => {
+                  fireSelectionHaptic();
+                  setBestTime(time);
+                }}
+              >
+                <Feather
+                  name={
+                    time === "morning"
+                      ? "sunrise"
+                      : time === "afternoon"
+                      ? "sun"
+                      : "sunset"
+                  }
+                  size={20}
+                  color={
+                    selected
+                      ? BrandColors.primary.gradientStart
+                      : BrandColors.gray[600]
+                  }
+                />
+                <ThemedText
+                  style={[
+                    styles.timeText,
+                    selected && {
+                      color: BrandColors.primary.gradientStart,
+                      fontWeight: "700",
+                    },
+                  ]}
+                >
+                  {time.charAt(0).toUpperCase() + time.slice(1)}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
       <View style={styles.pointsIndicator}>
-        <Feather name="zap" size={16} color={BrandColors.secondary.orange} />
-        <ThemedText style={[styles.pointsText, { color: BrandColors.secondary.orange }]}>
-          +30 points for adding a stop
-        </ThemedText>
+        <Feather name="zap" size={16} color={BrandColors.primary.gradientStart} />
+        <ThemedText style={styles.pointsText}>+30 points for adding a stop</ThemedText>
       </View>
 
       <View style={styles.buttonRow}>
         <Pressable
-          style={[styles.secondaryButton, { borderColor: theme.border }]}
+          style={[
+            styles.secondaryButton,
+            {
+              backgroundColor: cardSurface,
+              borderColor: BrandColors.gray[200],
+            },
+          ]}
           onPress={handleSkipStop}
         >
           <ThemedText style={styles.secondaryButtonText}>Skip</ThemedText>
         </Pressable>
-        <Pressable
-          style={[
-            styles.primaryButton,
-            styles.flexButton,
-            { backgroundColor: stopName ? BrandColors.secondary.orange : theme.textSecondary },
-          ]}
-          onPress={() => stopMutation.mutate()}
-          disabled={!stopName || stopMutation.isPending}
-        >
-          {stopMutation.isPending ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <ThemedText style={styles.primaryButtonText}>Add Stop</ThemedText>
-              <Feather name="map-pin" size={20} color="#FFFFFF" />
-            </>
-          )}
-        </Pressable>
+        <View style={{ flex: 2 }}>
+          <GradientButton
+            onPress={() => stopMutation.mutate()}
+            disabled={!stopName || stopMutation.isPending}
+            icon={stopMutation.isPending ? undefined : "map-pin"}
+            iconPosition="right"
+          >
+            {stopMutation.isPending ? "Saving..." : "Add stop"}
+          </GradientButton>
+        </View>
       </View>
     </Animated.View>
   );
 
   const renderPhotoStep = () => (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.stepContainer}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500)} style={styles.stepContainer}>
       <View style={styles.levelHeader}>
-        <View style={[styles.levelBadge, { backgroundColor: "#FF9800" }]}>
+        <View style={styles.levelBadge}>
           <ThemedText style={styles.levelNumber}>3</ThemedText>
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <ThemedText style={styles.levelTitle}>Direction Hero</ThemedText>
-          <ThemedText style={[styles.levelSubtitle, { color: theme.textSecondary }]}>
-            Add photos & details to level up!
+          <ThemedText style={styles.levelSubtitle}>
+            Add details to level up
           </ThemedText>
         </View>
       </View>
 
-      <View style={[styles.questionCard, { backgroundColor: theme.backgroundSecondary }]}>
-        <ThemedText style={styles.questionLabel}>Picture Patrol</ThemedText>
+      <View style={[styles.questionCard, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.questionLabel}>Picture patrol</ThemedText>
         <ThemedText style={styles.questionText}>
-          Can you snap a quick photo of a taxi rank or stop near you? This helps travelers recognize the spot!
+          Snap a quick photo of a taxi rank or stop near you. This helps travellers
+          recognise the spot.
         </ThemedText>
       </View>
 
       <Pressable
-        style={[styles.photoUploadArea, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
+        style={[
+          styles.photoUploadArea,
+          {
+            backgroundColor: BrandColors.primary.gradientStart + "08",
+            borderColor: BrandColors.primary.gradientStart + "4D",
+          },
+        ]}
         onPress={() => {
           Alert.alert(
-            "Photo Upload",
-            "Photo upload coming soon! For now, add a description instead.",
-            [{ text: "OK" }]
+            "Coming soon",
+            "Photo upload is not available yet. For now, add a description below — you'll still earn points."
           );
         }}
       >
-        <Feather name="camera" size={48} color={theme.textSecondary} />
-        <ThemedText style={[styles.photoUploadText, { color: theme.textSecondary }]}>
-          Tap to upload photo
-        </ThemedText>
-        <ThemedText style={[styles.photoUploadHint, { color: theme.textSecondary }]}>
-          (Coming soon)
-        </ThemedText>
+        <View style={styles.photoIconWrap}>
+          <Feather name="camera" size={28} color={BrandColors.primary.gradientStart} />
+        </View>
+        <ThemedText style={styles.photoUploadText}>Tap to upload photo</ThemedText>
+        <View style={styles.comingSoonPill}>
+          <ThemedText style={styles.comingSoonText}>Coming soon</ThemedText>
+        </View>
       </Pressable>
 
       <View style={styles.inputGroup}>
-        <ThemedText style={styles.inputLabel}>Or describe the location:</ThemedText>
+        <ThemedText style={styles.inputLabel}>Or describe the location</ThemedText>
         <TextInput
           style={[
-            styles.input,
-            styles.multilineInput,
-            { backgroundColor: theme.backgroundSecondary, color: theme.text },
+            styles.textArea,
+            { backgroundColor: cardSurface, color: theme.text },
           ]}
           value={photoDescription}
           onChangeText={setPhotoDescription}
-          placeholder="e.g., Large rank with blue roof, next to the mall entrance..."
-          placeholderTextColor={theme.textSecondary}
+          placeholder="e.g. Large rank with blue roof, next to the mall entrance..."
+          placeholderTextColor={BrandColors.gray[500]}
           multiline
-          numberOfLines={3}
+          textAlignVertical="top"
         />
       </View>
 
       <View style={styles.pointsIndicator}>
-        <Feather name="zap" size={16} color={BrandColors.secondary.orange} />
-        <ThemedText style={[styles.pointsText, { color: BrandColors.secondary.orange }]}>
-          +40 for photo, +20 for description
+        <Feather name="zap" size={16} color={BrandColors.primary.gradientStart} />
+        <ThemedText style={styles.pointsText}>
+          +20 points for description (+40 once photo upload is live)
         </ThemedText>
       </View>
 
       <View style={styles.buttonRow}>
         <Pressable
-          style={[styles.secondaryButton, { borderColor: theme.border }]}
+          style={[
+            styles.secondaryButton,
+            {
+              backgroundColor: cardSurface,
+              borderColor: BrandColors.gray[200],
+            },
+          ]}
           onPress={handleSkipPhoto}
         >
           <ThemedText style={styles.secondaryButtonText}>Skip</ThemedText>
         </Pressable>
-        <Pressable
-          style={[
-            styles.primaryButton,
-            styles.flexButton,
-            { backgroundColor: photoDescription ? BrandColors.secondary.orange : theme.textSecondary },
-          ]}
-          onPress={() => photoMutation.mutate()}
-          disabled={!photoDescription || photoMutation.isPending}
-        >
-          {photoMutation.isPending ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <ThemedText style={styles.primaryButtonText}>Submit</ThemedText>
-              <Feather name="check" size={20} color="#FFFFFF" />
-            </>
-          )}
-        </Pressable>
+        <View style={{ flex: 2 }}>
+          <GradientButton
+            onPress={() => photoMutation.mutate()}
+            disabled={!photoDescription || photoMutation.isPending}
+            icon={photoMutation.isPending ? undefined : "check"}
+            iconPosition="right"
+          >
+            {photoMutation.isPending ? "Saving..." : "Submit"}
+          </GradientButton>
+        </View>
       </View>
     </Animated.View>
   );
 
   const renderComplete = () => (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.stepContainer}>
-      <View style={[styles.successCard, { backgroundColor: BrandColors.primary.green }]}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500)} style={styles.stepContainer}>
+      <LinearGradient
+        colors={[BrandColors.status.success, "#0F8F4F"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.successCard}
+      >
         <View style={styles.celebrationIcon}>
-          <Feather name="award" size={64} color="#FFFFFF" />
+          <Feather name="award" size={56} color="#FFFFFF" />
         </View>
-        <ThemedText style={styles.successTitle}>Level Up Complete!</ThemedText>
+        <ThemedText style={styles.successTitle}>Level up complete</ThemedText>
         <ThemedText style={styles.successSubtitle}>
-          You've earned {earnedPoints} points today!
+          You've earned {earnedPoints} points today
         </ThemedText>
-      </View>
+      </LinearGradient>
 
-      {newBadges.length > 0 && (
-        <View style={[styles.badgesEarned, { backgroundColor: theme.backgroundSecondary }]}>
-          <ThemedText style={styles.badgesTitle}>New Badges Earned:</ThemedText>
+      {newBadges.length > 0 ? (
+        <View style={[styles.badgesEarned, { backgroundColor: cardSurface }]}>
+          <ThemedText style={styles.badgesTitle}>New badges earned</ThemedText>
           <View style={styles.badgesList}>
             {newBadges.map((badge) => {
-              const info = BADGE_INFO[badge as keyof typeof BADGE_INFO];
+              const info = BADGE_INFO[badge];
+              if (!info) return null;
               return (
-                <View key={badge} style={[styles.badgeItem, { backgroundColor: info?.color || theme.backgroundDefault }]}>
-                  <Feather name={info?.icon as any || "award"} size={24} color="#FFFFFF" />
-                  <ThemedText style={styles.badgeLabel}>{info?.label || badge}</ThemedText>
+                <View
+                  key={badge}
+                  style={[styles.badgeItem, { backgroundColor: info.color }]}
+                >
+                  <Feather name={info.icon} size={20} color="#FFFFFF" />
+                  <ThemedText style={styles.badgeLabel}>{info.label}</ThemedText>
                 </View>
               );
             })}
           </View>
         </View>
-      )}
+      ) : null}
 
-      <View style={[styles.rewardsEarned, { backgroundColor: theme.backgroundSecondary }]}>
-        <ThemedText style={styles.rewardsEarnedTitle}>Your Rewards:</ThemedText>
+      <View style={[styles.rewardsEarned, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.rewardsEarnedTitle}>Your rewards</ThemedText>
         <View style={styles.rewardItem}>
-          <Feather name="check-circle" size={18} color={BrandColors.primary.green} />
+          <Feather name="check-circle" size={18} color={BrandColors.status.success} />
           <ThemedText style={styles.rewardText}>Entry into Weekly Haibo Raffle</ThemedText>
         </View>
         <View style={styles.rewardItem}>
-          <Feather name="check-circle" size={18} color={BrandColors.primary.green} />
+          <Feather name="check-circle" size={18} color={BrandColors.status.success} />
           <ThemedText style={styles.rewardText}>See how your fares compare</ThemedText>
         </View>
         <View style={styles.rewardItem}>
-          <Feather name="check-circle" size={18} color={BrandColors.primary.green} />
-          <ThemedText style={styles.rewardText}>Climb the City Explorer Leaderboard</ThemedText>
+          <Feather name="check-circle" size={18} color={BrandColors.status.success} />
+          <ThemedText style={styles.rewardText}>
+            Climb the City Explorer leaderboard
+          </ThemedText>
         </View>
       </View>
 
-      <View style={styles.totalPoints}>
-        <ThemedText style={styles.totalPointsLabel}>Total Points</ThemedText>
-        <ThemedText style={[styles.totalPointsValue, { color: BrandColors.secondary.orange }]}>
+      <View style={[styles.totalPoints, { backgroundColor: cardSurface }]}>
+        <ThemedText style={styles.totalPointsLabel}>Total points</ThemedText>
+        <ThemedText style={styles.totalPointsValue}>
           {(progress?.totalPoints || 0) + earnedPoints}
         </ThemedText>
       </View>
 
-      <Pressable
-        style={[styles.primaryButton, { backgroundColor: BrandColors.secondary.orange }]}
-        onPress={() => {
-          setCurrentStep("welcome");
-          setEarnedPoints(0);
-          setNewBadges([]);
-          setFareResponse(null);
-          setFareAmount("");
-          setStopName("");
-          setStopTip("");
-          setStopLandmark("");
-          setBestTime(null);
-          setPhotoDescription("");
-          queryClient.invalidateQueries({ queryKey: [`/api/explorer/progress/${deviceId}`] });
-        }}
+      <GradientButton
+        onPress={handleStartOver}
+        icon="refresh-cw"
+        iconPosition="right"
       >
-        <ThemedText style={styles.primaryButtonText}>Start Another Challenge</ThemedText>
-        <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-      </Pressable>
+        Start another challenge
+      </GradientButton>
     </Animated.View>
   );
 
   if (!deviceId || progressLoading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={BrandColors.secondary.orange} />
-      </ThemedView>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.backgroundDefault },
+        ]}
+      >
+        <ActivityIndicator size="large" color={BrandColors.primary.gradientStart} />
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${getProgressPercent()}%`, backgroundColor: BrandColors.secondary.orange },
-          ]}
-        />
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={[styles.topBackButton, { backgroundColor: cardSurface }]}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Feather name="arrow-left" size={20} color={BrandColors.gray[700]} />
+        </Pressable>
+        <View style={styles.topProgressTrack}>
+          <Animated.View
+            style={[
+              styles.topProgressFill,
+              { width: `${getProgressPercent()}%` },
+            ]}
+          />
+        </View>
+        <View style={[styles.pointsPill, { backgroundColor: cardSurface }]}>
+          <Feather name="star" size={12} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.pointsPillText}>
+            {progress?.totalPoints || 0}
+          </ThemedText>
+        </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xl }]}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing.xl },
+        ]}
       >
         {currentStep === "welcome" && renderWelcome()}
         {currentStep === "fare" && renderFareStep()}
         {currentStep === "stop" && renderStopStep()}
         {currentStep === "photo" && renderPhotoStep()}
         {currentStep === "complete" && renderComplete()}
-      </ScrollView>
-    </ThemedView>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
@@ -722,13 +953,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  progressBar: {
-    height: 4,
-    width: "100%",
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: Spacing.md,
   },
-  progressFill: {
+  topBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  topProgressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: BrandColors.gray[200],
+    overflow: "hidden",
+  },
+  topProgressFill: {
     height: "100%",
-    borderRadius: 2,
+    backgroundColor: BrandColors.primary.gradientStart,
+    borderRadius: 3,
+  },
+  pointsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pointsPillText: {
+    ...Typography.label,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   scrollContent: {
     padding: Spacing.lg,
@@ -741,36 +1013,51 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.md,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "rgba(255,255,255,0.22)",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
   },
   heroTitle: {
-    fontSize: 28,
-    fontWeight: "700",
+    ...Typography.h1,
     color: "#FFFFFF",
     textAlign: "center",
   },
   heroSubtitle: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.9)",
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
     textAlign: "center",
     lineHeight: 22,
   },
   infoCard: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    gap: Spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  infoDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BrandColors.gray[200],
   },
   badge: {
     width: 36,
@@ -783,42 +1070,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 14,
-    opacity: 0.7,
+    ...Typography.label,
+    color: BrandColors.gray[600],
   },
   infoValue: {
-    fontSize: 18,
-    fontWeight: "600",
+    ...Typography.h4,
+    fontWeight: "800",
+    marginTop: 2,
+    fontVariant: ["tabular-nums"],
   },
   rewardsPreview: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
     gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   rewardsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
     marginBottom: Spacing.xs,
   },
   rewardItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
+    paddingVertical: 4,
   },
   rewardText: {
-    fontSize: 14,
-  },
-  primaryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.lg,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+    ...Typography.small,
+    flex: 1,
   },
   levelHeader: {
     flexDirection: "row",
@@ -829,32 +1116,48 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: BrandColors.primary.gradientStart,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   levelNumber: {
     color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   levelTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    ...Typography.h3,
+    fontWeight: "800",
   },
   levelSubtitle: {
-    fontSize: 14,
+    ...Typography.small,
+    color: BrandColors.gray[600],
   },
   questionCard: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    gap: Spacing.md,
+    gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   questionLabel: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
   },
   questionText: {
-    fontSize: 14,
+    ...Typography.small,
+    color: BrandColors.gray[700],
   },
   routeBox: {
     flexDirection: "row",
@@ -864,11 +1167,18 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   routeText: {
-    fontSize: 16,
-    fontWeight: "500",
+    ...Typography.body,
+    fontWeight: "700",
+  },
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
   },
   hint: {
-    fontSize: 12,
+    ...Typography.label,
+    color: BrandColors.gray[500],
     fontStyle: "italic",
   },
   optionsContainer: {
@@ -879,45 +1189,78 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: "transparent",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   optionText: {
-    fontSize: 16,
+    ...Typography.body,
+    fontWeight: "600",
+    flex: 1,
   },
-  fareInput: {
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
-  },
-  fareLabel: {
-    fontSize: 14,
-  },
-  input: {
+  fareInputCard: {
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    fontSize: 16,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "33",
   },
-  multilineInput: {
-    height: 80,
-    textAlignVertical: "top",
+  fareLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+  },
+  input: {
+    ...Typography.body,
+    flex: 1,
+    height: 48,
+  },
+  textArea: {
+    ...Typography.body,
+    minHeight: 100,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+  },
+  farePrefix: {
+    ...Typography.h4,
+    fontWeight: "800",
+    color: BrandColors.primary.gradientStart,
   },
   pointsIndicator: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.xs,
+    gap: 4,
   },
   pointsText: {
-    fontSize: 14,
-    fontWeight: "500",
+    ...Typography.label,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
   },
   inputGroup: {
-    gap: Spacing.xs,
+    gap: 6,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.gray[700],
   },
   timeOptions: {
     flexDirection: "row",
@@ -926,75 +1269,116 @@ const styles = StyleSheet.create({
   timeOption: {
     flex: 1,
     alignItems: "center",
-    gap: Spacing.xs,
-    padding: Spacing.md,
+    gap: 4,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: "transparent",
   },
   timeText: {
-    fontSize: 12,
+    ...Typography.label,
+    fontWeight: "600",
+    color: BrandColors.gray[700],
   },
   buttonRow: {
     flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   secondaryButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
   secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  flexButton: {
-    flex: 2,
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.gray[700],
   },
   photoUploadArea: {
     alignItems: "center",
     justifyContent: "center",
     padding: Spacing.xl,
     borderRadius: BorderRadius.lg,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: "dashed",
     gap: Spacing.sm,
   },
-  photoUploadText: {
-    fontSize: 16,
+  photoIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
-  photoUploadHint: {
-    fontSize: 12,
+  photoUploadText: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  comingSoonPill: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.gray[200],
+  },
+  comingSoonText: {
+    ...Typography.label,
+    fontWeight: "700",
+    color: BrandColors.gray[600],
+    textTransform: "uppercase",
   },
   successCard: {
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.md,
+    shadowColor: BrandColors.status.success,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
   celebrationIcon: {
-    marginBottom: Spacing.md,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    marginBottom: Spacing.sm,
   },
   successTitle: {
-    fontSize: 28,
-    fontWeight: "700",
+    ...Typography.h1,
     color: "#FFFFFF",
+    textAlign: "center",
   },
   successSubtitle: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.9)",
+    ...Typography.body,
+    color: "rgba(255,255,255,0.92)",
+    textAlign: "center",
   },
   badgesEarned: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     gap: Spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   badgesTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
   },
   badgesList: {
     flexDirection: "row",
@@ -1005,34 +1389,55 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    padding: Spacing.sm,
+    paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.full,
   },
   badgeLabel: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "500",
+    ...Typography.small,
+    fontWeight: "800",
   },
   rewardsEarned: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    gap: Spacing.md,
+    gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   rewardsEarnedTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
   },
   totalPoints: {
     alignItems: "center",
-    gap: Spacing.xs,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   totalPointsLabel: {
-    fontSize: 14,
-    opacity: 0.7,
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
   },
   totalPointsValue: {
     fontSize: 48,
-    fontWeight: "700",
+    fontWeight: "800",
+    color: BrandColors.primary.gradientStart,
+    marginTop: 4,
+    fontVariant: ["tabular-nums"],
   },
 });

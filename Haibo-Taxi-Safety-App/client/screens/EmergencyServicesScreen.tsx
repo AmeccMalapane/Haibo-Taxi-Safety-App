@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { getEmergencyContactsList } from "@/lib/localData";
 import {
   Spacing,
@@ -75,6 +76,7 @@ function categoryIcon(category: string): keyof typeof Feather.glyphMap {
 }
 
 export default function EmergencyServicesScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -181,7 +183,7 @@ export default function EmergencyServicesScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -194,7 +196,7 @@ export default function EmergencyServicesScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -203,7 +205,7 @@ export default function EmergencyServicesScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Emergency services</ThemedText>
@@ -215,7 +217,7 @@ export default function EmergencyServicesScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -245,7 +247,12 @@ export default function EmergencyServicesScreen() {
               returnKeyType="search"
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
                 <Feather name="x" size={16} color={theme.textSecondary} />
               </Pressable>
             ) : null}
@@ -254,7 +261,7 @@ export default function EmergencyServicesScreen() {
           {/* Primary numbers — only when not searching/filtering */}
           {primaryNumbers.length > 0 && !searchQuery && !selectedCategory ? (
             <Animated.View
-              entering={FadeInDown.duration(500).delay(250)}
+              entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(250)}
               style={styles.primarySection}
             >
               <ThemedText
@@ -270,7 +277,7 @@ export default function EmergencyServicesScreen() {
                 {primaryNumbers.map((item, index) => (
                   <Animated.View
                     key={item.id}
-                    entering={FadeInDown.duration(400).delay(300 + index * 60)}
+                    entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(300 + index * 60)}
                   >
                     <Pressable
                       onPress={() => handleCall(item.number)}
@@ -309,7 +316,7 @@ export default function EmergencyServicesScreen() {
           {/* Categories */}
           {categories.length > 0 ? (
             <Animated.View
-              entering={FadeInDown.duration(500).delay(300)}
+              entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(300)}
               style={styles.categoriesSection}
             >
               <ThemedText
@@ -338,7 +345,7 @@ export default function EmergencyServicesScreen() {
                           end={{ x: 1, y: 1 }}
                           style={styles.categoryChipActive}
                         >
-                          <Feather name={cat.icon} size={14} color="#FFFFFF" />
+                          <Feather name={cat.icon} size={16} color="#FFFFFF" />
                           <ThemedText style={styles.categoryChipActiveText}>
                             {cat.name}
                           </ThemedText>
@@ -368,7 +375,7 @@ export default function EmergencyServicesScreen() {
                     >
                       <Feather
                         name={cat.icon}
-                        size={14}
+                        size={16}
                         color={BrandColors.primary.gradientStart}
                       />
                       <ThemedText style={[styles.categoryChipText, { color: theme.text }]}>
@@ -411,7 +418,7 @@ export default function EmergencyServicesScreen() {
           {/* Contact list */}
           {filteredContacts.length === 0 ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={styles.emptyState}
             >
               <View
@@ -440,7 +447,7 @@ export default function EmergencyServicesScreen() {
                 return (
                   <Animated.View
                     key={contact.id}
-                    entering={FadeInDown.duration(300).delay(
+                    entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(
                       Math.min(index * 25, 250)
                     )}
                   >

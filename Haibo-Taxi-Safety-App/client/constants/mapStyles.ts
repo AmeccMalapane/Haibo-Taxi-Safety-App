@@ -23,8 +23,8 @@ export const MapTheme = {
     buildings: "#EAE7E0",            // Warm beige
     labels: "#424242",               // Dark gray text
     parks: "#D4E8C0",               // Soft green
-    taxiRankMarker: "#E72369",       // Rose Red (brand primary)
-    taxiRouteActive: "#E72369",      // Rose Red
+    taxiRankMarker: "#C81E5E",       // Rose Red (brand primary)
+    taxiRouteActive: "#C81E5E",      // Rose Red
     taxiRouteInactive: "#BDBDBD",    // Gray
     sosAlert: "#C62828",             // Emergency red
     driverMarker: "#1976D2",         // Blue

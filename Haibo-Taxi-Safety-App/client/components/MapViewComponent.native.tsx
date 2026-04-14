@@ -16,6 +16,7 @@ import { MAPBOX_ACCESS_TOKEN, MAPBOX_STYLES, DEFAULT_CAMERA, ZOOM_LEVELS } from 
 import { RANKS, ROUTES, STATUS_CONFIG, GAUTENG_CENTER } from "@/data/mapbox_transit_data";
 import type { TaxiLocation, LocationType, TrafficIncident, IncidentType } from "@/lib/types";
 import type { MapboxTaxiRank, MapboxTaxiRoute } from "@/data/mapbox_transit_data";
+import { PasopReport, PASOP_CATEGORIES, isReportActive } from "@/data/pasopReports";
 
 // Set access token before any map renders
 setAccessToken(MAPBOX_ACCESS_TOKEN);
@@ -38,10 +39,16 @@ interface MapViewComponentProps {
   onPinnedMarkerPress?: () => void;
   // New Mapbox-specific props
   showTransitRoutes?: boolean;
+  showTransitRanks?: boolean;
+  dimTransitRanks?: boolean;
   onRankSelect?: (rank: MapboxTaxiRank | null) => void;
   onRouteSelect?: (route: MapboxTaxiRoute | null) => void;
   selectedRankId?: string | null;
   selectedRouteId?: string | null;
+  // Pasop hazard layer
+  pasopReports?: PasopReport[];
+  showPasopPins?: boolean;
+  onPasopPress?: (report: PasopReport) => void;
 }
 
 // Convert locations to GeoJSON FeatureCollection
@@ -148,6 +155,41 @@ function incidentsToGeoJSON(incidents: TrafficIncident[]) {
   };
 }
 
+// Convert Pasop reports to GeoJSON
+// Each feature carries its category color, petition count, and an age-based
+// opacity so fading pins tell the user the report is losing relevance.
+function pasopToGeoJSON(reports: PasopReport[]) {
+  const now = Date.now();
+  return {
+    type: "FeatureCollection" as const,
+    features: reports.filter(isReportActive).map((r) => {
+      const cat = PASOP_CATEGORIES[r.category];
+      const ttlMs = cat.ttlHours * 60 * 60 * 1000;
+      const age = now - r.createdAt;
+      const ageRatio = Math.max(0, Math.min(1, age / ttlMs));
+      // Opacity: 1.0 fresh → 0.4 near-expired
+      const opacity = Math.max(0.4, 1 - ageRatio * 0.6);
+      return {
+        type: "Feature" as const,
+        id: r.id,
+        properties: {
+          id: r.id,
+          category: r.category,
+          label: cat.label,
+          color: cat.color,
+          severity: cat.severity,
+          petitionCount: r.petitionCount,
+          opacity,
+        },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [r.longitude, r.latitude],
+        },
+      };
+    }),
+  };
+}
+
 // Pinned location GeoJSON
 function pinnedToGeoJSON(pinnedLocation: { latitude: number; longitude: number }) {
   return {
@@ -179,12 +221,19 @@ export function MapViewComponent({
   pinnedLocation = null,
   onPinnedMarkerPress,
   showTransitRoutes = true,
+  showTransitRanks,
+  dimTransitRanks = false,
   onRankSelect,
   onRouteSelect,
   selectedRankId,
   selectedRouteId,
+  pasopReports = [],
+  showPasopPins = false,
+  onPasopPress,
   mapRef,
 }: MapViewComponentProps) {
+  const ranksVisible = showTransitRanks ?? showTransitRoutes;
+  const ranksOpacity = dimTransitRanks ? 0.4 : 1;
   const cameraRef = useRef<Camera>(null);
   const mapViewRef = useRef<MapView>(null);
 
@@ -226,6 +275,10 @@ export function MapViewComponent({
   const ranksGeoJSON = React.useMemo(() => ranksToGeoJSON(RANKS), []);
   const routesGeoJSON = React.useMemo(() => routesToGeoJSON(ROUTES), []);
   const incidentsGeoJSON = React.useMemo(() => incidentsToGeoJSON(incidents), [incidents]);
+  const pasopGeoJSON = React.useMemo(
+    () => pasopToGeoJSON(pasopReports),
+    [pasopReports]
+  );
   const pinnedGeoJSON = React.useMemo(
     () => (pinnedLocation ? pinnedToGeoJSON(pinnedLocation) : null),
     [pinnedLocation]
@@ -324,6 +377,25 @@ export function MapViewComponent({
   const handlePinnedPress = useCallback(() => {
     onPinnedMarkerPress?.();
   }, [onPinnedMarkerPress]);
+
+  // Handle Pasop pin press — look up the full report from props and hand
+  // it to the parent (HomeScreen opens a PasopPinSheet preview).
+  const handlePasopPress = useCallback(
+    (event: any) => {
+      if (!onPasopPress || !event.features?.length) return;
+      const props = event.features[0].properties;
+      const report = pasopReports.find((r) => r.id === props.id);
+      if (!report) return;
+      const [lng, lat] = event.features[0].geometry.coordinates;
+      cameraRef.current?.setCamera({
+        centerCoordinate: [lng, lat],
+        zoomLevel: ZOOM_LEVELS.rank,
+        animationDuration: 1200,
+      });
+      onPasopPress(report);
+    },
+    [onPasopPress, pasopReports]
+  );
 
   // Fly to selected rank when it changes
   useEffect(() => {
@@ -433,7 +505,7 @@ export function MapViewComponent({
       )}
 
       {/* ─── Transit Rank Markers ─── */}
-      {showTransitRoutes && (
+      {ranksVisible && (
         <ShapeSource
           id="transit-ranks"
           shape={ranksGeoJSON}
@@ -445,7 +517,7 @@ export function MapViewComponent({
             style={{
               circleRadius: 20,
               circleColor: ["get", "color"],
-              circleOpacity: 0.15,
+              circleOpacity: 0.15 * ranksOpacity,
               circleStrokeWidth: 0,
             }}
           />
@@ -455,7 +527,7 @@ export function MapViewComponent({
             style={{
               circleRadius: 8,
               circleColor: ["get", "color"],
-              circleOpacity: 1,
+              circleOpacity: ranksOpacity,
               circleStrokeWidth: 2.5,
               circleStrokeColor: "#FFFFFF",
             }}
@@ -474,6 +546,59 @@ export function MapViewComponent({
               textHaloWidth: 1.5,
               textAllowOverlap: false,
               textMaxWidth: 10,
+              textOpacity: ranksOpacity,
+            }}
+          />
+        </ShapeSource>
+      )}
+
+      {/* ─── Pasop Hazard Pins ─── */}
+      {showPasopPins && pasopGeoJSON.features.length > 0 && (
+        <ShapeSource
+          id="pasop-reports"
+          shape={pasopGeoJSON}
+          onPress={handlePasopPress}
+        >
+          {/* Outer halo — scales with petition count */}
+          <CircleLayer
+            id="pasop-halo"
+            style={{
+              circleRadius: [
+                "+",
+                18,
+                ["min", 8, ["*", 0.8, ["get", "petitionCount"]]],
+              ],
+              circleColor: ["get", "color"],
+              circleOpacity: ["*", 0.18, ["get", "opacity"]],
+              circleStrokeWidth: 0,
+            }}
+          />
+          {/* Inner marker */}
+          <CircleLayer
+            id="pasop-inner"
+            style={{
+              circleRadius: [
+                "+",
+                10,
+                ["min", 4, ["*", 0.35, ["get", "petitionCount"]]],
+              ],
+              circleColor: ["get", "color"],
+              circleOpacity: ["get", "opacity"],
+              circleStrokeWidth: 3,
+              circleStrokeColor: "#FFFFFF",
+            }}
+          />
+          {/* Universal "!" glyph — color-coded circles carry the meaning,
+              the glyph just confirms "this is a hazard pin". */}
+          <SymbolLayer
+            id="pasop-glyph"
+            style={{
+              textField: "!",
+              textSize: 14,
+              textColor: "#FFFFFF",
+              textAllowOverlap: true,
+              textIgnorePlacement: true,
+              textFont: ["DIN Pro Bold", "Arial Unicode MS Bold"],
             }}
           />
         </ShapeSource>

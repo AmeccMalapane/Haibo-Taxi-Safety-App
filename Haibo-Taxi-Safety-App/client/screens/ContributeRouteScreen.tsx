@@ -10,15 +10,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Location from "expo-location";
+import * as Haptics from "expo-haptics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { GradientButton } from "@/components/GradientButton";
+import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
+import { getDeviceId } from "@/lib/deviceId";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const PROVINCES = [
   "Gauteng",
@@ -32,18 +42,23 @@ const PROVINCES = [
   "Northern Cape",
 ];
 
-const ROUTE_TYPES = [
-  { id: "local", label: "Local", icon: "navigation" },
-  { id: "regional", label: "Regional", icon: "map" },
-  { id: "intercity", label: "Intercity", icon: "globe" },
+const ROUTE_TYPES: {
+  id: string;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  hint: string;
+}[] = [
+  { id: "local", label: "Local", icon: "navigation", hint: "Short hops" },
+  { id: "regional", label: "Regional", icon: "map", hint: "Between towns" },
+  { id: "intercity", label: "Intercity", icon: "globe", hint: "Cross-province" },
 ];
 
-const HAND_SIGNALS = [
-  { id: "point_up", label: "Point Up", icon: "arrow-up" },
-  { id: "point_down", label: "Point Down", icon: "arrow-down" },
+const HAND_SIGNALS: { id: string; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { id: "point_up", label: "Point up", icon: "arrow-up" },
+  { id: "point_down", label: "Point down", icon: "arrow-down" },
   { id: "fist", label: "Fist", icon: "square" },
-  { id: "flat_hand", label: "Flat Hand", icon: "minus" },
-  { id: "two_fingers", label: "Two Fingers", icon: "chevrons-up" },
+  { id: "flat_hand", label: "Flat hand", icon: "minus" },
+  { id: "two_fingers", label: "Two fingers", icon: "chevrons-up" },
   { id: "circle", label: "Circle", icon: "circle" },
 ];
 
@@ -54,9 +69,10 @@ interface LocationData {
 }
 
 export default function ContributeRouteScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
 
   const [origin, setOrigin] = useState("");
@@ -77,46 +93,40 @@ export default function ContributeRouteScreen() {
   const [deviceId, setDeviceId] = useState("");
 
   useEffect(() => {
-    const generateDeviceId = async () => {
-      try {
-        const AsyncStorage = await import("@react-native-async-storage/async-storage");
-        let storedDeviceId = await AsyncStorage.default.getItem("deviceId");
-        if (!storedDeviceId) {
-          storedDeviceId = `device_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-          await AsyncStorage.default.setItem("deviceId", storedDeviceId);
-        }
-        setDeviceId(storedDeviceId);
-      } catch {
-        setDeviceId(`device_${Date.now()}`);
-      }
-    };
-    generateDeviceId();
+    getDeviceId().then(setDeviceId).catch(() => setDeviceId(""));
   }, []);
 
   const submitMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/contributions", data);
+      return apiRequest("/api/contributions", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contributions"] });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       Alert.alert(
-        "Route Submitted",
+        "Route submitted",
         "Thank you for contributing! Your route will be reviewed by the community before being added.",
         [{ text: "OK", onPress: () => navigation.goBack() }]
       );
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to submit contribution. Please try again.");
+      Alert.alert("Error", error?.message || "Failed to submit contribution. Please try again.");
     },
   });
 
-  const isFormValid =
+  const isFormValid = Boolean(
     origin.trim() &&
-    destination.trim() &&
-    fare.trim() &&
-    parseFloat(fare) > 0 &&
-    selectedProvince &&
-    selectedHandSignal;
+      destination.trim() &&
+      fare.trim() &&
+      parseFloat(fare) > 0 &&
+      selectedProvince &&
+      selectedHandSignal
+  );
 
   const handleUseLocation = async (type: "origin" | "destination") => {
     setLoadingLocation(type);
@@ -124,18 +134,17 @@ export default function ContributeRouteScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
-          "Permission Denied",
-          "Location permission is required to use this feature. Please enable it in your device settings."
+          "Permission denied",
+          "Location permission is required. Please enable it in your device settings."
         );
         setLoadingLocation(null);
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
+      const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-
-      const { latitude, longitude } = location.coords;
+      const { latitude, longitude } = loc.coords;
 
       let address = "";
       try {
@@ -148,39 +157,34 @@ export default function ContributeRouteScreen() {
         address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
       }
 
-      const locationData: LocationData = { latitude, longitude, address };
-
+      const data: LocationData = { latitude, longitude, address };
       if (type === "origin") {
         setOrigin(address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-        setOriginLocation(locationData);
+        setOriginLocation(data);
       } else {
         setDestination(address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-        setDestinationLocation(locationData);
+        setDestinationLocation(data);
       }
 
-      try {
-        const Haptics = await import("expo-haptics");
+      if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
-    } catch (error) {
+      }
+    } catch {
       Alert.alert("Error", "Failed to get your location. Please try again or enter manually.");
     } finally {
       setLoadingLocation(null);
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!isFormValid) {
-      Alert.alert("Missing Information", "Please fill in all required fields.");
+      Alert.alert("Missing info", "Please fill in all required fields.");
       return;
     }
-
-    try {
-      const Haptics = await import("expo-haptics");
+    if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {}
-
-    const contributionData = {
+    }
+    submitMutation.mutate({
       origin: origin.trim(),
       originLatitude: originLocation?.latitude,
       originLongitude: originLocation?.longitude,
@@ -199,420 +203,369 @@ export default function ContributeRouteScreen() {
       additionalNotes: additionalNotes.trim() || null,
       contributorName: contributorName.trim() || null,
       deviceId,
-    };
-
-    submitMutation.mutate(contributionData);
+    });
   };
 
-  const triggerHaptic = async () => {
-    try {
-      const Haptics = await import("expo-haptics");
-      Haptics.selectionAsync();
-    } catch {}
+  const handleSelect = (setter: (v: string) => void, value: string) => {
+    Haptics.selectionAsync();
+    setter(value);
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+      <LinearGradient
+        colors={BrandColors.gradient.primary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: insets.top + Spacing.md }]}
+      >
+        <View style={styles.heroTopRow}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.heroCloseButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Feather name="x" size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.heroBadge}>
+            <Feather name="git-branch" size={16} color="#FFFFFF" />
+            <ThemedText style={styles.heroBadgeText}>Contribute</ThemedText>
+          </View>
+          <View style={styles.heroSpacer} />
+        </View>
+        <ThemedText style={styles.heroTitle}>Share a route.</ThemedText>
+        <ThemedText style={styles.heroSubtitle}>
+          Add a taxi route so every commuter in Mzansi can find their way.
+        </ThemedText>
+      </LinearGradient>
+
       <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + Spacing.xl },
+          { paddingBottom: insets.bottom + Spacing["3xl"] },
         ]}
       >
-        <View style={styles.infoCard}>
-          <Feather name="info" size={18} color={BrandColors.primary.blue} />
-          <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-            Your contribution helps fellow commuters. Submitted routes are reviewed and voted on by the community before being added.
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.infoCard}>
+          <Feather name="info" size={16} color={BrandColors.primary.gradientStart} />
+          <ThemedText style={styles.infoText}>
+            Submitted routes are reviewed and voted on by the community before being added.
           </ThemedText>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Route Details</ThemedText>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(60).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Route details</ThemedText>
 
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
-              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-                From Location *
-              </ThemedText>
+              <ThemedText style={styles.fieldLabel}>From *</ThemedText>
               <Pressable
-                style={[styles.locationButton, { backgroundColor: `${BrandColors.primary.blue}15` }]}
+                style={styles.locationButton}
                 onPress={() => handleUseLocation("origin")}
                 disabled={loadingLocation === "origin"}
               >
                 {loadingLocation === "origin" ? (
-                  <ActivityIndicator size="small" color={BrandColors.primary.blue} />
+                  <ActivityIndicator size="small" color={BrandColors.primary.gradientStart} />
                 ) : (
                   <>
-                    <Feather name="map-pin" size={14} color={BrandColors.primary.blue} />
-                    <ThemedText style={[styles.locationButtonText, { color: BrandColors.primary.blue }]}>
-                      Use My Location
-                    </ThemedText>
+                    <Feather name="map-pin" size={12} color={BrandColors.primary.gradientStart} />
+                    <ThemedText style={styles.locationButtonText}>Use my location</ThemedText>
                   </>
                 )}
               </Pressable>
             </View>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
-              placeholder="e.g., Soweto (Baragwanath)"
-              placeholderTextColor={theme.textSecondary}
-              value={origin}
-              onChangeText={(text) => {
-                setOrigin(text);
-                if (originLocation) setOriginLocation(null);
-              }}
-            />
+            <View style={styles.inputWrap}>
+              <Feather name="navigation" size={16} color={BrandColors.gray[600]} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Soweto (Baragwanath)"
+                placeholderTextColor={BrandColors.gray[500]}
+                value={origin}
+                onChangeText={(text) => {
+                  setOrigin(text);
+                  if (originLocation) setOriginLocation(null);
+                }}
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
-              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-                To Location (Destination) *
-              </ThemedText>
+              <ThemedText style={styles.fieldLabel}>To *</ThemedText>
               <Pressable
-                style={[styles.locationButton, { backgroundColor: `${BrandColors.primary.blue}15` }]}
+                style={styles.locationButton}
                 onPress={() => handleUseLocation("destination")}
                 disabled={loadingLocation === "destination"}
               >
                 {loadingLocation === "destination" ? (
-                  <ActivityIndicator size="small" color={BrandColors.primary.blue} />
+                  <ActivityIndicator size="small" color={BrandColors.primary.gradientStart} />
                 ) : (
                   <>
-                    <Feather name="map-pin" size={14} color={BrandColors.primary.blue} />
-                    <ThemedText style={[styles.locationButtonText, { color: BrandColors.primary.blue }]}>
-                      Use My Location
-                    </ThemedText>
+                    <Feather name="map-pin" size={12} color={BrandColors.primary.gradientStart} />
+                    <ThemedText style={styles.locationButtonText}>Use my location</ThemedText>
                   </>
                 )}
               </Pressable>
             </View>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
-              placeholder="e.g., Johannesburg CBD (Noord)"
-              placeholderTextColor={theme.textSecondary}
-              value={destination}
-              onChangeText={(text) => {
-                setDestination(text);
-                if (destinationLocation) setDestinationLocation(null);
-              }}
-            />
+            <View style={styles.inputWrap}>
+              <Feather name="flag" size={16} color={BrandColors.gray[600]} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Johannesburg CBD (Noord)"
+                placeholderTextColor={BrandColors.gray[500]}
+                value={destination}
+                onChangeText={(text) => {
+                  setDestination(text);
+                  if (destinationLocation) setDestinationLocation(null);
+                }}
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              Station/Taxi Rank Name
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
-              placeholder="e.g., Baragwanath Taxi Rank"
-              placeholderTextColor={theme.textSecondary}
-              value={taxiRankName}
-              onChangeText={setTaxiRankName}
-            />
-            <ThemedText style={[styles.helperText, { color: theme.textSecondary }]}>
-              The main taxi rank where you catch this route
-            </ThemedText>
+            <ThemedText style={styles.fieldLabel}>Taxi rank name</ThemedText>
+            <View style={styles.inputWrap}>
+              <Feather name="home" size={16} color={BrandColors.gray[600]} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Baragwanath Taxi Rank"
+                placeholderTextColor={BrandColors.gray[500]}
+                value={taxiRankName}
+                onChangeText={setTaxiRankName}
+              />
+            </View>
           </View>
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1 }]}>
-              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-                Fare (R) *
-              </ThemedText>
+              <ThemedText style={styles.fieldLabel}>Fare *</ThemedText>
+              <View style={styles.inputWrap}>
+                <ThemedText style={styles.currencyPrefix}>R</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="25"
+                  placeholderTextColor={BrandColors.gray[500]}
+                  value={fare}
+                  onChangeText={setFare}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+            <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.sm }]}>
+              <ThemedText style={styles.fieldLabel}>Est. time</ThemedText>
+              <View style={styles.inputWrap}>
+                <Feather name="clock" size={16} color={BrandColors.gray[600]} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="45 min"
+                  placeholderTextColor={BrandColors.gray[500]}
+                  value={estimatedTime}
+                  onChangeText={setEstimatedTime}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.fieldLabel}>Distance (km)</ThemedText>
+            <View style={styles.inputWrap}>
+              <Feather name="trending-up" size={16} color={BrandColors.gray[600]} />
               <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: theme.backgroundDefault, color: theme.text },
-                ]}
-                placeholder="25"
-                placeholderTextColor={theme.textSecondary}
-                value={fare}
-                onChangeText={setFare}
+                style={styles.input}
+                placeholder="15"
+                placeholderTextColor={BrandColors.gray[500]}
+                value={distance}
+                onChangeText={setDistance}
                 keyboardType="decimal-pad"
               />
             </View>
-
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.md }]}>
-              <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-                Est. Time
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: theme.backgroundDefault, color: theme.text },
-                ]}
-                placeholder="45 min"
-                placeholderTextColor={theme.textSecondary}
-                value={estimatedTime}
-                onChangeText={setEstimatedTime}
-              />
-            </View>
           </View>
+        </Animated.View>
 
-          <View style={styles.inputGroup}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              Distance (km)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
-              placeholder="15"
-              placeholderTextColor={theme.textSecondary}
-              value={distance}
-              onChangeText={setDistance}
-              keyboardType="decimal-pad"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Route Type</ThemedText>
-          <View style={styles.routeTypeContainer}>
-            {ROUTE_TYPES.map((type) => (
-              <Pressable
-                key={type.id}
-                style={[
-                  styles.routeTypeCard,
-                  {
-                    backgroundColor: theme.backgroundDefault,
-                    borderColor: selectedRouteType === type.id ? BrandColors.primary.blue : "transparent",
-                    borderWidth: 2,
-                  },
-                ]}
-                onPress={() => {
-                  triggerHaptic();
-                  setSelectedRouteType(type.id);
-                }}
-              >
-                <Feather
-                  name={type.icon as any}
-                  size={20}
-                  color={selectedRouteType === type.id ? BrandColors.primary.blue : theme.textSecondary}
-                />
-                <ThemedText
-                  style={[
-                    styles.routeTypeLabel,
-                    { color: selectedRouteType === type.id ? BrandColors.primary.blue : theme.text },
-                  ]}
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(120).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Route type</ThemedText>
+          <View style={styles.routeTypeRow}>
+            {ROUTE_TYPES.map((t) => {
+              const selected = selectedRouteType === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  style={[styles.routeTypeCard, selected && styles.routeTypeCardActive]}
+                  onPress={() => handleSelect(setSelectedRouteType, t.id)}
                 >
-                  {type.label}
-                </ThemedText>
-              </Pressable>
-            ))}
+                  <View
+                    style={[
+                      styles.routeTypeIconWrap,
+                      selected && styles.routeTypeIconWrapActive,
+                    ]}
+                  >
+                    <Feather
+                      name={t.icon}
+                      size={18}
+                      color={selected ? "#FFFFFF" : BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.routeTypeLabel,
+                      selected && styles.routeTypeLabelActive,
+                    ]}
+                  >
+                    {t.label}
+                  </ThemedText>
+                  <ThemedText style={styles.routeTypeHint}>{t.hint}</ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Province/Region *</ThemedText>
-          <View style={styles.chipContainer}>
-            {PROVINCES.map((province) => (
-              <Pressable
-                key={province}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      selectedProvince === province
-                        ? BrandColors.primary.blue
-                        : theme.backgroundDefault,
-                  },
-                ]}
-                onPress={() => {
-                  triggerHaptic();
-                  setSelectedProvince(province);
-                }}
-              >
-                <ThemedText
-                  style={[
-                    styles.chipText,
-                    { color: selectedProvince === province ? "#FFFFFF" : theme.text },
-                  ]}
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(180).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Province *</ThemedText>
+          <View style={styles.chipRow}>
+            {PROVINCES.map((province) => {
+              const selected = selectedProvince === province;
+              return (
+                <Pressable
+                  key={province}
+                  style={[styles.chip, selected && styles.chipActive]}
+                  onPress={() => handleSelect(setSelectedProvince, province)}
                 >
-                  {province}
-                </ThemedText>
-              </Pressable>
-            ))}
+                  <ThemedText
+                    style={[styles.chipText, selected && styles.chipTextActive]}
+                  >
+                    {province}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Hand Signal *</ThemedText>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(240).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Hand signal *</ThemedText>
           <View style={styles.signalGrid}>
-            {HAND_SIGNALS.map((signal) => (
-              <Pressable
-                key={signal.id}
-                style={[
-                  styles.signalCard,
-                  {
-                    backgroundColor: theme.backgroundDefault,
-                    borderColor:
-                      selectedHandSignal === signal.id
-                        ? BrandColors.secondary.purple
-                        : "transparent",
-                    borderWidth: 2,
-                  },
-                ]}
-                onPress={() => {
-                  triggerHaptic();
-                  setSelectedHandSignal(signal.id);
-                }}
-              >
-                <View
-                  style={[
-                    styles.signalIcon,
-                    {
-                      backgroundColor:
-                        selectedHandSignal === signal.id
-                          ? "rgba(123, 31, 162, 0.15)"
-                          : "rgba(123, 31, 162, 0.08)",
-                    },
-                  ]}
+            {HAND_SIGNALS.map((signal) => {
+              const selected = selectedHandSignal === signal.id;
+              return (
+                <Pressable
+                  key={signal.id}
+                  style={[styles.signalCard, selected && styles.signalCardActive]}
+                  onPress={() => handleSelect(setSelectedHandSignal, signal.id)}
                 >
-                  <Feather
-                    name={signal.icon as any}
-                    size={20}
-                    color={BrandColors.secondary.purple}
-                  />
-                </View>
-                <ThemedText style={styles.signalLabel}>{signal.label}</ThemedText>
-              </Pressable>
-            ))}
+                  <View
+                    style={[
+                      styles.signalIconWrap,
+                      selected && styles.signalIconWrapActive,
+                    ]}
+                  >
+                    <Feather
+                      name={signal.icon}
+                      size={18}
+                      color={selected ? "#FFFFFF" : BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.signalLabel,
+                      selected && styles.signalLabelActive,
+                    ]}
+                  >
+                    {signal.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
           </View>
 
-          <View style={styles.inputGroup}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              Signal Description (optional)
-            </ThemedText>
+          <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
+            <ThemedText style={styles.fieldLabel}>Signal description (optional)</ThemedText>
             <TextInput
-              style={[
-                styles.textArea,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
+              style={styles.textArea}
               placeholder="Describe how commuters use this signal"
-              placeholderTextColor={theme.textSecondary}
+              placeholderTextColor={BrandColors.gray[500]}
               value={handSignalDescription}
               onChangeText={setHandSignalDescription}
               multiline
-              numberOfLines={2}
               textAlignVertical="top"
             />
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Additional Information</ThemedText>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(300).duration(400)} style={styles.section}>
+          <ThemedText style={styles.sectionLabel}>Additional info</ThemedText>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              Additional Notes
-            </ThemedText>
+            <View style={styles.labelRow}>
+              <ThemedText style={styles.fieldLabel}>Notes</ThemedText>
+              <ThemedText style={styles.charCount}>
+                {additionalNotes.length}/500
+              </ThemedText>
+            </View>
             <TextInput
-              style={[
-                styles.textArea,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
+              style={styles.textArea}
               placeholder="Any additional information about this route..."
-              placeholderTextColor={theme.textSecondary}
+              placeholderTextColor={BrandColors.gray[500]}
               value={additionalNotes}
               onChangeText={setAdditionalNotes}
               multiline
-              numberOfLines={3}
               maxLength={500}
               textAlignVertical="top"
             />
-            <ThemedText style={[styles.charCount, { color: theme.textSecondary }]}>
-              {additionalNotes.length}/500
-            </ThemedText>
           </View>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              Your Name (optional)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: theme.backgroundDefault, color: theme.text },
-              ]}
-              placeholder="Display name for your contribution"
-              placeholderTextColor={theme.textSecondary}
-              value={contributorName}
-              onChangeText={setContributorName}
-            />
+            <ThemedText style={styles.fieldLabel}>Your name (optional)</ThemedText>
+            <View style={styles.inputWrap}>
+              <Feather name="user" size={16} color={BrandColors.gray[600]} />
+              <TextInput
+                style={styles.input}
+                placeholder="Display name for your contribution"
+                placeholderTextColor={BrandColors.gray[500]}
+                value={contributorName}
+                onChangeText={setContributorName}
+              />
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={[styles.processSection, { backgroundColor: `${BrandColors.gray[500]}10` }]}>
-          <ThemedText style={[styles.processSectionTitle, { color: theme.textSecondary }]}>
-            What happens next?
-          </ThemedText>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(360).duration(400)} style={styles.processCard}>
+          <ThemedText style={styles.processTitle}>What happens next?</ThemedText>
           <View style={styles.processItem}>
-            <Feather name="check-circle" size={14} color={BrandColors.primary.green} />
-            <ThemedText style={[styles.processText, { color: theme.textSecondary }]}>
-              Your submission will be reviewed by the community
+            <View style={styles.processDot} />
+            <ThemedText style={styles.processText}>
+              Community reviews your submission
             </ThemedText>
           </View>
           <View style={styles.processItem}>
-            <Feather name="users" size={14} color={BrandColors.primary.blue} />
-            <ThemedText style={[styles.processText, { color: theme.textSecondary }]}>
-              Other users can vote to verify the information
+            <View style={styles.processDot} />
+            <ThemedText style={styles.processText}>
+              Other users vote to verify the information
             </ThemedText>
           </View>
           <View style={styles.processItem}>
-            <Feather name="award" size={14} color={BrandColors.secondary.orange} />
-            <ThemedText style={[styles.processText, { color: theme.textSecondary }]}>
+            <View style={styles.processDot} />
+            <ThemedText style={styles.processText}>
               Approved routes appear in the official route list
             </ThemedText>
           </View>
-          <ThemedText style={[styles.disclaimer, { color: theme.textSecondary }]}>
-            Note: Please ensure information is accurate. False submissions may be removed.
-          </ThemedText>
-        </View>
+        </Animated.View>
 
-        <View style={styles.buttonRow}>
-          <Pressable
-            style={[styles.cancelButton, { backgroundColor: theme.backgroundDefault }]}
-            onPress={() => navigation.goBack()}
-          >
-            <ThemedText style={{ color: theme.text }}>Cancel</ThemedText>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.submitButton,
-              {
-                backgroundColor: isFormValid
-                  ? BrandColors.primary.green
-                  : BrandColors.gray[400],
-                opacity: submitMutation.isPending ? 0.7 : 1,
-                flex: 1,
-              },
-            ]}
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(420).duration(400)}>
+          <GradientButton
             onPress={handleSubmit}
             disabled={!isFormValid || submitMutation.isPending}
+            icon={submitMutation.isPending ? undefined : "send"}
           >
-            {submitMutation.isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Feather name="send" size={18} color="#FFFFFF" />
-                <ThemedText style={styles.submitButtonText}>Submit for Review</ThemedText>
-              </>
-            )}
-          </Pressable>
-        </View>
+            {submitMutation.isPending ? "Submitting..." : "Submit for review"}
+          </GradientButton>
+          <ThemedText style={styles.footerNote}>
+            Please ensure information is accurate. False submissions may be removed.
+          </ThemedText>
+        </Animated.View>
       </KeyboardAwareScrollViewCompat>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -620,29 +573,82 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
+    borderBottomLeftRadius: BorderRadius["2xl"],
+    borderBottomRightRadius: BorderRadius["2xl"],
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  heroCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  heroBadgeText: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  heroSpacer: {
+    width: 40,
+  },
+  heroTitle: {
+    ...Typography.h1,
+    color: "#FFFFFF",
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: Spacing.xs,
+  },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    marginTop: -Spacing["2xl"],
   },
   infoCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "rgba(33, 150, 243, 0.08)",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.lg,
     gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.primary.gradientStart + "0A",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "25",
   },
   infoText: {
+    ...Typography.small,
     flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
+    color: BrandColors.gray[700],
   },
   section: {
-    marginBottom: Spacing.xl,
+    marginTop: Spacing.xl,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+  sectionLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginBottom: Spacing.md,
   },
   inputGroup: {
@@ -652,51 +658,67 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.xs,
+    marginBottom: 6,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: "500",
+  fieldLabel: {
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.gray[700],
+  },
+  charCount: {
+    ...Typography.label,
+    color: BrandColors.gray[500],
+    fontVariant: ["tabular-nums"],
   },
   locationButton: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    gap: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
   },
   locationButtonText: {
-    fontSize: 12,
-    fontWeight: "500",
+    ...Typography.label,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: "#FFFFFF",
   },
   input: {
+    ...Typography.body,
+    flex: 1,
     height: 48,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    fontSize: 16,
+    color: BrandColors.gray[900],
+  },
+  currencyPrefix: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: BrandColors.primary.gradientStart,
   },
   textArea: {
-    minHeight: 80,
+    ...Typography.body,
+    minHeight: 90,
+    padding: Spacing.md,
     borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    fontSize: 16,
-  },
-  helperText: {
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  charCount: {
-    fontSize: 11,
-    textAlign: "right",
-    marginTop: 4,
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    backgroundColor: "#FFFFFF",
+    color: BrandColors.gray[900],
   },
   row: {
     flexDirection: "row",
   },
-  routeTypeContainer: {
+  routeTypeRow: {
     flexDirection: "row",
     gap: Spacing.sm,
   },
@@ -704,99 +726,142 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    gap: 4,
+  },
+  routeTypeCardActive: {
+    backgroundColor: BrandColors.primary.gradientStart + "0A",
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  routeTypeIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  routeTypeIconWrapActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
   },
   routeTypeLabel: {
-    fontSize: 13,
-    fontWeight: "500",
+    ...Typography.small,
+    fontWeight: "700",
+    color: BrandColors.gray[800],
   },
-  chipContainer: {
+  routeTypeLabelActive: {
+    color: BrandColors.primary.gradientStart,
+  },
+  routeTypeHint: {
+    ...Typography.label,
+    color: BrandColors.gray[500],
+  },
+  chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
   },
   chip: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 8,
     borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart + "12",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "33",
+  },
+  chipActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
+    borderColor: BrandColors.primary.gradientStart,
   },
   chipText: {
-    fontSize: 14,
-    fontWeight: "500",
+    ...Typography.small,
+    fontWeight: "600",
+    color: BrandColors.primary.gradientStart,
+  },
+  chipTextActive: {
+    color: "#FFFFFF",
   },
   signalGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
   },
   signalCard: {
-    width: "30%",
+    flexBasis: "31%",
+    flexGrow: 1,
     alignItems: "center",
     padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: BrandColors.gray[200],
+    gap: 4,
   },
-  signalIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  signalCardActive: {
+    backgroundColor: BrandColors.primary.gradientStart + "0A",
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  signalIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: BrandColors.primary.gradientStart + "15",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
+  },
+  signalIconWrapActive: {
+    backgroundColor: BrandColors.primary.gradientStart,
   },
   signalLabel: {
-    fontSize: 12,
+    ...Typography.label,
+    fontWeight: "600",
+    color: BrandColors.gray[700],
     textAlign: "center",
   },
-  processSection: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.lg,
+  signalLabelActive: {
+    color: BrandColors.primary.gradientStart,
+    fontWeight: "700",
   },
-  processSectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: Spacing.sm,
+  processCard: {
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.primary.gradientStart + "08",
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart + "25",
+    gap: Spacing.sm,
+  },
+  processTitle: {
+    ...Typography.h4,
+    color: BrandColors.primary.gradientStart,
+    marginBottom: Spacing.xs,
   },
   processItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+  },
+  processDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: BrandColors.primary.gradientStart,
   },
   processText: {
-    fontSize: 13,
+    ...Typography.small,
+    color: BrandColors.gray[700],
     flex: 1,
   },
-  disclaimer: {
-    fontSize: 11,
-    fontStyle: "italic",
-    marginTop: Spacing.sm,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
+  footerNote: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    textAlign: "center",
     marginTop: Spacing.md,
-  },
-  cancelButton: {
-    height: 52,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  submitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 52,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.sm,
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+    fontStyle: "italic",
   },
 });

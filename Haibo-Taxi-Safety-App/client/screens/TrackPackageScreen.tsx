@@ -17,6 +17,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BorderRadius,
@@ -98,7 +99,7 @@ function StatusTimeline({ steps }: { steps: StatusStep[] }) {
               ]}
             >
               {step.completed ? (
-                <Feather name="check" size={11} color="#FFFFFF" />
+                <Feather name="check" size={12} color="#FFFFFF" />
               ) : step.current ? (
                 <View style={styles.currentDotInner} />
               ) : null}
@@ -160,6 +161,7 @@ function StatusTimeline({ steps }: { steps: StatusStep[] }) {
 }
 
 export default function TrackPackageScreen() {
+  const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -262,7 +264,7 @@ export default function TrackPackageScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -275,7 +277,7 @@ export default function TrackPackageScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -288,7 +290,7 @@ export default function TrackPackageScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Track package</ThemedText>
@@ -300,7 +302,7 @@ export default function TrackPackageScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -350,7 +352,7 @@ export default function TrackPackageScreen() {
 
           {error ? (
             <Animated.View
-              entering={FadeIn.duration(300)}
+              entering={reducedMotion ? undefined : FadeIn.duration(300)}
               style={[
                 styles.errorCard,
                 {
@@ -373,7 +375,7 @@ export default function TrackPackageScreen() {
           ) : null}
 
           {packageData ? (
-            <Animated.View entering={FadeInDown.duration(400)}>
+            <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)}>
               <View
                 style={[
                   styles.packageCard,
@@ -472,7 +474,7 @@ export default function TrackPackageScreen() {
             </Animated.View>
           ) : !error ? (
             <Animated.View
-              entering={FadeIn.duration(400).delay(300)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400).delay(300)}
               style={styles.emptyState}
             >
               <View
@@ -528,7 +530,7 @@ function DetailRow({
       >
         <Feather
           name={icon}
-          size={14}
+          size={16}
           color={BrandColors.primary.gradientStart}
         />
       </View>

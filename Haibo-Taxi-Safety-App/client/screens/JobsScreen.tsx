@@ -19,6 +19,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 
 import { useJobs } from "@/hooks/useApiData";
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BrandColors,
@@ -117,6 +118,7 @@ function getCategoryIcon(category: string): keyof typeof Feather.glyphMap {
 }
 
 export default function JobsScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -206,7 +208,7 @@ export default function JobsScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.lg }]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -219,7 +221,7 @@ export default function JobsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -232,7 +234,7 @@ export default function JobsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Jobs board</ThemedText>
@@ -244,7 +246,7 @@ export default function JobsScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -274,7 +276,12 @@ export default function JobsScreen() {
               returnKeyType="search"
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
                 <Feather name="x" size={16} color={theme.textSecondary} />
               </Pressable>
             ) : null}
@@ -308,7 +315,7 @@ export default function JobsScreen() {
                       end={{ x: 1, y: 1 }}
                       style={styles.categoryTabActive}
                     >
-                      <Feather name={cat.icon} size={14} color="#FFFFFF" />
+                      <Feather name={cat.icon} size={16} color="#FFFFFF" />
                       <ThemedText style={styles.categoryTabActiveText}>
                         {cat.label}
                       </ThemedText>
@@ -340,7 +347,7 @@ export default function JobsScreen() {
                 >
                   <Feather
                     name={cat.icon}
-                    size={14}
+                    size={16}
                     color={BrandColors.primary.gradientStart}
                   />
                   <ThemedText
@@ -386,7 +393,7 @@ export default function JobsScreen() {
             </View>
           ) : filteredJobs.length === 0 ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={[
                 styles.emptyState,
                 { backgroundColor: theme.surface, borderColor: theme.border },
@@ -420,7 +427,7 @@ export default function JobsScreen() {
               return (
                 <Animated.View
                   key={item.id}
-                  entering={FadeInDown.duration(300).delay(
+                  entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(
                     Math.min(index * 30, 300)
                   )}
                 >
@@ -485,7 +492,7 @@ export default function JobsScreen() {
                           <View style={styles.metaItem}>
                             <Feather
                               name="map-pin"
-                              size={11}
+                              size={12}
                               color={theme.textSecondary}
                             />
                             <ThemedText
@@ -502,7 +509,7 @@ export default function JobsScreen() {
                             <View style={styles.metaItem}>
                               <Feather
                                 name="dollar-sign"
-                                size={11}
+                                size={12}
                                 color={BrandColors.status.success}
                               />
                               <ThemedText
@@ -688,7 +695,7 @@ export default function JobsScreen() {
                               >
                                 <Feather
                                   name="phone"
-                                  size={14}
+                                  size={16}
                                   color="#FFFFFF"
                                 />
                                 <ThemedText style={styles.actionButtonText}>
@@ -711,7 +718,7 @@ export default function JobsScreen() {
                             >
                               <Feather
                                 name="message-circle"
-                                size={14}
+                                size={16}
                                 color="#FFFFFF"
                               />
                               <ThemedText style={styles.actionButtonText}>

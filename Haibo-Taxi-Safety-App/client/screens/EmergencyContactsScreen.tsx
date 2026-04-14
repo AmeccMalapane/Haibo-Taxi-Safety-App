@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
   BrandColors,
@@ -35,8 +36,8 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // typeui-clean rework — emergency contacts as a calm, brand-aligned hub:
 //   1. Rose gradient header band with shield badge + clear copy
-//   2. Inline expanding "Add contact" form with LoginScreen-style inputs
-//      (rose focus borders, Typography tokens), wrapped in
+//   2. Inline expanding "Add contact" form with rose focus borders and
+//      Typography tokens, wrapped in
 //      KeyboardAwareScrollView so the keyboard doesn't cover the form
 //   3. Contact rows with monogram avatars in rose tint, slide-in
 //      FadeInDown entries, swipe-free remove via a confirm Alert
@@ -48,6 +49,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 const RELATIONSHIPS = ["Family", "Friend", "Partner", "Colleague", "Other"];
 
 export default function EmergencyContactsScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -160,7 +162,7 @@ export default function EmergencyContactsScreen() {
             { paddingTop: insets.top + Spacing.lg },
           ]}
         >
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)}>
             <Pressable
               onPress={() => navigation.goBack()}
               style={styles.backButton}
@@ -173,7 +175,7 @@ export default function EmergencyContactsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeIn.duration(400).delay(100)}
+            entering={reducedMotion ? undefined : FadeIn.duration(400).delay(100)}
             style={styles.heroBadgeWrap}
           >
             <View style={styles.heroBadge}>
@@ -182,7 +184,7 @@ export default function EmergencyContactsScreen() {
           </Animated.View>
 
           <Animated.View
-            entering={FadeInDown.duration(500).delay(150)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
             <ThemedText style={styles.heroTitle}>Emergency contacts</ThemedText>
@@ -194,7 +196,7 @@ export default function EmergencyContactsScreen() {
 
         {/* Floating content card */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={[
             styles.contentCard,
             { backgroundColor: theme.backgroundRoot },
@@ -203,7 +205,7 @@ export default function EmergencyContactsScreen() {
           {/* Add form (inline) */}
           {isAdding ? (
             <Animated.View
-              entering={FadeInDown.duration(300)}
+              entering={reducedMotion ? undefined : FadeInDown.duration(300)}
               style={[
                 styles.formCard,
                 {
@@ -338,7 +340,7 @@ export default function EmergencyContactsScreen() {
           {/* Contact list */}
           {contacts.length === 0 && !isAdding ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(400)}
               style={styles.emptyState}
             >
               <View
@@ -375,7 +377,7 @@ export default function EmergencyContactsScreen() {
                 return (
                   <Animated.View
                     key={contact.id}
-                    entering={FadeInDown.duration(300).delay(
+                    entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(
                       Math.min(index * 40, 200)
                     )}
                   >

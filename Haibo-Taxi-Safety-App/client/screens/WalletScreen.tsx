@@ -6,6 +6,7 @@ import {
   TextInput,
   Alert,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -24,14 +25,11 @@ import { GradientButton } from "@/components/GradientButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { useWalletBalance, useWalletTransactions } from "@/hooks/useApiData";
-import { getApiUrl } from "@/lib/query-client";
-import {
-  getWalletBalance,
-  saveWalletBalance,
-  getTransactions,
-  addTransaction,
-  generateId,
-} from "@/lib/storage";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { getWalletBalance, getTransactions } from "@/lib/storage";
+import { checkPaystackStatus, runPaystackTopup } from "@/lib/paystack";
+import { SA_BANKS, SABank } from "@/constants/saBanks";
 import { WalletBalance, Transaction } from "@/lib/types";
 
 // typeui-clean rework — Haibo Pay as a fintech dashboard:
@@ -40,18 +38,19 @@ import { WalletBalance, Transaction } from "@/lib/types";
 //   3. Inline expanding form for the active action
 //   4. Recent activity list with thin income/expense accent borders
 //
-// Also surfaces the demo state honestly: top-up + withdraw don't yet hit
-// the real /api/wallet/topup or /api/wallet/withdraw endpoints — those
-// require Paystack hosted-checkout flow + bank-code picker. The simulation
-// is locally consistent and uses AsyncStorage so the demo feels real, but
-// a "Demo mode" banner makes the limitation visible.
+// Top-up uses the real Paystack hosted-checkout flow via client/lib/paystack.ts
+// (server credits the wallet on verify, we just refetch). Withdraw hits the
+// real /api/wallet/withdraw with a SA bank picker. When the API is unreachable
+// or Paystack isn't configured, a "Demo mode" banner shows and top-up falls
+// back to local AsyncStorage so the screen stays demonstrable.
 
 type WalletAction = "topup" | "withdraw" | "history" | null;
 
 export default function WalletScreen() {
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { data: apiBalance, refetch: refetchBalance } = useWalletBalance();
   const { data: apiTransactions, refetch: refetchTransactions } = useWalletTransactions();
 
@@ -62,13 +61,15 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [activeAction, setActiveAction] = useState<WalletAction>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paystackConfigured, setPaystackConfigured] = useState(false);
 
   // Form state
   const [amount, setAmount] = useState("");
-  const [bankName, setBankName] = useState("");
+  const [email, setEmail] = useState(user?.email || "");
+  const [selectedBank, setSelectedBank] = useState<SABank | null>(null);
   const [accountNumber, setAccountNumber] = useState("");
   const [amountFocused, setAmountFocused] = useState(false);
-  const [bankFocused, setBankFocused] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
   const [accountFocused, setAccountFocused] = useState(false);
 
   useEffect(() => {
@@ -106,10 +107,15 @@ export default function WalletScreen() {
     }
   }, [isAuthenticated, refetchBalance, refetchTransactions]);
 
+  const refreshPaystackStatus = useCallback(async () => {
+    setPaystackConfigured(await checkPaystackStatus());
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      refreshPaystackStatus();
+    }, [loadData, refreshPaystackStatus])
   );
 
   const triggerHaptic = (
@@ -126,11 +132,13 @@ export default function WalletScreen() {
     } catch {}
   };
 
+  const demoMode = !isAuthenticated || !getApiUrl() || !paystackConfigured;
+
   const handleActionPress = (action: WalletAction) => {
     triggerHaptic("selection");
     setActiveAction(activeAction === action ? null : action);
     if (action !== "withdraw") {
-      setBankName("");
+      setSelectedBank(null);
       setAccountNumber("");
     }
     setAmount("");
@@ -144,32 +152,66 @@ export default function WalletScreen() {
       return;
     }
 
+    // Demo fallback — no server or Paystack is unavailable. Keep the local
+    // AsyncStorage path so the screen stays usable in offline builds.
+    if (demoMode) {
+      setIsProcessing(true);
+      const { saveWalletBalance, addTransaction, generateId } = await import("@/lib/storage");
+      const newBalance = {
+        amount: balance.amount + numAmount,
+        lastUpdated: new Date().toISOString(),
+      };
+      const transaction: Transaction = {
+        id: generateId(),
+        type: "top_up",
+        amount: numAmount,
+        description: "Top-up via Haibo Pay (demo)",
+        createdAt: new Date().toISOString(),
+      };
+      await saveWalletBalance(newBalance);
+      await addTransaction(transaction);
+      setBalance(newBalance);
+      setTransactions((prev) => [transaction, ...prev]);
+      setAmount("");
+      setIsProcessing(false);
+      setActiveAction(null);
+      triggerHaptic("success");
+      Alert.alert("Top-up complete", `R${numAmount.toFixed(2)} added to your wallet (demo).`);
+      return;
+    }
+
+    if (!email || !email.includes("@") || !email.includes(".")) {
+      triggerHaptic("error");
+      Alert.alert("Email required", "Paystack needs a valid email for the receipt.");
+      return;
+    }
+
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    triggerHaptic("selection");
 
-    const newBalance = {
-      amount: balance.amount + numAmount,
-      lastUpdated: new Date().toISOString(),
-    };
+    const result = await runPaystackTopup({ email, amount: numAmount });
 
-    const transaction: Transaction = {
-      id: generateId(),
-      type: "top_up",
-      amount: numAmount,
-      description: `Top-up via Haibo Pay (demo)`,
-      createdAt: new Date().toISOString(),
-    };
+    if (result.status === "success") {
+      await loadData();
+      setAmount("");
+      setActiveAction(null);
+      triggerHaptic("success");
+      Alert.alert(
+        "Top-up complete",
+        `R${result.amount.toFixed(2)} has been added to your wallet.`
+      );
+    } else if (result.status === "cancelled") {
+      triggerHaptic("error");
+      Alert.alert(
+        "Payment not completed",
+        "Paystack didn't confirm the payment. If you did pay, it'll show up once the bank confirms."
+      );
+    } else {
+      triggerHaptic("error");
+      Alert.alert("Payment failed", result.message);
+    }
 
-    await saveWalletBalance(newBalance);
-    await addTransaction(transaction);
-
-    setBalance(newBalance);
-    setTransactions((prev) => [transaction, ...prev]);
-    setAmount("");
     setIsProcessing(false);
-    setActiveAction(null);
-    triggerHaptic("success");
-    Alert.alert("Top-up complete", `R${numAmount.toFixed(2)} added to your wallet.`);
   };
 
   const handleWithdraw = async () => {
@@ -187,46 +229,57 @@ export default function WalletScreen() {
       );
       return;
     }
-    if (!bankName || !accountNumber) {
+    if (!selectedBank || !accountNumber) {
       triggerHaptic("error");
       Alert.alert(
         "Missing details",
-        "Please enter your bank name and account number."
+        "Please pick a bank and enter your account number."
+      );
+      return;
+    }
+
+    if (!isAuthenticated || !getApiUrl()) {
+      triggerHaptic("error");
+      Alert.alert(
+        "Sign in to withdraw",
+        "Withdrawals need a verified Haibo account. Please sign in with your phone."
       );
       return;
     }
 
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    const newBalance = {
-      amount: balance.amount - withdrawAmount,
-      lastUpdated: new Date().toISOString(),
-    };
+    try {
+      await apiRequest("/api/wallet/withdraw", {
+        method: "POST",
+        body: JSON.stringify({
+          amount: withdrawAmount,
+          bankCode: selectedBank.code,
+          accountNumber,
+          accountName: user?.displayName || undefined,
+          narration: "Haibo wallet withdrawal",
+        }),
+      });
 
-    const transaction: Transaction = {
-      id: generateId(),
-      type: "fare_payment",
-      amount: withdrawAmount,
-      description: `Withdrawal to ${bankName} (•••${accountNumber.slice(-4)})`,
-      createdAt: new Date().toISOString(),
-    };
-
-    await saveWalletBalance(newBalance);
-    await addTransaction(transaction);
-
-    setBalance(newBalance);
-    setTransactions((prev) => [transaction, ...prev]);
-    setAmount("");
-    setBankName("");
-    setAccountNumber("");
-    setIsProcessing(false);
-    setActiveAction(null);
-    triggerHaptic("success");
-    Alert.alert(
-      "Withdrawal requested",
-      `R${withdrawAmount.toFixed(2)} on its way to ${bankName}. EFT typically clears in 24–48 hours.`
-    );
+      await loadData();
+      setAmount("");
+      setSelectedBank(null);
+      setAccountNumber("");
+      setActiveAction(null);
+      triggerHaptic("success");
+      Alert.alert(
+        "Withdrawal requested",
+        `R${withdrawAmount.toFixed(2)} on its way to ${selectedBank.name}. EFT typically clears in 24–48 hours.`
+      );
+    } catch (err: any) {
+      triggerHaptic("error");
+      Alert.alert(
+        "Withdrawal failed",
+        err?.message || "Could not submit your withdrawal. Please try again."
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const recentTransactions = transactions.slice(0, 8);
@@ -242,7 +295,7 @@ export default function WalletScreen() {
       >
         {/* Hero — Haibo Pay header + brand badge */}
         <View style={[styles.heroHeader, { paddingTop: insets.top + Spacing.lg }]}>
-          <Animated.View entering={FadeIn.duration(400)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)}>
             <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
               HAIBO PAY
             </ThemedText>
@@ -252,7 +305,7 @@ export default function WalletScreen() {
 
         {/* Balance card — rose gradient centerpiece */}
         <Animated.View
-          entering={FadeInDown.duration(500).delay(100)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(100)}
           style={styles.balanceCardWrap}
         >
           <LinearGradient
@@ -278,7 +331,7 @@ export default function WalletScreen() {
             </View>
 
             <View style={styles.balanceFooter}>
-              <Feather name="clock" size={11} color="rgba(255,255,255,0.7)" />
+              <Feather name="clock" size={12} color="rgba(255,255,255,0.7)" />
               <ThemedText style={styles.balanceFooterText}>
                 Updated {new Date(balance.lastUpdated).toLocaleString("en-ZA", {
                   hour: "2-digit",
@@ -291,26 +344,28 @@ export default function WalletScreen() {
           </LinearGradient>
         </Animated.View>
 
-        {/* Demo banner — honest about Paystack not being wired */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(150)}
-          style={[
-            styles.demoBanner,
-            {
-              backgroundColor: BrandColors.status.warning + "15",
-              borderColor: BrandColors.status.warning + "40",
-            },
-          ]}
-        >
-          <Feather name="info" size={14} color={BrandColors.status.warning} />
-          <ThemedText style={[styles.demoBannerText, { color: theme.text }]}>
-            Demo mode — Paystack checkout coming soon
-          </ThemedText>
-        </Animated.View>
+        {/* Demo banner — only when server/Paystack isn't reachable */}
+        {demoMode ? (
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
+            style={[
+              styles.demoBanner,
+              {
+                backgroundColor: BrandColors.status.warning + "15",
+                borderColor: BrandColors.status.warning + "40",
+              },
+            ]}
+          >
+            <Feather name="info" size={16} color={BrandColors.status.warning} />
+            <ThemedText style={[styles.demoBannerText, { color: theme.text }]}>
+              Demo mode — top-ups stay local until you sign in and Paystack is configured.
+            </ThemedText>
+          </Animated.View>
+        ) : null}
 
         {/* Action grid — 3 quick-access pills */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(200)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(200)}
           style={styles.actionGrid}
         >
           <ActionTile
@@ -339,7 +394,7 @@ export default function WalletScreen() {
         {/* Inline expanding form — top-up */}
         {activeAction === "topup" && (
           <Animated.View
-            entering={FadeInDown.duration(300)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={[
               styles.formCard,
               { backgroundColor: theme.surface, borderColor: theme.border },
@@ -373,6 +428,33 @@ export default function WalletScreen() {
               onBlur={() => setAmountFocused(false)}
               editable={!isProcessing}
             />
+
+            {!demoMode ? (
+              <>
+                <BrandLabel>EMAIL (FOR RECEIPT)</BrandLabel>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      color: theme.text,
+                      borderColor: emailFocused
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                    },
+                  ]}
+                  placeholder="you@example.com"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                  editable={!isProcessing}
+                />
+              </>
+            ) : null}
 
             <View style={styles.quickAmounts}>
               {[50, 100, 200, 500].map((quick) => (
@@ -429,7 +511,7 @@ export default function WalletScreen() {
         {/* Inline expanding form — withdraw */}
         {activeAction === "withdraw" && (
           <Animated.View
-            entering={FadeInDown.duration(300)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={[
               styles.formCard,
               { backgroundColor: theme.surface, borderColor: theme.border },
@@ -442,26 +524,52 @@ export default function WalletScreen() {
               Send your earnings to your South African bank account via EFT.
             </ThemedText>
 
-            <BrandLabel>BANK NAME</BrandLabel>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.backgroundDefault,
-                  color: theme.text,
-                  borderColor: bankFocused
-                    ? BrandColors.primary.gradientStart
-                    : theme.border,
-                },
-              ]}
-              placeholder="FNB, Capitec, Nedbank, Absa..."
-              placeholderTextColor={theme.textSecondary}
-              value={bankName}
-              onChangeText={setBankName}
-              onFocus={() => setBankFocused(true)}
-              onBlur={() => setBankFocused(false)}
-              editable={!isProcessing}
-            />
+            <BrandLabel>BANK</BrandLabel>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bankChipRow}
+            >
+              {SA_BANKS.map((bank) => {
+                const active = selectedBank?.code === bank.code;
+                return (
+                  <Pressable
+                    key={bank.code}
+                    onPress={() => setSelectedBank(bank)}
+                    disabled={isProcessing}
+                    style={({ pressed }) => [
+                      styles.bankChip,
+                      {
+                        backgroundColor: active
+                          ? BrandColors.primary.gradientStart + "18"
+                          : theme.backgroundDefault,
+                        borderColor: active
+                          ? BrandColors.primary.gradientStart
+                          : theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${bank.name}`}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.bankChipText,
+                        {
+                          color: active
+                            ? BrandColors.primary.gradientStart
+                            : theme.text,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {bank.name}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
             <BrandLabel>ACCOUNT NUMBER</BrandLabel>
             <TextInput
@@ -516,7 +624,7 @@ export default function WalletScreen() {
                 },
               ]}
             >
-              <Feather name="clock" size={14} color={BrandColors.primary.gradientStart} />
+              <Feather name="clock" size={16} color={BrandColors.primary.gradientStart} />
               <ThemedText
                 style={[styles.eftInfoText, { color: theme.textSecondary }]}
               >
@@ -527,7 +635,7 @@ export default function WalletScreen() {
             <View style={styles.formCta}>
               <GradientButton
                 onPress={handleWithdraw}
-                disabled={isProcessing || !amount || !bankName || !accountNumber}
+                disabled={isProcessing || !amount || !selectedBank || !accountNumber}
                 size="large"
                 icon={isProcessing ? undefined : "arrow-right"}
                 iconPosition="right"
@@ -540,7 +648,7 @@ export default function WalletScreen() {
 
         {/* Recent activity — always visible, expands on "History" */}
         <Animated.View
-          entering={FadeInUp.duration(500).delay(300)}
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
           style={styles.activitySection}
         >
           <View style={styles.activityHeader}>
@@ -683,12 +791,13 @@ function TransactionRow({
   index: number;
   theme: any;
 }) {
+  const reducedMotion = useReducedMotion();
   const isIncome = tx.type === "top_up" || tx.type === "refund";
   const accent = isIncome ? BrandColors.status.success : BrandColors.primary.gradientStart;
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300).delay(Math.min(index * 30, 200))}
+      entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(Math.min(index * 30, 200))}
     >
       <View
         style={[
@@ -920,6 +1029,23 @@ const styles = StyleSheet.create({
     ...Typography.small,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
+  },
+  bankChipRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingVertical: 2,
+  },
+  bankChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    minWidth: 100,
+    alignItems: "center",
+  },
+  bankChipText: {
+    ...Typography.small,
+    fontWeight: "600",
   },
   eftInfo: {
     flexDirection: "row",

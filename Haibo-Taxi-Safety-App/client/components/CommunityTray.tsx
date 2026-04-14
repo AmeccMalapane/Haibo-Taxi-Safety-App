@@ -178,11 +178,21 @@ export default function CommunityTray({ visible, onClose }: CommunityTrayProps) 
         <GestureDetector gesture={panGesture}>
           <Animated.View style={[styles.tray, { backgroundColor: theme.backgroundRoot, paddingTop: insets.top }, animatedStyle]}>
             <View style={styles.header}>
-              <Pressable onPress={handleClose} style={styles.closeButton}>
+              <Pressable
+                onPress={handleClose}
+                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Feather name="chevron-down" size={28} color={theme.text} />
               </Pressable>
               <ThemedText type="h3" style={styles.headerTitle}>Haibo Community</ThemedText>
-              <Pressable onPress={() => setIsPosting(!isPosting)} style={styles.postToggleButton}>
+              <Pressable
+                onPress={() => setIsPosting(!isPosting)}
+                style={styles.postToggleButton}
+                accessibilityRole="button"
+                accessibilityLabel={isPosting ? "Cancel post" : "Create new post"}
+              >
                 <Feather name={isPosting ? "x" : "plus"} size={24} color={BrandColors.primary.red} />
               </Pressable>
             </View>
@@ -218,7 +228,12 @@ export default function CommunityTray({ visible, onClose }: CommunityTrayProps) 
                   {selectedImage && (
                     <View style={styles.imagePreviewContainer}>
                       <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
-                      <Pressable style={styles.removeImage} onPress={() => setSelectedImage(null)}>
+                      <Pressable
+                        style={styles.removeImage}
+                        onPress={() => setSelectedImage(null)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Remove photo"
+                      >
                         <Feather name="x" size={14} color="#FFF" />
                       </Pressable>
                     </View>
