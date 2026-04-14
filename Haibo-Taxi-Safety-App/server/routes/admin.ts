@@ -783,4 +783,211 @@ router.put(
   }
 );
 
+// ============ USER WALLET ADMIN ============
+// Read a single user's wallet (balance + recent transactions + lifetime
+// totals) and apply credit/debit adjustments with a mandatory reason.
+// Every adjustment creates a walletTransactions row of type="adjustment"
+// and lands in the admin audit log — we never mutate balance silently.
+
+// GET /api/admin/users/:id/wallet
+router.get(
+  "/users/:id/wallet",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [user] = await db
+        .select({
+          id: users.id,
+          phone: users.phone,
+          displayName: users.displayName,
+          email: users.email,
+          role: users.role,
+          walletBalance: users.walletBalance,
+          isVerified: users.isVerified,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.id, req.params.id))
+        .limit(1);
+
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      // Recent transactions (last 50)
+      const recentTxns = await db
+        .select()
+        .from(walletTransactions)
+        .where(eq(walletTransactions.userId, req.params.id))
+        .orderBy(desc(walletTransactions.createdAt))
+        .limit(50);
+
+      // Lifetime totals — sum positive deposits vs negative outflows,
+      // only counting completed rows so pending withdrawals don't inflate
+      // "withdrawn" before they actually leave the wallet.
+      const [totalsIn] = await db
+        .select({ sum: sum(walletTransactions.amount) })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.userId, req.params.id),
+            eq(walletTransactions.status, "completed"),
+            sql`${walletTransactions.amount} > 0`
+          )
+        );
+
+      const [totalsOut] = await db
+        .select({ sum: sum(walletTransactions.amount) })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.userId, req.params.id),
+            eq(walletTransactions.status, "completed"),
+            sql`${walletTransactions.amount} < 0`
+          )
+        );
+
+      // walletTransactions.status can be "pending" for in-flight
+      // withdrawals — expose that count so the admin UI can warn
+      // before applying another debit.
+      const [pendingCount] = await db
+        .select({ count: count() })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.userId, req.params.id),
+            eq(walletTransactions.status, "pending")
+          )
+        );
+
+      res.json({
+        user,
+        transactions: recentTxns,
+        totals: {
+          depositedAllTime: Number(totalsIn.sum) || 0,
+          // Outflows are stored negative; flip for display convenience.
+          withdrawnAllTime: Math.abs(Number(totalsOut.sum) || 0),
+          pendingCount: pendingCount.count,
+        },
+      });
+    } catch (error: any) {
+      console.error("Get user wallet error:", error);
+      res.status(500).json({ error: "Failed to fetch user wallet" });
+    }
+  }
+);
+
+// POST /api/admin/users/:id/wallet/adjust
+// Body: { amount: number, direction: "credit" | "debit", reason: string }
+// `amount` is always positive in the request; the server writes a signed
+// walletTransactions row and updates the user's balance in the right
+// direction. Debits are rejected if they would overdraw the wallet.
+router.post(
+  "/users/:id/wallet/adjust",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { amount, direction, reason } = req.body as {
+        amount?: number;
+        direction?: "credit" | "debit";
+        reason?: string;
+      };
+
+      if (!amount || amount <= 0) {
+        res.status(400).json({ error: "amount must be a positive number" });
+        return;
+      }
+      if (direction !== "credit" && direction !== "debit") {
+        res.status(400).json({ error: "direction must be 'credit' or 'debit'" });
+        return;
+      }
+      if (!reason || reason.trim().length < 4) {
+        res
+          .status(400)
+          .json({ error: "reason is required (min 4 chars)" });
+        return;
+      }
+
+      const [target] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.params.id))
+        .limit(1);
+
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      const currentBalance = target.walletBalance || 0;
+      if (direction === "debit" && currentBalance < amount) {
+        res.status(400).json({
+          error: "Insufficient balance — cannot debit more than current balance",
+          currentBalance,
+          requestedDebit: amount,
+        });
+        return;
+      }
+
+      // Signed amount for the wallet_transactions row: credits positive,
+      // debits negative. Matches the existing convention from topups
+      // (+) and withdrawals (-).
+      const signedAmount = direction === "credit" ? amount : -amount;
+      const newBalance = currentBalance + signedAmount;
+
+      await db
+        .update(users)
+        .set({ walletBalance: newBalance })
+        .where(eq(users.id, req.params.id));
+
+      const [txn] = await db
+        .insert(walletTransactions)
+        .values({
+          userId: req.params.id,
+          type: "adjustment",
+          amount: signedAmount,
+          description: `Admin ${direction}: ${reason.trim()}`,
+          status: "completed",
+        })
+        .returning();
+
+      await recordAdminAction(
+        req,
+        "wallet.adjust",
+        "users",
+        req.params.id,
+        {
+          direction,
+          amount,
+          reason: reason.trim(),
+          previousBalance: currentBalance,
+          newBalance,
+        }
+      );
+
+      try {
+        await notifyUser({
+          userId: req.params.id,
+          type: "payment",
+          title: direction === "credit" ? "Wallet credited" : "Wallet debited",
+          body: `${direction === "credit" ? "+" : "-"}R${amount.toFixed(2)} — ${reason.trim()}`,
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] wallet adjust notify failed:", notifyErr);
+      }
+
+      res.json({
+        transaction: txn,
+        newBalance,
+      });
+    } catch (error: any) {
+      console.error("Adjust wallet error:", error);
+      res.status(500).json({ error: "Failed to adjust wallet" });
+    }
+  }
+);
+
 export default router;

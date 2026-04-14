@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { admin } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
@@ -31,6 +32,7 @@ function roleTone(role?: string): BadgeTone {
 }
 
 export function UsersPage() {
+  const navigate = useNavigate();
   const [role, setRole] = useState("");
   const usersQ = useQuery({
     queryKey: ["admin", "users", role],
@@ -94,14 +96,29 @@ export function UsersPage() {
           </thead>
           <tbody>
             {users.map((u: any) => (
-              <tr key={u.id}>
+              <tr
+                key={u.id}
+                onClick={() => navigate(`/users/${u.id}/wallet`)}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = colors.surfaceAlt)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
+                title="Click to view wallet"
+              >
                 <TD>{u.phone}</TD>
                 <TD>{u.displayName || "—"}</TD>
                 <TD>
                   <Badge tone={roleTone(u.role)}>{u.role}</Badge>
                 </TD>
                 <TD>{u.isVerified ? "Yes" : "No"}</TD>
-                <TD>R{Number(u.walletBalance || 0).toFixed(2)}</TD>
+                <TD>
+                  <span style={{ fontVariant: "tabular-nums", fontWeight: 600 }}>
+                    R{Number(u.walletBalance || 0).toFixed(2)}
+                  </span>
+                </TD>
                 <TD>
                   {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                 </TD>

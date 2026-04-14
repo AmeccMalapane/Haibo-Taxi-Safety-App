@@ -203,6 +203,30 @@ export const admin = {
   },
 
   /**
+   * Fetch a single user's wallet for admin review. Returns the user
+   * summary + recent transactions (last 50) + lifetime totals and
+   * pending-outflow count. Safe to call often — it's read-only.
+   */
+  async getUserWallet(userId: string) {
+    return request(`/api/admin/users/${userId}/wallet`);
+  },
+
+  /**
+   * Credit or debit a user's wallet. `amount` is always positive; the
+   * server writes a signed walletTransaction row. Reason is required
+   * (min 4 chars) and lands in the admin audit log verbatim.
+   */
+  async adjustUserWallet(
+    userId: string,
+    input: { amount: number; direction: "credit" | "debit"; reason: string }
+  ) {
+    return request(`/api/admin/users/${userId}/wallet/adjust`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
    * Audit log — append-only record of admin writes. Supports optional
    * action/resource filters and cursor-style limit/offset pagination.
    */
