@@ -12,7 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
@@ -52,7 +52,11 @@ interface DirectoryVendor {
 
 interface DirectoryResponse {
   data: DirectoryVendor[];
+  hasMore: boolean;
+  nextOffset: number | null;
 }
+
+const PAGE_SIZE = 50;
 
 const TYPE_META: Record<
   VendorType,
@@ -85,18 +89,23 @@ export default function VendorDirectoryScreen() {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
 
-  const directoryQ = useQuery<DirectoryResponse>({
+  const directoryQ = useInfiniteQuery<DirectoryResponse>({
     queryKey: ["/api/vendor-profile/directory", search],
-    queryFn: () => {
+    initialPageParam: 0,
+    queryFn: ({ pageParam = 0 }) => {
       const q = search.trim();
-      const path = q
-        ? `/api/vendor-profile/directory?q=${encodeURIComponent(q)}`
-        : "/api/vendor-profile/directory";
-      return apiRequest(path);
+      const params = new URLSearchParams();
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(pageParam));
+      if (q) params.set("q", q);
+      return apiRequest(`/api/vendor-profile/directory?${params.toString()}`);
     },
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
   });
 
-  const vendors = directoryQ.data?.data || [];
+  // Flatten all loaded pages into a single vendor list for the FlatList.
+  const vendors: DirectoryVendor[] =
+    directoryQ.data?.pages.flatMap((p) => p.data) || [];
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -286,6 +295,22 @@ export default function VendorDirectoryScreen() {
             }}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+            onEndReached={() => {
+              if (directoryQ.hasNextPage && !directoryQ.isFetchingNextPage) {
+                directoryQ.fetchNextPage();
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              directoryQ.isFetchingNextPage ? (
+                <View style={styles.footerLoading}>
+                  <ActivityIndicator
+                    size="small"
+                    color={BrandColors.primary.gradientStart}
+                  />
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => (
               <VendorCard
                 vendor={item}
@@ -512,6 +537,10 @@ const styles = StyleSheet.create({
   // States
   loading: {
     paddingVertical: Spacing["3xl"],
+    alignItems: "center",
+  },
+  footerLoading: {
+    paddingVertical: Spacing.xl,
     alignItems: "center",
   },
   empty: {

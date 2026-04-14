@@ -182,24 +182,31 @@ router.get(
 );
 
 // GET /api/vendor-profile/directory — list of verified vendors for
-// the commuter-facing directory. Supports optional rank filter and
-// free-text search on business name.
+// the commuter-facing directory. Supports optional rank filter, free-
+// text search on business name, and cursor-style limit/offset
+// pagination. Response includes hasMore so the client can stop
+// firing onEndReached once the server has nothing left.
 router.get(
   "/directory",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const { rank, q, limit: rawLimit } = req.query as {
+      const { rank, q, limit: rawLimit, offset: rawOffset } = req.query as {
         rank?: string;
         q?: string;
         limit?: string;
+        offset?: string;
       };
       const limit = Math.min(Number(rawLimit) || 50, 100);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
 
       const conditions: SQL[] = [eq(vendorProfiles.status, "verified")];
       if (rank) conditions.push(ilike(vendorProfiles.rankLocation, `%${rank}%`));
       if (q) conditions.push(ilike(vendorProfiles.businessName, `%${q}%`));
 
+      // Fetch one extra row so we can tell the client whether another
+      // page exists without a second COUNT query. Trim it off before
+      // responding.
       const rows = await db
         .select({
           id: vendorProfiles.id,
@@ -214,9 +221,13 @@ router.get(
         .from(vendorProfiles)
         .where(and(...conditions))
         .orderBy(desc(vendorProfiles.salesCount))
-        .limit(limit);
+        .limit(limit + 1)
+        .offset(offset);
 
-      res.json({ data: rows });
+      const hasMore = rows.length > limit;
+      const data = hasMore ? rows.slice(0, limit) : rows;
+
+      res.json({ data, hasMore, nextOffset: hasMore ? offset + limit : null });
     } catch (error: any) {
       console.error("Vendor directory error:", error);
       res.status(500).json({ error: "Failed to fetch vendor directory" });
