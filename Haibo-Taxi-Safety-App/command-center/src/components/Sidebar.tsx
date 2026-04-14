@@ -19,6 +19,7 @@ import {
   Package,
   Route,
   Send,
+  Gift,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { to: "/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
   { to: "/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },
   { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
+  { to: "/referrals", label: "Referrals", Icon: Gift, section: "Directory" },
 
   // System — who did what
   { to: "/audit-log", label: "Audit log", Icon: ScrollText, section: "System" },

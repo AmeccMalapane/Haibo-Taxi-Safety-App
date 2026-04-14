@@ -6,6 +6,7 @@ import {
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
   sosAlerts, driverRatings, routeContributions, p2pTransfers,
+  referralCodes, referralSignups, referralRewards,
 } from "../../shared/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
@@ -1755,6 +1756,81 @@ router.get(
     } catch (error: any) {
       console.error("List p2p transfers error:", error);
       res.status(500).json({ error: "Failed to fetch p2p transfers" });
+    }
+  }
+);
+
+// ============ REFERRALS DASHBOARD (read-only) ============
+// Aggregated referral metrics — top-line stats + recent signups +
+// top referrers leaderboard. One round-trip keeps the page simple
+// and lets us compute derived fields (conversion rate) server-side.
+
+router.get(
+  "/referrals",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [codesCount] = await db
+        .select({ count: count() })
+        .from(referralCodes);
+
+      const [signupsCount] = await db
+        .select({ count: count() })
+        .from(referralSignups);
+
+      const [completedCount] = await db
+        .select({ count: count() })
+        .from(referralSignups)
+        .where(eq(referralSignups.hasCompletedRide, true));
+
+      const [rewardsCount] = await db
+        .select({ count: count() })
+        .from(referralRewards);
+
+      const [claimedCount] = await db
+        .select({ count: count() })
+        .from(referralRewards)
+        .where(eq(referralRewards.status, "claimed"));
+
+      // Recent signups — last 20, for the activity feed
+      const recentSignups = await db
+        .select()
+        .from(referralSignups)
+        .orderBy(desc(referralSignups.createdAt))
+        .limit(20);
+
+      // Top referrers — group by referrerDeviceId, count signups
+      const topReferrers = await db
+        .select({
+          referrerDeviceId: referralSignups.referrerDeviceId,
+          signupCount: count(),
+        })
+        .from(referralSignups)
+        .groupBy(referralSignups.referrerDeviceId)
+        .orderBy(desc(count()))
+        .limit(10);
+
+      const conversionRate =
+        signupsCount.count > 0
+          ? Math.round((completedCount.count / signupsCount.count) * 100)
+          : 0;
+
+      res.json({
+        stats: {
+          totalCodes: codesCount.count,
+          totalSignups: signupsCount.count,
+          completedSignups: completedCount.count,
+          conversionRate,
+          totalRewards: rewardsCount.count,
+          claimedRewards: claimedCount.count,
+        },
+        recentSignups,
+        topReferrers,
+      });
+    } catch (error: any) {
+      console.error("Referrals dashboard error:", error);
+      res.status(500).json({ error: "Failed to fetch referrals data" });
     }
   }
 );

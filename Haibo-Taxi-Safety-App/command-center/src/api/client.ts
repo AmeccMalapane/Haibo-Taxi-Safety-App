@@ -310,6 +310,11 @@ export const admin = {
     return request(`/api/admin/group-rides${q}`);
   },
 
+  /** Referrals dashboard — stats + recent signups + top referrers. */
+  async getReferrals() {
+    return request("/api/admin/referrals");
+  },
+
   /** Read-only list of P2P wallet transfers with optional status filter. */
   async getP2PTransfers(params: { status?: string; limit?: number; offset?: number } = {}) {
     const qs = new URLSearchParams();

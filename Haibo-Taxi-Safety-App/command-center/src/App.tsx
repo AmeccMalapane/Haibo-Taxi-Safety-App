@@ -25,6 +25,7 @@ import { BroadcastPage } from "./pages/BroadcastPage";
 import { GroupRidesPage } from "./pages/GroupRidesPage";
 import { DeliveriesPage } from "./pages/DeliveriesPage";
 import { P2PTransfersPage } from "./pages/P2PTransfersPage";
+import { ReferralsPage } from "./pages/ReferralsPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="/group-rides" element={<GroupRidesPage />} />
           <Route path="/deliveries" element={<DeliveriesPage />} />
           <Route path="/events" element={<EventsPage />} />
+          <Route path="/referrals" element={<ReferralsPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
