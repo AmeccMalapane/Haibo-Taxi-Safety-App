@@ -25,6 +25,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest } from "@/lib/query-client";
+import { uploadFromUri } from "@/lib/uploads";
+import { useQueryClient } from "@tanstack/react-query";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -51,12 +54,14 @@ export default function CreateReelScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const queryClient = useQueryClient();
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [caption, setCaption] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("general");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const requestMediaPermission = async (): Promise<boolean> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -152,6 +157,14 @@ export default function CreateReelScreen() {
     }
   };
 
+  // Extract hashtags from the caption body so the server gets a
+  // structured list in addition to the rendered text. Cheap tokenizer
+  // — matches #[a-z0-9_]+ case-insensitively.
+  const extractHashtags = (text: string): string[] => {
+    const matches = text.match(/#[a-zA-Z0-9_]+/g) || [];
+    return matches.map((t) => t.slice(1).toLowerCase());
+  };
+
   const handlePost = async () => {
     if (!mediaUri) {
       Alert.alert("Missing media", "Please select a photo or video to upload.");
@@ -164,16 +177,61 @@ export default function CreateReelScreen() {
 
     setIsUploading(true);
     if (Platform.OS !== "web") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    setTimeout(() => {
-      setIsUploading(false);
-      Alert.alert(
-        "Saved locally",
-        "Reel uploads are coming soon. Your content has been saved on this device.",
-        [{ text: "OK", onPress: () => navigation.goBack() }]
+
+    try {
+      // Phase 1 — upload the media. Image vs video picks the right
+      // endpoint + cap (10 MB vs 50 MB). Status copy updates so the
+      // user sees the two-stage progression instead of a dead spinner.
+      setUploadStatus(
+        mediaType === "video" ? "Uploading video…" : "Uploading photo…"
       );
-    }, 600);
+      const uploaded = await uploadFromUri(mediaUri, {
+        folder: "reels",
+        kind: mediaType,
+      });
+
+      // Phase 2 — create the reel row pointing at the uploaded URL.
+      // The server already has POST /api/community/posts from the
+      // community router; we just need to match its body shape.
+      setUploadStatus("Publishing…");
+      await apiRequest("/api/community/posts", {
+        method: "POST",
+        body: JSON.stringify({
+          contentType: mediaType === "video" ? "video" : "photo",
+          mediaUrl: uploaded.url,
+          caption: caption.trim(),
+          hashtags: extractHashtags(caption),
+          category: selectedCategory,
+        }),
+      });
+
+      // Invalidate the community/reels feeds so the new post appears
+      // on the wall when the user navigates back.
+      queryClient.invalidateQueries({ queryKey: ["/api/community/posts"] });
+
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      Alert.alert(
+        "Posted",
+        "Your reel is live on the Haibo community wall.",
+        [{ text: "Done", onPress: () => navigation.goBack() }]
+      );
+    } catch (error: any) {
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      Alert.alert(
+        "Upload failed",
+        error.message || "Something went wrong. Please try again."
+      );
+    } finally {
+      setIsUploading(false);
+      setUploadStatus(null);
+    }
   };
 
   const toggleHashtag = (tag: string) => {
@@ -365,10 +423,10 @@ export default function CreateReelScreen() {
           disabled={!canPost}
           icon={isUploading ? undefined : "send"}
         >
-          {isUploading ? "Saving..." : "Post reel"}
+          {isUploading ? uploadStatus || "Uploading…" : "Post reel"}
         </GradientButton>
         <ThemedText style={styles.footerNote}>
-          Demo mode — reels are saved locally. Cloud upload coming soon.
+          Your reel will appear on the Haibo community wall.
         </ThemedText>
       </View>
     </View>
