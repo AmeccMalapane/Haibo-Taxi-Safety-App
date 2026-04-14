@@ -180,6 +180,7 @@ export default function MenuScreen() {
   const handleRating = () => navigation.navigate("Rating");
   const handleDriverDashboard = () => navigation.navigate("DriverDashboard");
   const handleDriverOnboarding = () => navigation.navigate("DriverOnboarding");
+  const handleNotifications = () => navigation.navigate("Notifications");
 
   const isDriver = user?.avatarType === "driver";
 
@@ -423,6 +424,13 @@ export default function MenuScreen() {
                 />
               </>
             )}
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <MenuItem
+              icon="bell"
+              label="Notifications"
+              hint="Payment receipts, alerts and updates"
+              onPress={handleNotifications}
+            />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="settings"
