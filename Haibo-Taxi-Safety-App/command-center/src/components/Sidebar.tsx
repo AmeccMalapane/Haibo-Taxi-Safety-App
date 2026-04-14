@@ -20,6 +20,7 @@ import {
   Route,
   Send,
   Gift,
+  Store,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   // Moderation — content + person review
   { to: "/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
   { to: "/drivers", label: "Driver KYC", Icon: BadgeCheck, section: "Moderation" },
+  { to: "/vendors", label: "Vault vendors", Icon: Store, section: "Moderation" },
   { to: "/moderation/routes", label: "Routes", Icon: Route, section: "Moderation" },
   { to: "/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
   { to: "/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },

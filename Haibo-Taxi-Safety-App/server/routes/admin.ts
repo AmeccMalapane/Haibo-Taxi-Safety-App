@@ -6,7 +6,7 @@ import {
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
   sosAlerts, driverRatings, routeContributions, p2pTransfers,
-  referralCodes, referralSignups, referralRewards,
+  referralCodes, referralSignups, referralRewards, vendorProfiles,
 } from "../../shared/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
@@ -1831,6 +1831,130 @@ router.get(
     } catch (error: any) {
       console.error("Referrals dashboard error:", error);
       res.status(500).json({ error: "Failed to fetch referrals data" });
+    }
+  }
+);
+
+// ============ VENDORS (Haibo Vault) ============
+// Admin view of vendor_profiles with status-based filtering, counts
+// for the sidebar badge, and a single mutation endpoint for
+// verify/suspend/unsuspend. Sales totals come straight off the
+// vendor row thanks to the atomic counters in /api/wallet/pay-vendor.
+
+router.get(
+  "/vendors",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, limit: rawLimit, offset: rawOffset } = req.query as {
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 100, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const baseQuery = db
+        .select({
+          id: vendorProfiles.id,
+          userId: vendorProfiles.userId,
+          vendorType: vendorProfiles.vendorType,
+          businessName: vendorProfiles.businessName,
+          rankLocation: vendorProfiles.rankLocation,
+          description: vendorProfiles.description,
+          businessImageUrl: vendorProfiles.businessImageUrl,
+          vendorRef: vendorProfiles.vendorRef,
+          status: vendorProfiles.status,
+          salesCount: vendorProfiles.salesCount,
+          totalSales: vendorProfiles.totalSales,
+          createdAt: vendorProfiles.createdAt,
+          updatedAt: vendorProfiles.updatedAt,
+          ownerPhone: users.phone,
+          ownerName: users.displayName,
+        })
+        .from(vendorProfiles)
+        .leftJoin(users, eq(vendorProfiles.userId, users.id))
+        .orderBy(desc(vendorProfiles.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows = status
+        ? await baseQuery.where(eq(vendorProfiles.status, status))
+        : await baseQuery;
+
+      const countsRows = await db
+        .select({ status: vendorProfiles.status, count: count() })
+        .from(vendorProfiles)
+        .groupBy(vendorProfiles.status);
+      const counts: Record<string, number> = {};
+      for (const r of countsRows) counts[r.status] = r.count;
+
+      const [totals] = await db
+        .select({
+          totalSales: sum(vendorProfiles.totalSales),
+          totalTxns: sum(vendorProfiles.salesCount),
+        })
+        .from(vendorProfiles);
+
+      res.json({
+        data: rows,
+        counts,
+        totals: {
+          totalSales: Number(totals?.totalSales) || 0,
+          totalTxns: Number(totals?.totalTxns) || 0,
+        },
+        pendingCount: counts.pending || 0,
+      });
+    } catch (error: any) {
+      console.error("List vendors error:", error);
+      res.status(500).json({ error: "Failed to fetch vendors" });
+    }
+  }
+);
+
+// PUT /api/admin/vendors/:id/status — transition a vendor between
+// pending / verified / suspended. Writes review audit columns so
+// we know who last actioned the row.
+router.put(
+  "/vendors/:id/status",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body as { status?: string };
+
+      const valid = ["pending", "verified", "suspended"];
+      if (!status || !valid.includes(status)) {
+        res.status(400).json({ error: "Invalid status" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(vendorProfiles)
+        .set({
+          status,
+          reviewedBy: req.user!.userId,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(vendorProfiles.id, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Vendor not found" });
+        return;
+      }
+
+      await recordAdminAction(req, `vendor.${status}`, "vendor_profile", id, {
+        vendorRef: updated.vendorRef,
+      });
+
+      res.json({ data: updated });
+    } catch (error: any) {
+      console.error("Update vendor status error:", error);
+      res.status(500).json({ error: "Failed to update vendor status" });
     }
   }
 );

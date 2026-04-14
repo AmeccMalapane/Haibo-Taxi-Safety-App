@@ -315,6 +315,24 @@ export const admin = {
     return request("/api/admin/referrals");
   },
 
+  /** Haibo Vault vendors — list with status filter, counts, totals. */
+  async getVendors(params: { status?: string; limit?: number; offset?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/vendors${q}`);
+  },
+
+  /** Transition a vendor profile between pending/verified/suspended. */
+  async setVendorStatus(vendorId: string, status: "pending" | "verified" | "suspended") {
+    return request(`/api/admin/vendors/${vendorId}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    });
+  },
+
   /** Read-only list of P2P wallet transfers with optional status filter. */
   async getP2PTransfers(params: { status?: string; limit?: number; offset?: number } = {}) {
     const qs = new URLSearchParams();
