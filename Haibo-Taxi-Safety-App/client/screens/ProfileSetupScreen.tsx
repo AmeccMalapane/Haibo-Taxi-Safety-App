@@ -8,6 +8,7 @@ import {
   Platform,
   Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,6 +25,7 @@ import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/them
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { uploadFromUri } from "@/lib/uploads";
 
 // typeui-clean rework of the profile-setup hero.
 //
@@ -79,6 +81,8 @@ export default function ProfileSetupScreen() {
 
   const [displayName, setDisplayName] = useState("");
   const [avatarType, setAvatarType] = useState<AvatarType>("commuter");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
@@ -87,6 +91,40 @@ export default function ProfileSetupScreen() {
   const [emergencyPhoneFocused, setEmergencyPhoneFocused] = useState(false);
   const [referralFocused, setReferralFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Same pick flow as ProfileScreen — library only, 1:1 crop, 0.85
+  // quality. Uploads immediately so the preview shows the server URL
+  // and the final save just passes it through.
+  const handlePickAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access to upload a profile photo.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      setAvatarUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "profiles",
+        name: result.assets[0].fileName || undefined,
+      });
+      setAvatarUrl(uploaded.url);
+    } catch (error: any) {
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const finishSetup = () => {
     if (Platform.OS !== "web") {
@@ -116,6 +154,7 @@ export default function ProfileSetupScreen() {
     } = {
       displayName: displayName.trim(),
       avatarType,
+      avatarUrl: avatarUrl || undefined,
       emergencyContactName: emergencyName.trim() || undefined,
       emergencyContactPhone: emergencyPhone.trim() || undefined,
     };
@@ -136,7 +175,7 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const canSubmit = displayName.trim().length > 0 && !isSaving;
+  const canSubmit = displayName.trim().length > 0 && !isSaving && !avatarUploading;
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -176,6 +215,59 @@ export default function ProfileSetupScreen() {
           entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
           style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
         >
+          {/* Profile photo picker — optional but visually prominent */}
+          <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+            PROFILE PHOTO (OPTIONAL)
+          </ThemedText>
+          <View style={styles.photoPickRow}>
+            <Pressable
+              onPress={handlePickAvatar}
+              disabled={avatarUploading}
+              style={({ pressed }) => [
+                styles.photoPickCircle,
+                {
+                  borderColor: avatarUrl
+                    ? BrandColors.primary.gradientStart
+                    : theme.border,
+                  backgroundColor: theme.backgroundDefault,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={avatarUrl ? "Change profile photo" : "Add profile photo"}
+            >
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.photoPickImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Feather
+                  name={avatarUploading ? "loader" : "camera"}
+                  size={24}
+                  color={BrandColors.primary.gradientStart}
+                />
+              )}
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={[styles.photoPickTitle, { color: theme.text }]}>
+                {avatarUrl
+                  ? "Looking good"
+                  : avatarUploading
+                    ? "Uploading…"
+                    : "Tap to add a photo"}
+              </ThemedText>
+              <ThemedText
+                style={[styles.photoPickHint, { color: theme.textSecondary }]}
+              >
+                {avatarUrl
+                  ? "Tap the circle to change it"
+                  : "Makes it easier for drivers and vendors to recognize you"}
+              </ThemedText>
+            </View>
+          </View>
+
           {/* Role picker */}
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
             WHO ARE YOU?
@@ -469,6 +561,39 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textTransform: "none",
   },
+
+  // Profile photo picker
+  photoPickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  photoPickCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  photoPickImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPickTitle: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  photoPickHint: {
+    ...Typography.small,
+    fontSize: 12,
+    marginTop: 2,
+  },
+
   avatarRow: {
     flexDirection: "row",
     gap: Spacing.sm,
