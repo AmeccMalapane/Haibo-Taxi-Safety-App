@@ -6,7 +6,9 @@ import {
   Pressable,
   Alert,
   Platform,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -26,6 +28,7 @@ import {
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { apiRequest } from "@/lib/query-client";
+import { uploadFromUri } from "@/lib/uploads";
 import { getDeviceId } from "@/lib/deviceId";
 
 // typeui-clean rework — Post Lost & Found item form. Matches the rest of
@@ -81,6 +84,8 @@ export default function PostLostFoundScreen() {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [reward, setReward] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
 
   const [titleFocused, setTitleFocused] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
@@ -112,6 +117,48 @@ export default function PostLostFoundScreen() {
     } catch {}
   };
 
+  // Pick + upload a photo of the item — essential for "found" posts
+  // (so the owner can recognize it) and very helpful for "lost" posts
+  // (so finders know exactly what to look for).
+  const handlePickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access to attach an image.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      triggerHaptic("selection");
+      setImageUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "lost-found",
+        name: result.assets[0].fileName || undefined,
+      });
+      setImageUrl(uploaded.url);
+      triggerHaptic("success");
+    } catch (error: any) {
+      triggerHaptic("error");
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleClearImage = () => {
+    triggerHaptic("selection");
+    setImageUrl("");
+  };
+
   const postMutation = useMutation({
     mutationFn: async () => {
       const deviceId = await getDeviceId();
@@ -122,6 +169,7 @@ export default function PostLostFoundScreen() {
           category,
           title: title.trim(),
           description: description.trim(),
+          imageUrl: imageUrl || undefined,
           routeOrigin: routeOrigin.trim() || undefined,
           routeDestination: routeDestination.trim() || undefined,
           contactName: contactName.trim(),
@@ -359,6 +407,72 @@ export default function PostLostFoundScreen() {
               : `${charCount}/10 characters minimum`}
           </ThemedText>
 
+          {/* Photo (optional but strongly encouraged) */}
+          <BrandLabel theme={theme}>Photo (optional)</BrandLabel>
+          {imageUrl ? (
+            <View style={styles.lfImagePreviewWrap}>
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.lfImagePreview}
+                resizeMode="cover"
+              />
+              <Pressable
+                onPress={handleClearImage}
+                style={({ pressed }) => [
+                  styles.lfImageClearBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
+              >
+                <Feather name="x" size={14} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handlePickImage}
+              disabled={imageUploading}
+              style={({ pressed }) => [
+                styles.lfUploadButton,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Upload a photo"
+            >
+              <View
+                style={[
+                  styles.lfUploadIcon,
+                  {
+                    backgroundColor:
+                      BrandColors.primary.gradientStart + "12",
+                  },
+                ]}
+              >
+                <Feather
+                  name={imageUploading ? "loader" : "camera"}
+                  size={18}
+                  color={BrandColors.primary.gradientStart}
+                />
+              </View>
+              <ThemedText
+                style={[
+                  styles.lfUploadText,
+                  { color: theme.text },
+                ]}
+              >
+                {imageUploading
+                  ? "Uploading…"
+                  : type === "found"
+                    ? "Add a photo of the item"
+                    : "Add a photo if you have one"}
+              </ThemedText>
+            </Pressable>
+          )}
+
           {/* Route (optional) */}
           <BrandLabel theme={theme}>Route (optional)</BrandLabel>
           <View style={styles.routeRow}>
@@ -482,7 +596,7 @@ export default function PostLostFoundScreen() {
           <View style={styles.cta}>
             <GradientButton
               onPress={handleSubmit}
-              disabled={!isValid || postMutation.isPending}
+              disabled={!isValid || postMutation.isPending || imageUploading}
               size="large"
               icon={postMutation.isPending ? undefined : "arrow-right"}
               iconPosition="right"
@@ -673,6 +787,52 @@ const styles = StyleSheet.create({
     ...Typography.small,
     fontSize: 12,
     marginTop: Spacing.xs,
+  },
+
+  // Lost & found image upload
+  lfUploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+  },
+  lfUploadIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lfUploadText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  lfImagePreviewWrap: {
+    width: "100%",
+    height: 180,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+    position: "relative",
+  },
+  lfImagePreview: {
+    width: "100%",
+    height: "100%",
+  },
+  lfImageClearBtn: {
+    position: "absolute",
+    top: Spacing.sm,
+    right: Spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Type buttons
