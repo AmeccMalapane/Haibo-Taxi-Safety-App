@@ -11,7 +11,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -50,6 +52,7 @@ export default function WalletScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { isAuthenticated, user } = useAuth();
   const { data: apiBalance, refetch: refetchBalance } = useWalletBalance();
   const { data: apiTransactions, refetch: refetchTransactions } = useWalletTransactions();
@@ -389,6 +392,49 @@ export default function WalletScreen() {
             onPress={() => handleActionPress("history")}
             theme={theme}
           />
+        </Animated.View>
+
+        {/* Vendor entry — subtle row that opens the Haibo Vault onboarding */}
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(250)}
+        >
+          <Pressable
+            onPress={() => navigation.navigate("VendorOnboarding")}
+            style={({ pressed }) => [
+              styles.vendorEntry,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+              pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Become a vendor"
+          >
+            <View
+              style={[
+                styles.vendorEntryIcon,
+                { backgroundColor: BrandColors.primary.gradientStart + "12" },
+              ]}
+            >
+              <Feather
+                name="shopping-bag"
+                size={18}
+                color={BrandColors.primary.gradientStart}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.vendorEntryTitle}>
+                Accept payments as a vendor
+              </ThemedText>
+              <ThemedText
+                style={[styles.vendorEntryHint, { color: theme.textSecondary }]}
+              >
+                Rank vendors, hawkers, and accessory sellers
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
         </Animated.View>
 
         {/* Inline expanding form — top-up */}
@@ -959,6 +1005,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
+  },
+
+  // Vendor entry row (subtle upsell under the action grid)
+  vendorEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  vendorEntryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  vendorEntryTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  vendorEntryHint: {
+    ...Typography.small,
+    fontSize: 12,
   },
   actionTile: {
     flex: 1,
