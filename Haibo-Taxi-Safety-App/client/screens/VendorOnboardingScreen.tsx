@@ -6,6 +6,7 @@ import {
   Pressable,
   Alert,
   Platform,
+  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -26,6 +27,7 @@ import {
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { apiRequest } from "@/lib/query-client";
+import { createVendorPayLink } from "@/lib/deepLinks";
 
 // typeui-clean VendorOnboardingScreen — rose gradient hero with storefront
 // badge, floating white card with the onboarding form. Matches PostLostFound
@@ -312,14 +314,43 @@ export default function VendorOnboardingScreen() {
 
             <View style={styles.cta}>
               <GradientButton
-                onPress={() => navigation.goBack()}
+                onPress={async () => {
+                  try {
+                    const url = createVendorPayLink(existing.vendorRef);
+                    await Share.share({
+                      message: `Pay ${existing.businessName} on Haibo:\n${url}\n\nOr type the code: ${existing.vendorRef}`,
+                      title: `Pay ${existing.businessName}`,
+                    });
+                  } catch (e) {
+                    // user cancelled — no-op
+                  }
+                }}
                 size="large"
-                icon="arrow-left"
-                iconPosition="left"
+                icon="share-2"
+                iconPosition="right"
               >
-                Back to wallet
+                Share payment link
               </GradientButton>
             </View>
+
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [
+                styles.backLink,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Back to wallet"
+            >
+              <ThemedText
+                style={[
+                  styles.backLinkText,
+                  { color: BrandColors.primary.gradientStart },
+                ]}
+              >
+                Back to wallet
+              </ThemedText>
+            </Pressable>
           </Animated.View>
         </KeyboardAwareScrollViewCompat>
       </View>
@@ -849,6 +880,15 @@ const styles = StyleSheet.create({
   // CTA bottom button
   cta: {
     marginTop: Spacing["2xl"],
+  },
+
+  backLink: {
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+  },
+  backLinkText: {
+    ...Typography.link,
+    fontWeight: "600",
   },
 
   // Welcome-back: vendor ref card

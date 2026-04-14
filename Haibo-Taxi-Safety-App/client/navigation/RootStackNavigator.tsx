@@ -98,7 +98,7 @@ export type RootStackParamList = {
   DriverDashboard: undefined;
   DriverOnboarding: undefined;
   VendorOnboarding: undefined;
-  PayVendor: undefined;
+  PayVendor: { vendorRef?: string } | undefined;
   PasopFeed: undefined;
   PasopReport: undefined;
 };

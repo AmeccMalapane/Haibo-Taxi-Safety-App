@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   TextInput,
@@ -8,7 +8,8 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -59,9 +60,14 @@ export default function PayVendorScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, "PayVendor">>();
   const queryClient = useQueryClient();
 
-  const [vendorRef, setVendorRef] = useState("");
+  // Deep-link entry: if we got here via haibo://pay/HBV-xxxx or a shared
+  // payment link, the vendorRef is passed as a route param. Seed the
+  // text input with it so the user sees what they're about to resolve.
+  const initialRef = route.params?.vendorRef || "";
+  const [vendorRef, setVendorRef] = useState(initialRef);
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   const [refFocused, setRefFocused] = useState(false);
@@ -104,6 +110,17 @@ export default function PayVendorScreen() {
       );
     },
   });
+
+  // Auto-lookup on deep-link entry so the user drops straight into the
+  // confirmation step instead of having to tap "Find vendor" on a ref
+  // they didn't type. Guarded on initialRef so manual-entry users keep
+  // the two-step flow.
+  useEffect(() => {
+    if (initialRef && initialRef.length >= 8) {
+      lookupMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const payMutation = useMutation({
     mutationFn: async () => {

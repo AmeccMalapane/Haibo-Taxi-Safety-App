@@ -76,6 +76,16 @@ export function createEventLink(eventId: string): string {
 }
 
 /**
+ * Haibo Pay vendor link — builds a shareable URL that lands on the
+ * PayVendor screen with the vendorRef pre-filled. Vendors share this
+ * via WhatsApp or turn it into a printed QR sticker for their stall;
+ * buyers scan with any native camera and tap through.
+ */
+export function createVendorPayLink(vendorRef: string): string {
+  return createShareableLink("pay", vendorRef);
+}
+
+/**
  * Screen route map for deep links. Keys are the URL path segment, values are
  * the actual screen name in RootStackParamList. Screens that take a param
  * declare the target paramKey; screens that don't just navigate bare.
@@ -92,6 +102,7 @@ const SCREEN_ROUTES: Record<string, { screen: string; paramKey?: string }> = {
   invite: { screen: "Referral" },
   job: { screen: "Jobs" },
   event: { screen: "Events" },
+  pay: { screen: "PayVendor", paramKey: "vendorRef" },
   sos: { screen: "Emergency" },
   home: { screen: "Main" },
   community: { screen: "Community" },
