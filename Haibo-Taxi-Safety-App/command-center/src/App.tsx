@@ -27,6 +27,7 @@ import { DeliveriesPage } from "./pages/DeliveriesPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
 import { JobsModerationPage } from "./pages/JobsModerationPage";
+import { RoutesModerationPage } from "./pages/RoutesModerationPage";
 import { FleetPage } from "./pages/FleetPage";
 import { EventsPage } from "./pages/EventsPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="/complaints" element={<ComplaintsPage />} />
           <Route path="/broadcast" element={<BroadcastPage />} />
           <Route path="/moderation/pasop" element={<PasopPage />} />
+          <Route path="/moderation/routes" element={<RoutesModerationPage />} />
           <Route path="/moderation/reels" element={<ReelsModerationPage />} />
           <Route path="/moderation/lost-found" element={<LostFoundModerationPage />} />
           <Route path="/moderation/jobs" element={<JobsModerationPage />} />
