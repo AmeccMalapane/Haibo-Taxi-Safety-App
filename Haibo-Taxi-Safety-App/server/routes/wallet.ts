@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { db } from "../db";
 import {
   users, walletTransactions, p2pTransfers, sponsorships,
-  transactions, withdrawalRequests, paymentMethods,
+  transactions, withdrawalRequests, paymentMethods, vendorProfiles,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
@@ -205,6 +205,139 @@ router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthReq
   } catch (error: any) {
     console.error("Transfer error:", error);
     res.status(500).json({ error: "Transfer failed" });
+    return;
+  }
+});
+
+// POST /api/wallet/pay-vendor - Pay a Haibo Vault vendor by reference code.
+// Same money rail as /transfer but looks the recipient up by vendorRef
+// instead of phone, tags the p2pTransfers row so we can classify it as a
+// sale, and increments the vendor's sales counters for the directory/CC.
+router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthRequest, res: Response) => {
+  try {
+    const { vendorRef, amount, message } = req.body;
+
+    if (!vendorRef || typeof vendorRef !== "string") {
+      res.status(400).json({ error: "vendorRef is required" });
+      return;
+    }
+    if (!amount || amount <= 0) {
+      res.status(400).json({ error: "Valid amount is required" });
+      return;
+    }
+
+    // Look up the vendor. Suspended vendors must not accept payments; we
+    // return a deliberate "vendor not found" so the sender can't tell the
+    // difference between "never existed" and "was suspended".
+    const [vendor] = await db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.vendorRef, vendorRef))
+      .limit(1);
+
+    if (!vendor || vendor.status === "suspended") {
+      res.status(404).json({ error: "Vendor not found" });
+      return;
+    }
+
+    if (vendor.userId === req.user!.userId) {
+      res.status(400).json({ error: "You can't pay yourself" });
+      return;
+    }
+
+    // Check sender balance
+    const [sender] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user!.userId))
+      .limit(1);
+    if (!sender || (sender.walletBalance || 0) < amount) {
+      res.status(400).json({ error: "Insufficient balance" });
+      return;
+    }
+
+    // Resolve vendor's user row for the transfer description
+    const [vendorUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, vendor.userId))
+      .limit(1);
+    if (!vendorUser) {
+      res.status(404).json({ error: "Vendor account missing" });
+      return;
+    }
+
+    // Money movement — deduct + credit
+    await db
+      .update(users)
+      .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
+      .where(eq(users.id, req.user!.userId));
+
+    await db
+      .update(users)
+      .set({ walletBalance: sql`${users.walletBalance} + ${amount}` })
+      .where(eq(users.id, vendor.userId));
+
+    // Record the P2P row — vendorRef tag lets /api/admin/p2p-transfers
+    // classify this as a "sale" in reports without a second table.
+    const [transfer] = await db
+      .insert(p2pTransfers)
+      .values({
+        senderId: req.user!.userId,
+        recipientId: vendor.userId,
+        recipientPhone: vendorUser.phone,
+        amount,
+        message: message || null,
+        status: "completed",
+        vendorRef: vendor.vendorRef,
+      })
+      .returning();
+
+    // Wallet transactions — both sides
+    await db.insert(walletTransactions).values([
+      {
+        userId: req.user!.userId,
+        type: "vendor_payment",
+        amount: -amount,
+        description: `Paid ${vendor.businessName}`,
+        status: "completed",
+        relatedUserId: vendor.userId,
+        relatedUserPhone: vendorUser.phone,
+      },
+      {
+        userId: vendor.userId,
+        type: "vendor_sale",
+        amount,
+        description: `Sale via ${sender.phone}`,
+        status: "completed",
+        relatedUserId: req.user!.userId,
+        relatedUserPhone: sender.phone,
+      },
+    ]);
+
+    // Update vendor sales counters. Using sql`` so concurrent sales
+    // increment atomically rather than racing on a read-modify-write.
+    await db
+      .update(vendorProfiles)
+      .set({
+        salesCount: sql`${vendorProfiles.salesCount} + 1`,
+        totalSales: sql`${vendorProfiles.totalSales} + ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorProfiles.id, vendor.id));
+
+    res.json({
+      message: "Payment successful",
+      transfer,
+      vendor: {
+        vendorRef: vendor.vendorRef,
+        businessName: vendor.businessName,
+        vendorType: vendor.vendorType,
+      },
+    });
+  } catch (error: any) {
+    console.error("Pay vendor error:", error);
+    res.status(500).json({ error: "Payment failed" });
   }
 });
 

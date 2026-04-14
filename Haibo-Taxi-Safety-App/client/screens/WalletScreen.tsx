@@ -394,10 +394,44 @@ export default function WalletScreen() {
           />
         </Animated.View>
 
-        {/* Vendor entry — subtle row that opens the Haibo Vault onboarding */}
+        {/* Haibo Vault vendor entries — one row to pay, one row to sell. */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(250)}
         >
+          <Pressable
+            onPress={() => navigation.navigate("PayVendor")}
+            style={({ pressed }) => [
+              styles.vendorEntry,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+              pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Pay a vendor"
+          >
+            <View
+              style={[
+                styles.vendorEntryIcon,
+                { backgroundColor: BrandColors.status.info + "12" },
+              ]}
+            >
+              <Feather name="credit-card" size={18} color={BrandColors.status.info} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.vendorEntryTitle}>
+                Pay a vendor
+              </ThemedText>
+              <ThemedText
+                style={[styles.vendorEntryHint, { color: theme.textSecondary }]}
+              >
+                Enter a HBV code to pay at a rank or stall
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          </Pressable>
+
           <Pressable
             onPress={() => navigation.navigate("VendorOnboarding")}
             style={({ pressed }) => [
@@ -1015,7 +1049,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   vendorEntryIcon: {
     width: 36,

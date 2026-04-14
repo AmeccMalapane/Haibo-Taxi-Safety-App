@@ -44,6 +44,7 @@ import PushaScreen from "@/screens/PushaScreen";
 import TaxiFareScreen from "@/screens/TaxiFareScreen";
 import DriverDashboardScreen from "@/screens/DriverDashboardScreen";
 import VendorOnboardingScreen from "@/screens/VendorOnboardingScreen";
+import PayVendorScreen from "@/screens/PayVendorScreen";
 import PasopFeedScreen from "@/screens/PasopFeedScreen";
 import PasopReportScreen from "@/screens/PasopReportScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
@@ -95,6 +96,7 @@ export type RootStackParamList = {
   TaxiFare: undefined;
   DriverDashboard: undefined;
   VendorOnboarding: undefined;
+  PayVendor: undefined;
   PasopFeed: undefined;
   PasopReport: undefined;
 };
@@ -440,6 +442,14 @@ export default function RootStackNavigator() {
         component={VendorOnboardingScreen}
         options={{
           presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="PayVendor"
+        component={PayVendorScreen}
+        options={{
+          presentation: "modal",
           headerShown: false,
         }}
       />
