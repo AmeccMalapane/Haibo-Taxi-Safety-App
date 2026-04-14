@@ -399,7 +399,7 @@ export default function WalletScreen() {
           entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(250)}
         >
           <Pressable
-            onPress={() => navigation.navigate("PayVendor")}
+            onPress={() => navigation.navigate("VendorDirectory")}
             style={({ pressed }) => [
               styles.vendorEntry,
               {
@@ -409,7 +409,7 @@ export default function WalletScreen() {
               pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Pay a vendor"
+            accessibilityLabel="Browse vendors"
           >
             <View
               style={[
@@ -426,7 +426,7 @@ export default function WalletScreen() {
               <ThemedText
                 style={[styles.vendorEntryHint, { color: theme.textSecondary }]}
               >
-                Enter a HBV code to pay at a rank or stall
+                Browse verified vendors or enter a HBV code
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
