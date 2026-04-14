@@ -29,6 +29,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { createVendorPayLink } from "@/lib/deepLinks";
+import { uploadFromUri } from "@/lib/uploads";
+import * as ImagePicker from "expo-image-picker";
 
 // typeui-clean VendorOnboardingScreen — rose gradient hero with storefront
 // badge, floating white card with the onboarding form. Matches PostLostFound
@@ -105,11 +107,11 @@ export default function VendorOnboardingScreen() {
   const [rankLocation, setRankLocation] = useState("");
   const [description, setDescription] = useState("");
   const [businessImageUrl, setBusinessImageUrl] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [rankFocused, setRankFocused] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
-  const [imageFocused, setImageFocused] = useState(false);
 
   // Load existing profile if any — shows the "welcome back" state instead
   // of the form when the user is already registered.
@@ -122,11 +124,6 @@ export default function VendorOnboardingScreen() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const rawImage = businessImageUrl.trim();
-      // Only pass through clean http(s) URLs — a malformed value would
-      // silently render a broken image across the directory.
-      const cleanImage =
-        rawImage && /^https?:\/\//i.test(rawImage) ? rawImage : undefined;
       return apiRequest("/api/vendor-profile", {
         method: "POST",
         body: JSON.stringify({
@@ -134,7 +131,7 @@ export default function VendorOnboardingScreen() {
           businessName: businessName.trim(),
           rankLocation: rankLocation.trim() || undefined,
           description: description.trim() || undefined,
-          businessImageUrl: cleanImage,
+          businessImageUrl: businessImageUrl || undefined,
         }),
       });
     },
@@ -162,6 +159,49 @@ export default function VendorOnboardingScreen() {
         Haptics.selectionAsync();
       }
     } catch {}
+  };
+
+  // Pick an image from the library, upload it to /api/uploads/image,
+  // and store the returned public URL. We upload on pick (not on form
+  // submit) so the user sees the image immediately and we don't have
+  // to carry a local file URI through the mutation.
+  const handlePickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access in your device settings to upload a business photo.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      triggerHaptic("selection");
+      setImageUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "vendor-photos",
+        name: result.assets[0].fileName || undefined,
+      });
+      setBusinessImageUrl(uploaded.url);
+      triggerHaptic("success");
+    } catch (error: any) {
+      triggerHaptic("error");
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleClearImage = () => {
+    triggerHaptic("selection");
+    setBusinessImageUrl("");
   };
 
   const detailsValid =
@@ -631,38 +671,66 @@ export default function VendorOnboardingScreen() {
                 maxLength={280}
               />
 
-              <BrandLabel theme={theme}>Business photo URL (optional)</BrandLabel>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.backgroundDefault,
-                    color: theme.text,
-                    borderColor: imageFocused
-                      ? BrandColors.primary.gradientStart
-                      : theme.border,
-                  },
-                ]}
-                placeholder="https://…"
-                placeholderTextColor={theme.textSecondary}
-                value={businessImageUrl}
-                onChangeText={setBusinessImageUrl}
-                onFocus={() => setImageFocused(true)}
-                onBlur={() => setImageFocused(false)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                maxLength={500}
-              />
-              {businessImageUrl.trim() && /^https?:\/\//i.test(businessImageUrl.trim()) ? (
-                <View style={styles.formImagePreviewWrap}>
+              <BrandLabel theme={theme}>Business photo (optional)</BrandLabel>
+              {businessImageUrl ? (
+                <View style={styles.uploadedWrap}>
                   <Image
-                    source={{ uri: businessImageUrl.trim() }}
-                    style={styles.formImagePreview}
+                    source={{ uri: businessImageUrl }}
+                    style={styles.uploadedImage}
                     resizeMode="cover"
                   />
+                  <Pressable
+                    onPress={handleClearImage}
+                    style={({ pressed }) => [
+                      styles.clearImageBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove business photo"
+                  >
+                    <Feather name="x" size={14} color="#FFFFFF" />
+                  </Pressable>
                 </View>
-              ) : null}
+              ) : (
+                <Pressable
+                  onPress={handlePickImage}
+                  disabled={imageUploading}
+                  style={({ pressed }) => [
+                    styles.uploadButton,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      borderColor: theme.border,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Upload business photo"
+                >
+                  <View
+                    style={[
+                      styles.uploadIconWrap,
+                      {
+                        backgroundColor:
+                          BrandColors.primary.gradientStart + "12",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={imageUploading ? "loader" : "camera"}
+                      size={18}
+                      color={BrandColors.primary.gradientStart}
+                    />
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.uploadButtonText,
+                      { color: theme.text },
+                    ]}
+                  >
+                    {imageUploading ? "Uploading…" : "Add a photo of your stall"}
+                  </ThemedText>
+                </Pressable>
+              )}
 
               <View
                 style={[
@@ -974,15 +1042,51 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
   },
 
-  // Form image preview (while editing URL)
-  formImagePreviewWrap: {
+  // Upload button (empty state)
+  uploadButton: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: Spacing.md,
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
   },
-  formImagePreview: {
-    width: 96,
-    height: 96,
+  uploadIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  uploadButtonText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+
+  // Uploaded image preview with remove button
+  uploadedWrap: {
+    alignItems: "center",
+    marginTop: Spacing.xs,
+    position: "relative",
+  },
+  uploadedImage: {
+    width: 140,
+    height: 140,
     borderRadius: BorderRadius.md,
+  },
+  clearImageBtn: {
+    position: "absolute",
+    top: -6,
+    right: "35%",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Welcome-back: QR image (server-rendered PNG)
