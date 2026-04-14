@@ -7,6 +7,9 @@ import {
   Truck,
   Calendar,
   Banknote,
+  Video,
+  Search,
+  Briefcase,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -18,15 +21,24 @@ interface NavItem {
   to: string;
   label: string;
   Icon: LucideIcon;
+  section?: string;
 }
 
 const navItems: NavItem[] = [
-  { to: "/", label: "Dashboard", Icon: LayoutGrid },
-  { to: "/withdrawals", label: "Withdrawals", Icon: Banknote },
-  { to: "/complaints", label: "Complaints", Icon: AlertTriangle },
-  { to: "/users", label: "Users", Icon: Users },
-  { to: "/fleet", label: "Fleet", Icon: Truck },
-  { to: "/events", label: "Events", Icon: Calendar },
+  // Ops — urgent daily surfaces
+  { to: "/", label: "Dashboard", Icon: LayoutGrid, section: "Ops" },
+  { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
+  { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
+
+  // Moderation — content review
+  { to: "/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
+  { to: "/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
+  { to: "/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
+
+  // Directory — reference
+  { to: "/users", label: "Users", Icon: Users, section: "Directory" },
+  { to: "/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
+  { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
 ];
 
 export function Sidebar() {
@@ -57,30 +69,50 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav style={{ padding: `${spacing.lg}px 0`, flex: 1 }}>
-        {navItems.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            style={({ isActive }) => ({
-              display: "flex",
-              alignItems: "center",
-              gap: spacing.md,
-              padding: `${spacing.md}px ${spacing.xl}px`,
-              textDecoration: "none",
-              background: isActive ? colors.roseAccent : "transparent",
-              color: isActive ? colors.rose : colors.sidebarFgDim,
-              fontSize: 14,
-              fontWeight: isActive ? 600 : 500,
-              borderLeft: `3px solid ${isActive ? colors.rose : "transparent"}`,
-              transition: "background 0.15s, color 0.15s",
-            })}
-          >
-            <Icon size={18} strokeWidth={2} />
-            {label}
-          </NavLink>
-        ))}
+      <nav style={{ padding: `${spacing.lg}px 0`, flex: 1, overflowY: "auto" }}>
+        {navItems.map((item, idx) => {
+          const { to, label, Icon, section } = item;
+          const prevSection = idx > 0 ? navItems[idx - 1].section : undefined;
+          const showSectionHeader = section && section !== prevSection;
+          return (
+            <React.Fragment key={to}>
+              {showSectionHeader ? (
+                <div
+                  style={{
+                    padding: `${spacing.md}px ${spacing.xl}px ${spacing.xs}px`,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                    color: colors.sidebarFgFaint,
+                  }}
+                >
+                  {section}
+                </div>
+              ) : null}
+              <NavLink
+                to={to}
+                end={to === "/"}
+                style={({ isActive }) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  gap: spacing.md,
+                  padding: `${spacing.sm}px ${spacing.xl}px`,
+                  textDecoration: "none",
+                  background: isActive ? colors.roseAccent : "transparent",
+                  color: isActive ? colors.rose : colors.sidebarFgDim,
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 500,
+                  borderLeft: `3px solid ${isActive ? colors.rose : "transparent"}`,
+                  transition: "background 0.15s, color 0.15s",
+                })}
+              >
+                <Icon size={18} strokeWidth={2} />
+                {label}
+              </NavLink>
+            </React.Fragment>
+          );
+        })}
       </nav>
 
       <div

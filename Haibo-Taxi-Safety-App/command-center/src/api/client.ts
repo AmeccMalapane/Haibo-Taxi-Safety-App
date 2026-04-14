@@ -133,6 +133,26 @@ export const admin = {
       body: JSON.stringify({ reason }),
     });
   },
+
+  /**
+   * Moderation queues. `resource` is one of the whitelisted values on the
+   * server (reels | lost-found | jobs). `status` filter is optional.
+   */
+  async getModerationQueue(resource: string, status?: string) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request(`/api/admin/moderation/${resource}${q}`);
+  },
+
+  async moderateContent(
+    resource: string,
+    id: string,
+    patch: { status?: string; isVerified?: boolean; isFeatured?: boolean }
+  ) {
+    return request(`/api/admin/moderation/${resource}/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+  },
 };
 
 /**

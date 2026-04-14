@@ -4,6 +4,7 @@ import {
   users, taxis, driverProfiles, complaints, events,
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
+  reels, lostFoundItems, jobs,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
@@ -359,5 +360,173 @@ router.put("/withdrawals/:id/reject", authMiddleware, requireRole("admin"), asyn
     res.status(500).json({ error: "Failed to reject withdrawal" });
   }
 });
+
+// ============ MODERATION ============
+// One endpoint for every community surface that has a `status` field, so
+// the Command Center doesn't need a new admin route per resource. Fields
+// are whitelisted per resource to keep the attack surface tight — if a
+// later resource needs extra levers (e.g. pinning, shadow-ban), add them
+// here explicitly rather than letting the client patch arbitrary columns.
+
+const MODERATION_RESOURCES: Record<
+  string,
+  {
+    table: any;
+    idColumn: any;
+    listColumns: any;
+    allowedFields: Array<"status" | "isVerified" | "isFeatured">;
+  }
+> = {
+  reels: {
+    table: reels,
+    idColumn: reels.id,
+    listColumns: {
+      id: reels.id,
+      createdAt: reels.createdAt,
+      status: reels.status,
+      userId: reels.userId,
+      userName: reels.userName,
+      caption: reels.caption,
+      mediaUrl: reels.mediaUrl,
+      thumbnailUrl: reels.thumbnailUrl,
+      category: reels.category,
+      likeCount: reels.likeCount,
+      commentCount: reels.commentCount,
+      shareCount: reels.shareCount,
+    },
+    allowedFields: ["status"],
+  },
+  "lost-found": {
+    table: lostFoundItems,
+    idColumn: lostFoundItems.id,
+    listColumns: {
+      id: lostFoundItems.id,
+      createdAt: lostFoundItems.createdAt,
+      status: lostFoundItems.status,
+      type: lostFoundItems.type,
+      category: lostFoundItems.category,
+      title: lostFoundItems.title,
+      description: lostFoundItems.description,
+      contactName: lostFoundItems.contactName,
+      contactPhone: lostFoundItems.contactPhone,
+      routeOrigin: lostFoundItems.routeOrigin,
+      routeDestination: lostFoundItems.routeDestination,
+      reward: lostFoundItems.reward,
+    },
+    allowedFields: ["status"],
+  },
+  jobs: {
+    table: jobs,
+    idColumn: jobs.id,
+    listColumns: {
+      id: jobs.id,
+      createdAt: jobs.createdAt,
+      status: jobs.status,
+      title: jobs.title,
+      company: jobs.company,
+      location: jobs.location,
+      province: jobs.province,
+      jobType: jobs.jobType,
+      category: jobs.category,
+      salary: jobs.salary,
+      isVerified: jobs.isVerified,
+      isFeatured: jobs.isFeatured,
+      viewCount: jobs.viewCount,
+      applicationCount: jobs.applicationCount,
+    },
+    allowedFields: ["status", "isVerified", "isFeatured"],
+  },
+};
+
+// GET /api/admin/moderation/:resource — list items for a moderation queue.
+// Supports optional ?status=… filter so the CC can separate pending from
+// active rows without a client-side reduce.
+router.get(
+  "/moderation/:resource",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { resource } = req.params;
+      const cfg = MODERATION_RESOURCES[resource];
+      if (!cfg) {
+        res.status(404).json({ error: `Unknown moderation resource: ${resource}` });
+        return;
+      }
+
+      const { status, limit: rawLimit } = req.query as { status?: string; limit?: string };
+      const limit = Math.min(Number(rawLimit) || 100, 200);
+
+      const baseQuery = db
+        .select(cfg.listColumns)
+        .from(cfg.table)
+        .orderBy(desc((cfg.table as any).createdAt))
+        .limit(limit);
+
+      const results = status
+        ? await baseQuery.where(eq((cfg.table as any).status, status))
+        : await baseQuery;
+
+      res.json({ data: results });
+    } catch (error: any) {
+      console.error(`Moderation list error (${req.params.resource}):`, error);
+      res.status(500).json({ error: "Failed to fetch moderation queue" });
+    }
+  }
+);
+
+// PUT /api/admin/moderation/:resource/:id — patch whitelisted moderation
+// fields on a single row. Rejects requests that try to patch fields not in
+// the resource's allowedFields list.
+router.put(
+  "/moderation/:resource/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { resource, id } = req.params;
+      const cfg = MODERATION_RESOURCES[resource];
+      if (!cfg) {
+        res.status(404).json({ error: `Unknown moderation resource: ${resource}` });
+        return;
+      }
+
+      const patch: Record<string, any> = {};
+      for (const field of cfg.allowedFields) {
+        if (field in req.body) {
+          patch[field] = req.body[field];
+        }
+      }
+
+      if (Object.keys(patch).length === 0) {
+        res.status(400).json({
+          error: `No patchable fields in body. Allowed: ${cfg.allowedFields.join(", ")}`,
+        });
+        return;
+      }
+
+      // Resources that track updatedAt get it stamped automatically
+      if ("updatedAt" in (cfg.table as any)) {
+        patch.updatedAt = new Date();
+      }
+
+      const [updated] = await db
+        .update(cfg.table)
+        .set(patch)
+        .where(eq(cfg.idColumn, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Item not found" });
+        return;
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error(`Moderation update error (${req.params.resource}):`, error);
+      res.status(500).json({ error: "Failed to update item" });
+    }
+  }
+);
 
 export default router;
