@@ -6,7 +6,6 @@ import {
   Pressable,
   Alert,
   Switch,
-  TextInput,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,8 +14,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,17 +26,30 @@ import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/them
 import { startDriverTracking, stopDriverTracking, isTrackingActive } from "@/lib/tracking";
 import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-const PLATE_STORAGE_KEY = "@haibo_driver_plate";
 
 interface QuickAction {
   icon: keyof typeof Feather.glyphMap;
   label: string;
   hint: string;
   onPress: () => void;
+}
+
+interface DriverProfileRow {
+  id: string;
+  userId: string;
+  taxiPlateNumber: string;
+  vehicleModel: string | null;
+  vehicleYear: number | null;
+  vehicleColor: string | null;
+  payReferenceCode: string | null;
+  isVerified: boolean | null;
+  safetyRating: number | null;
+  totalRatings: number | null;
+  totalRides: number | null;
 }
 
 export default function DriverDashboardScreen() {
@@ -51,51 +63,53 @@ export default function DriverDashboardScreen() {
     useDriverTracking();
 
   const [trackingEnabled, setTrackingEnabled] = useState(false);
-  const [plateNumber, setPlateNumber] = useState<string | null>(null);
-  const [plateInput, setPlateInput] = useState("");
-  const [editingPlate, setEditingPlate] = useState(false);
+
+  // Driver profile lives in the DB now — read it via React Query instead
+  // of the old AsyncStorage plate flow. When no profile exists (e.g. user
+  // landed here by accident), we show a "Become a driver" CTA that deep
+  // links to the onboarding screen rather than a local plate input.
+  const profileQ = useQuery<{ data: DriverProfileRow | null }>({
+    queryKey: ["/api/drivers/me"],
+    queryFn: () => apiRequest("/api/drivers/me"),
+  });
+
+  const profile = profileQ.data?.data ?? null;
+  const plateNumber = profile?.taxiPlateNumber ?? null;
+  // Prefer the server-issued ref code, fall back to a plate-derived one
+  // for legacy rows that were created before generatePayReferenceCode.
+  const payRef =
+    profile?.payReferenceCode ||
+    (plateNumber ? `HB-${plateNumber.replace(/\s/g, "").toUpperCase()}` : null);
 
   useEffect(() => {
-    loadPlate();
     checkTracking();
   }, []);
-
-  const loadPlate = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(PLATE_STORAGE_KEY);
-      if (stored) setPlateNumber(stored);
-    } catch {
-      // best-effort load — empty state handles missing plate
-    }
-  };
 
   const checkTracking = async () => {
     const active = await isTrackingActive();
     setTrackingEnabled(active);
   };
 
-  const handleSavePlate = async () => {
-    const trimmed = plateInput.trim().toUpperCase();
-    if (!trimmed) {
-      Alert.alert("Plate required", "Enter your taxi's number plate to continue.");
-      return;
-    }
-    try {
-      await AsyncStorage.setItem(PLATE_STORAGE_KEY, trimmed);
-      setPlateNumber(trimmed);
-      setEditingPlate(false);
-      setPlateInput("");
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch {
-      Alert.alert("Save failed", "Could not save your plate. Please try again.");
-    }
-  };
-
   const toggleTracking = async (value: boolean) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    // Don't let a user toggle tracking on before they have a registered
+    // driver_profiles row — the server location-update route will
+    // reject location pings without one anyway.
+    if (value && !profile) {
+      Alert.alert(
+        "Register first",
+        "Complete driver registration before going online.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Register",
+            onPress: () => navigation.navigate("DriverOnboarding"),
+          },
+        ],
+      );
+      return;
     }
     if (value) {
       const started = await startDriverTracking();
@@ -128,9 +142,6 @@ export default function DriverDashboardScreen() {
 
   const driverName = user?.displayName || "Driver";
   const cardSurface = isDark ? theme.surface : "#FFFFFF";
-  const payRef = plateNumber
-    ? `HB-${plateNumber.replace(/\s/g, "").toUpperCase()}`
-    : null;
 
   const quickActions: QuickAction[] = [
     {
@@ -273,24 +284,11 @@ export default function DriverDashboardScreen() {
           >
             <ThemedText style={styles.sectionLabel}>Haibo Pay</ThemedText>
             {plateNumber && payRef ? (
-              <>
-                <HaiboPayQR
-                  driverName={driverName}
-                  plateNumber={plateNumber}
-                  payReferenceCode={payRef}
-                />
-                <Pressable
-                  onPress={() => {
-                    setPlateInput(plateNumber);
-                    setEditingPlate(true);
-                  }}
-                  style={styles.changePlateButton}
-                  hitSlop={8}
-                >
-                  <Feather name="edit-2" size={12} color={BrandColors.primary.gradientStart} />
-                  <ThemedText style={styles.changePlateText}>Change plate number</ThemedText>
-                </Pressable>
-              </>
+              <HaiboPayQR
+                driverName={driverName}
+                plateNumber={plateNumber}
+                payReferenceCode={payRef}
+              />
             ) : (
               <View style={[styles.setupCard, { backgroundColor: cardSurface }]}>
                 <View style={styles.setupIconWrap}>
@@ -300,66 +298,28 @@ export default function DriverDashboardScreen() {
                     color={BrandColors.primary.gradientStart}
                   />
                 </View>
-                <ThemedText style={styles.setupTitle}>Set up Haibo Pay</ThemedText>
-                <ThemedText style={styles.setupDesc}>
-                  Add your taxi's plate number to generate a reference code
-                  commuters can use to pay you digitally.
+                <ThemedText style={styles.setupTitle}>
+                  {profileQ.isLoading ? "Loading driver profile…" : "Become a driver"}
                 </ThemedText>
-                <View style={styles.plateInputWrap}>
-                  <Feather name="hash" size={16} color={BrandColors.gray[600]} />
-                  <TextInput
-                    style={styles.plateInput}
-                    placeholder="e.g. CA 123 456"
-                    placeholderTextColor={BrandColors.gray[500]}
-                    value={plateInput}
-                    onChangeText={setPlateInput}
-                    autoCapitalize="characters"
-                    maxLength={12}
-                  />
-                </View>
-                <View style={{ marginTop: Spacing.md }}>
-                  <GradientButton onPress={handleSavePlate} icon="check">
-                    Save plate
-                  </GradientButton>
-                </View>
+                <ThemedText style={styles.setupDesc}>
+                  {profileQ.isLoading
+                    ? "Fetching your plate and Haibo Pay reference…"
+                    : "Register your taxi to accept Haibo Pay, share your live location, and build your safety rating."}
+                </ThemedText>
+                {!profileQ.isLoading ? (
+                  <View style={{ marginTop: Spacing.md }}>
+                    <GradientButton
+                      onPress={() => navigation.navigate("DriverOnboarding")}
+                      icon="arrow-right"
+                      iconPosition="right"
+                    >
+                      Start registration
+                    </GradientButton>
+                  </View>
+                ) : null}
               </View>
             )}
           </Animated.View>
-
-          {editingPlate && plateNumber ? (
-            <View style={[styles.editOverlay, { backgroundColor: cardSurface }]}>
-              <ThemedText style={styles.editTitle}>Update plate number</ThemedText>
-              <View style={styles.plateInputWrap}>
-                <Feather name="hash" size={16} color={BrandColors.gray[600]} />
-                <TextInput
-                  style={styles.plateInput}
-                  placeholder="e.g. CA 123 456"
-                  placeholderTextColor={BrandColors.gray[500]}
-                  value={plateInput}
-                  onChangeText={setPlateInput}
-                  autoCapitalize="characters"
-                  maxLength={12}
-                  autoFocus
-                />
-              </View>
-              <View style={styles.editActions}>
-                <Pressable
-                  onPress={() => {
-                    setEditingPlate(false);
-                    setPlateInput("");
-                  }}
-                  style={styles.editCancel}
-                >
-                  <ThemedText style={styles.editCancelText}>Cancel</ThemedText>
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                  <GradientButton onPress={handleSavePlate} icon="check">
-                    Save
-                  </GradientButton>
-                </View>
-              </View>
-            </View>
-          ) : null}
 
           <Animated.View
             entering={reducedMotion ? undefined : FadeInDown.delay(140).duration(400)}
@@ -532,19 +492,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     fontWeight: "700",
   },
-  changePlateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    gap: 4,
-    marginTop: Spacing.sm,
-    paddingVertical: 6,
-  },
-  changePlateText: {
-    ...Typography.label,
-    fontWeight: "700",
-    color: BrandColors.primary.gradientStart,
-  },
   setupCard: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
@@ -576,56 +523,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.sm,
     lineHeight: 20,
-  },
-  plateInputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: BrandColors.gray[200],
-    backgroundColor: "#FFFFFF",
-    alignSelf: "stretch",
-  },
-  plateInput: {
-    ...Typography.body,
-    flex: 1,
-    height: 48,
-    color: BrandColors.gray[900],
-    fontVariant: ["tabular-nums"],
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  editOverlay: {
-    marginTop: Spacing.md,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  editTitle: {
-    ...Typography.body,
-    fontWeight: "700",
-    marginBottom: Spacing.md,
-  },
-  editActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  editCancel: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  editCancelText: {
-    ...Typography.small,
-    fontWeight: "700",
-    color: BrandColors.gray[600],
   },
   actionsGrid: {
     gap: Spacing.sm,

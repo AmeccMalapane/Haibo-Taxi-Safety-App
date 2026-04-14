@@ -7,6 +7,21 @@ import { generatePayReferenceCode, parsePagination, paginationResponse } from ".
 
 const router = Router();
 
+// GET /api/drivers/me - Read the current user's driver profile (or null)
+router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const [row] = await db
+      .select()
+      .from(driverProfiles)
+      .where(eq(driverProfiles.userId, req.user!.userId))
+      .limit(1);
+    res.json({ data: row || null });
+  } catch (error: any) {
+    console.error("Get own driver profile error:", error);
+    res.status(500).json({ error: "Failed to fetch driver profile" });
+  }
+});
+
 // POST /api/drivers/register - Register as a driver
 router.post("/register", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
