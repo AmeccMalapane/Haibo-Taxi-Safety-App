@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { admin, healthCheck } from "../api/client";
@@ -12,6 +13,7 @@ import { colors, spacing } from "../lib/brand";
 
 export function DashboardPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const metricsQ = useQuery({
     queryKey: ["admin", "system-metrics"],
     queryFn: () => admin.getSystemMetrics(),
@@ -25,6 +27,13 @@ export function DashboardPage() {
     queryFn: () => healthCheck(),
     refetchInterval: 30_000,
   });
+  // Pull just the unresolved count — limit=1 keeps the payload tiny since
+  // the dashboard only cares about the badge, not the row data.
+  const sosQ = useQuery({
+    queryKey: ["admin", "sos-alerts", "unresolved-count"],
+    queryFn: () => admin.getSOSAlerts({ status: "unresolved", limit: 1 }),
+    refetchInterval: 20_000,
+  });
 
   // Realtime: SOS alerts page the operator with a hard toast; complaint:new
   // and withdrawal:requested invalidate the metrics query so the dashboard
@@ -32,11 +41,16 @@ export function DashboardPage() {
   const handlers = useMemo(
     () => ({
       "sos:alert": (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["admin", "sos-alerts"] });
         toast.error(
           `🚨 SOS from ${payload.phone || payload.userId || "unknown"}`,
           {
             description: payload.message || "Emergency triggered",
             duration: 15_000,
+            action: {
+              label: "View",
+              onClick: () => navigate("/sos"),
+            },
           }
         );
       },
@@ -60,7 +74,7 @@ export function DashboardPage() {
         );
       },
     }),
-    [qc]
+    [qc, navigate]
   );
   useAdminSocket(handlers);
 
@@ -112,6 +126,16 @@ export function DashboardPage() {
               marginBottom: spacing["2xl"],
             }}
           >
+            <StatCard
+              label="Active SOS alerts"
+              value={sosQ.data?.unresolvedCount ?? 0}
+              accent={(sosQ.data?.unresolvedCount ?? 0) > 0 ? "danger" : "success"}
+              sub={
+                (sosQ.data?.unresolvedCount ?? 0) > 0
+                  ? "needs response"
+                  : "all clear"
+              }
+            />
             <StatCard label="Total users" value={metrics?.totalUsers ?? 0} />
             <StatCard label="Active vehicles" value={metrics?.activeVehicles ?? 0} />
             <StatCard label="Registered drivers" value={metrics?.totalDrivers ?? 0} />

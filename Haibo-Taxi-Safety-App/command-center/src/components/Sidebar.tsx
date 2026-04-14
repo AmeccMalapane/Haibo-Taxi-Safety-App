@@ -4,6 +4,7 @@ import {
   LayoutGrid,
   Users,
   AlertTriangle,
+  AlertOctagon,
   Truck,
   Calendar,
   Banknote,
@@ -27,8 +28,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // Ops — urgent daily surfaces
+  // Ops — urgent daily surfaces. SOS is first because it's the most
+  // time-sensitive surface in the whole app.
   { to: "/", label: "Dashboard", Icon: LayoutGrid, section: "Ops" },
+  { to: "/sos", label: "SOS alerts", Icon: AlertOctagon, section: "Ops" },
   { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
   { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
 
@@ -67,11 +70,43 @@ export function Sidebar() {
         style={{
           padding: `0 ${spacing.xl}px ${spacing.xl}px`,
           borderBottom: `1px solid ${colors.sidebarDivider}`,
+          display: "flex",
+          alignItems: "center",
+          gap: spacing.md,
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 800, color: colors.rose }}>Haibo!</div>
-        <div style={{ fontSize: 12, color: colors.sidebarFgFaint, marginTop: 2 }}>
-          Command Center
+        <img
+          src="/logo.svg"
+          alt="Haibo!"
+          width={38}
+          height={38}
+          style={{ flexShrink: 0, filter: "drop-shadow(0 2px 8px rgba(200, 30, 94, 0.35))" }}
+        />
+        <div>
+          <div
+            style={{
+              fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: -0.3,
+              lineHeight: 1,
+            }}
+          >
+            Haibo!
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: colors.sidebarFgFaint,
+              marginTop: 3,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+            }}
+          >
+            Command Center
+          </div>
         </div>
       </div>
 

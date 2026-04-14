@@ -181,6 +181,28 @@ export const admin = {
   },
 
   /**
+   * SOS alert queue. status filter: unresolved | resolved | all (default).
+   * The response includes unresolvedCount so the dashboard can badge the
+   * sidebar entry without a second request.
+   */
+  async getSOSAlerts(params: {
+    status?: "unresolved" | "resolved" | "all";
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/sos-alerts${q}`);
+  },
+
+  async resolveSOSAlert(id: string) {
+    return request(`/api/admin/sos-alerts/${id}/resolve`, { method: "PUT" });
+  },
+
+  /**
    * Audit log — append-only record of admin writes. Supports optional
    * action/resource filters and cursor-style limit/offset pagination.
    */

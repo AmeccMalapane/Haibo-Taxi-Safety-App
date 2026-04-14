@@ -5,6 +5,7 @@ import {
   transactions, walletTransactions, groupRides, deliveries,
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
+  sosAlerts,
 } from "../../shared/schema";
 import { eq, desc, sql, count, and, gte, lte, sum, avg } from "drizzle-orm";
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
@@ -663,6 +664,121 @@ router.get(
     } catch (error: any) {
       console.error("Audit log error:", error);
       res.status(500).json({ error: "Failed to fetch audit log" });
+    }
+  }
+);
+
+// ============ SOS ALERTS ============
+// sendSOSAlert() in services/notifications.ts already persists every
+// trigger to sos_alerts and broadcasts sos:alert to the admins room.
+// These endpoints just expose the table + let ops mark incidents as
+// resolved for post-incident accountability.
+
+// GET /api/admin/sos-alerts?status=unresolved|resolved|all&limit=…&offset=…
+router.get(
+  "/sos-alerts",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, limit: rawLimit, offset: rawOffset } = req.query as {
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      const baseQuery = db
+        .select({
+          id: sosAlerts.id,
+          userId: sosAlerts.userId,
+          phone: sosAlerts.phone,
+          latitude: sosAlerts.latitude,
+          longitude: sosAlerts.longitude,
+          message: sosAlerts.message,
+          source: sosAlerts.source,
+          adminRecipients: sosAlerts.adminRecipients,
+          smsRecipients: sosAlerts.smsRecipients,
+          resolvedAt: sosAlerts.resolvedAt,
+          resolvedBy: sosAlerts.resolvedBy,
+          createdAt: sosAlerts.createdAt,
+          // Pull the reporter display name when it exists so the queue
+          // doesn't need a second round-trip per row for "who triggered?"
+          reporterName: users.displayName,
+        })
+        .from(sosAlerts)
+        .leftJoin(users, eq(sosAlerts.userId, users.id))
+        .orderBy(desc(sosAlerts.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const rows =
+        status === "unresolved"
+          ? await baseQuery.where(sql`${sosAlerts.resolvedAt} IS NULL`)
+          : status === "resolved"
+          ? await baseQuery.where(sql`${sosAlerts.resolvedAt} IS NOT NULL`)
+          : await baseQuery;
+
+      const [unresolvedResult] = await db
+        .select({ count: count() })
+        .from(sosAlerts)
+        .where(sql`${sosAlerts.resolvedAt} IS NULL`);
+
+      res.json({
+        data: rows,
+        unresolvedCount: unresolvedResult.count,
+      });
+    } catch (error: any) {
+      console.error("SOS list error:", error);
+      res.status(500).json({ error: "Failed to fetch SOS alerts" });
+    }
+  }
+);
+
+// PUT /api/admin/sos-alerts/:id/resolve — mark alert as resolved.
+// Once resolved, the row is frozen (no re-resolve, no un-resolve) because
+// sos_alerts is an immutable audit log: updates would destroy the original
+// response-time measurement we need for post-incident review.
+router.put(
+  "/sos-alerts/:id/resolve",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [existing] = await db
+        .select()
+        .from(sosAlerts)
+        .where(eq(sosAlerts.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        res.status(404).json({ error: "SOS alert not found" });
+        return;
+      }
+      if (existing.resolvedAt) {
+        res.status(400).json({ error: "SOS alert already resolved" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(sosAlerts)
+        .set({
+          resolvedAt: new Date(),
+          resolvedBy: req.user!.userId,
+        })
+        .where(eq(sosAlerts.id, req.params.id))
+        .returning();
+
+      await recordAdminAction(req, "sos.resolve", "sos_alerts", req.params.id, {
+        userId: existing.userId,
+        phone: existing.phone,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("SOS resolve error:", error);
+      res.status(500).json({ error: "Failed to resolve SOS alert" });
     }
   }
 );

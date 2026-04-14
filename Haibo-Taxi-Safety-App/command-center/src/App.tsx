@@ -16,6 +16,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { ComplaintsPage } from "./pages/ComplaintsPage";
 import { WithdrawalsPage } from "./pages/WithdrawalsPage";
+import { SOSAlertsPage } from "./pages/SOSAlertsPage";
 import { PasopPage } from "./pages/PasopPage";
 import { ReelsModerationPage } from "./pages/ReelsModerationPage";
 import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedShell />}>
           <Route index element={<DashboardPage />} />
+          <Route path="/sos" element={<SOSAlertsPage />} />
           <Route path="/withdrawals" element={<WithdrawalsPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
           <Route path="/moderation/pasop" element={<PasopPage />} />
