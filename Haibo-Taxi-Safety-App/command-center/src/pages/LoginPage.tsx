@@ -21,8 +21,25 @@ export function LoginPage() {
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || "/admin";
 
+  // Surface why the user got bounced here, if any. The HTTP + WS
+  // clients redirect with ?reason=suspended when a mid-session 403 /
+  // auth:revoked fires. Without a visible reason the operator lands
+  // on a blank login form wondering what happened.
+  const redirectReason = (() => {
+    try {
+      const params = new URLSearchParams(location.search);
+      const reason = params.get("reason");
+      if (reason === "suspended") {
+        return "Your Command Center session was ended. Sign in again.";
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  })();
+
   const [mode, setMode] = useState<Mode>("email");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(redirectReason);
   const [loading, setLoading] = useState(false);
 
   const [email, setEmail] = useState("");

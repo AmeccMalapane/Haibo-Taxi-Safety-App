@@ -36,6 +36,26 @@ async function request<T = any>(path: string, options: RequestInit = {}): Promis
     throw new Error("Session expired");
   }
 
+  // 403 "Account suspended" means the server-side authMiddleware rejected
+  // us mid-session — an admin suspended this account, or (much worse) a
+  // /api/user/delete flow hit our userId. Treat it like an expired
+  // session: wipe the stored token, bounce to /login so the CC doesn't
+  // keep making requests against an account that can't do anything.
+  if (res.status === 403) {
+    try {
+      const body = await res.clone().text();
+      if (/account suspended/i.test(body)) {
+        setToken(null);
+        window.location.href = "/login?reason=suspended";
+        throw new Error("Account suspended");
+      }
+    } catch (err) {
+      // Body read can fail in edge cases (aborted response). Fall
+      // through to the generic error path below.
+      if ((err as Error).message === "Account suspended") throw err;
+    }
+  }
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status}: ${body}`);
