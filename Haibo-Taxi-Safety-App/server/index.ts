@@ -122,8 +122,7 @@ app.get("/api/health", async (req, res) => {
   // are live before flipping DNS.
   const features = {
     sms: Boolean(
-      process.env.AZURE_COMMUNICATION_CONNECTION_STRING &&
-        process.env.AZURE_SMS_SENDER_NUMBER,
+      process.env.BULKSMS_TOKEN_ID && process.env.BULKSMS_TOKEN_SECRET,
     ),
     paystack: Boolean(process.env.PAYSTACK_SECRET_KEY),
     firebase: Boolean(

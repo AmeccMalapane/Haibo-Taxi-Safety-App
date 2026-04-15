@@ -21,7 +21,6 @@
     "db:seed:public": "tsx server/seed-public-fixtures.ts"
   },
   "dependencies": {
-    "@azure/communication-sms": "^1.2.0-beta.4",
     "@azure/storage-blob": "^12.31.0",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/nunito": "^0.4.2",
