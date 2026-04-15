@@ -26,6 +26,7 @@ import {
 import { ThemedText } from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { resolveNotificationRoute } from "@/lib/notificationRouting";
 
 // typeui-clean NotificationsScreen — in-app inbox for the DB-persisted
 // notifications table. Rose gradient hero, floating white card, grouped
@@ -270,8 +271,14 @@ export default function NotificationsScreen() {
                 theme={theme}
                 onPress={() => {
                   if (!item.isRead) markReadMut.mutate(item.id);
-                  // Future: deep-link into a receipt/detail screen based
-                  // on type + data.kind. For now just mark as read.
+                  const route = resolveNotificationRoute(item);
+                  if (route) {
+                    // `as any` because navigate's overload resolution
+                    // gets confused by the union param type — the
+                    // resolver already type-checks the screen+params
+                    // tuple against RootStackParamList.
+                    navigation.navigate(route.screen as any, route.params as any);
+                  }
                 }}
               />
             )}
