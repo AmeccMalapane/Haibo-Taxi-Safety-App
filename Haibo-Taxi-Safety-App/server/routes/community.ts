@@ -39,12 +39,54 @@ router.get("/posts", optionalAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/community/posts - Create a community post
+// Per-field caps — the global express.json() limit is 10 MB but any
+// single caption or location name at that size would DoS the feed read
+// path. Cap caption at 2000 chars (enough for a long post, refuses
+// wall-of-text abuse) and hashtags at 30 entries of 50 chars each.
+const MAX_CAPTION = 2000;
+const MAX_HASHTAGS = 30;
+const MAX_HASHTAG_LENGTH = 50;
+const MAX_NAME = 200;
+
 router.post("/posts", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const {
       contentType, mediaUrl, thumbnailUrl, duration,
       caption, hashtags, locationName, locationId, category,
     } = req.body;
+
+    if (typeof caption === "string" && caption.length > MAX_CAPTION) {
+      res.status(400).json({
+        error: `Caption must be ${MAX_CAPTION} characters or fewer`,
+      });
+      return;
+    }
+    if (typeof locationName === "string" && locationName.length > MAX_NAME) {
+      res.status(400).json({ error: "Location name is too long" });
+      return;
+    }
+    if (hashtags !== undefined) {
+      if (!Array.isArray(hashtags)) {
+        res.status(400).json({ error: "Hashtags must be an array" });
+        return;
+      }
+      if (hashtags.length > MAX_HASHTAGS) {
+        res
+          .status(400)
+          .json({ error: `Max ${MAX_HASHTAGS} hashtags per post` });
+        return;
+      }
+      if (
+        hashtags.some(
+          (h) => typeof h !== "string" || h.length > MAX_HASHTAG_LENGTH,
+        )
+      ) {
+        res.status(400).json({
+          error: `Each hashtag must be a string ≤ ${MAX_HASHTAG_LENGTH} characters`,
+        });
+        return;
+      }
+    }
 
     const [post] = await db.insert(reels).values({
       userId: req.user!.userId,

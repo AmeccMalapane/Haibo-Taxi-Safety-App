@@ -35,6 +35,15 @@ import { getLocalUploadDir, getLocalUrlPrefix, isAzureConfigured } from "./servi
 const app = express();
 const PORT = parseInt(process.env.PORT || "8080", 10);
 
+// Trust the Azure App Service reverse proxy so `req.ip` reads the real
+// client IP from X-Forwarded-For instead of collapsing everyone behind
+// the platform's outbound IP. Without this, every IP-keyed rate limit
+// (auth, api, guest SOS, etc.) would share a single bucket across all
+// users and a single abuser could DoS legitimate traffic. `1` = trust
+// exactly one proxy hop; don't use `true` which honours client-forged
+// X-Forwarded-For headers.
+app.set("trust proxy", 1);
+
 // --- Global Middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
 
@@ -44,6 +53,17 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : isProduction
     ? []
     : ["http://localhost:8081", "http://localhost:19006"];
+
+// Loud warning on the dangerous combo — if we boot in production without
+// any allowed origins, browser-based clients (command-center, public web)
+// will get CORS-blocked on every request and the failure mode is silent
+// from the server's perspective. Surface it now so the first Day 1 curl
+// or Azure App Service log tail catches it before the first user does.
+if (isProduction && allowedOrigins.length === 0) {
+  console.warn(
+    "[CORS] ALLOWED_ORIGINS is empty in production — all browser requests will be rejected. Set ALLOWED_ORIGINS=https://app.haibo.africa in Azure App Service Configuration.",
+  );
+}
 
 app.use(cors({
   origin: (origin, callback) => {

@@ -14,6 +14,35 @@ import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
 
+// Wallet amounts are stored as real (single-precision float) in the users
+// table, so precision degrades beyond ~7 significant digits. Cap per-
+// transaction amounts well below that to keep the ledger honest and to
+// bound the blast radius of abuse. R100,000 is far above any realistic
+// fare/top-up while still below the FICA enhanced-due-diligence threshold.
+// Tighter limits (e.g. single withdrawals) apply on top of this.
+const MAX_TRANSACTION_AMOUNT = 100_000;
+
+// Normalize + guard a user-supplied amount field. Rejects non-numbers,
+// NaN, Infinity, non-positive values, and anything beyond the cap.
+// Rounds to 2 decimal places to avoid float drift from the client.
+function validateAmount(raw: unknown): { ok: true; value: number } | { ok: false; error: string } {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return { ok: false, error: "Amount must be a finite number" };
+  }
+  if (raw <= 0) {
+    return { ok: false, error: "Amount must be greater than zero" };
+  }
+  if (raw > MAX_TRANSACTION_AMOUNT) {
+    return {
+      ok: false,
+      error: `Amount exceeds the R${MAX_TRANSACTION_AMOUNT.toLocaleString()} per-transaction limit`,
+    };
+  }
+  // Round to cents so downstream math and display stay consistent even
+  // when a client sends fractional amounts like 12.3456789.
+  return { ok: true, value: Math.round(raw * 100) / 100 };
+}
+
 // GET /api/wallet/balance - Get wallet balance
 router.get("/balance", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -61,13 +90,15 @@ router.get("/transactions", authMiddleware, async (req: AuthRequest, res: Respon
 // POST /api/wallet/topup - Top up wallet (Paystack verified)
 router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, paymentReference } = req.body;
+    const { amount: rawAmount, paymentReference } = req.body;
     const userId = req.user!.userId;
 
-    if (!amount || amount <= 0) {
-      res.status(400).json({ error: "Valid amount is required" });
+    const amountCheck = validateAmount(rawAmount);
+    if (amountCheck.ok === false) {
+      res.status(400).json({ error: amountCheck.error });
       return;
     }
+    const amount = amountCheck.value;
 
     if (!paymentReference || typeof paymentReference !== "string") {
       res.status(400).json({ error: "Payment reference is required" });
@@ -178,13 +209,15 @@ router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) =>
 // POST /api/wallet/transfer - P2P transfer
 router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthRequest, res: Response) => {
   try {
-    const { recipientPhone, recipientUsername, amount, message } = req.body;
+    const { recipientPhone, recipientUsername, amount: rawAmount, message } = req.body;
     const senderId = req.user!.userId;
 
-    if (!amount || typeof amount !== "number" || amount <= 0) {
-      res.status(400).json({ error: "Valid amount is required" });
+    const amountCheck = validateAmount(rawAmount);
+    if (amountCheck.ok === false) {
+      res.status(400).json({ error: amountCheck.error });
       return;
     }
+    const amount = amountCheck.value;
 
     if (!recipientPhone && !recipientUsername) {
       res.status(400).json({ error: "Recipient phone or username is required" });
@@ -309,16 +342,18 @@ router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthReq
 // sale, and increments the vendor's sales counters for the directory/CC.
 router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthRequest, res: Response) => {
   try {
-    const { vendorRef, amount, message } = req.body;
+    const { vendorRef, amount: rawAmount, message } = req.body;
 
     if (!vendorRef || typeof vendorRef !== "string") {
       res.status(400).json({ error: "vendorRef is required" });
       return;
     }
-    if (!amount || amount <= 0) {
-      res.status(400).json({ error: "Valid amount is required" });
+    const amountCheck = validateAmount(rawAmount);
+    if (amountCheck.ok === false) {
+      res.status(400).json({ error: amountCheck.error });
       return;
     }
+    const amount = amountCheck.value;
 
     // Look up the vendor. Suspended vendors must not accept payments; we
     // return a deliberate "vendor not found" so the sender can't tell the
@@ -478,13 +513,19 @@ router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthR
 // POST /api/wallet/withdraw - Request EFT withdrawal
 router.post("/withdraw", authMiddleware, sensitiveRateLimit, async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, bankCode, accountNumber, accountName, narration } = req.body;
+    const { amount: rawAmount, bankCode, accountNumber, accountName, narration } = req.body;
     const userId = req.user!.userId;
 
-    if (!amount || typeof amount !== "number" || amount <= 0 || !bankCode || !accountNumber) {
-      res.status(400).json({ error: "Amount, bank code, and account number are required" });
+    if (!bankCode || !accountNumber) {
+      res.status(400).json({ error: "Bank code and account number are required" });
       return;
     }
+    const amountCheck = validateAmount(rawAmount);
+    if (amountCheck.ok === false) {
+      res.status(400).json({ error: amountCheck.error });
+      return;
+    }
+    const amount = amountCheck.value;
 
     // Atomic balance freeze + withdrawal request creation. Same pattern
     // as /transfer — concurrent withdrawal submissions could both pass a
