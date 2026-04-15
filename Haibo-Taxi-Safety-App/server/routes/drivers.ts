@@ -9,6 +9,7 @@ import {
 } from "../../shared/schema";
 import { eq, desc, count, avg, sql, and, gte, isNull } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
+import { notifyUser } from "../services/notifications";
 import { generatePayReferenceCode, parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
@@ -164,6 +165,21 @@ router.post("/register", authMiddleware, async (req: AuthRequest, res: Response)
 
     // Update user role to driver
     await db.update(users).set({ role: "driver" }).where(eq(users.id, req.user!.userId));
+
+    // Onboarding confirmation. KYC is still pending at this point but
+    // the driver can already accept Haibo Pay payments, so the copy
+    // leans on that rather than the verification state.
+    try {
+      await notifyUser({
+        userId: req.user!.userId,
+        type: "system",
+        title: "You're registered as a Haibo driver",
+        body: `Plate ${profile.taxiPlateNumber} is linked to your wallet. Share your Haibo Pay QR to start receiving fares — KYC review runs in parallel.`,
+        data: { kind: "welcome_driver", plate: profile.taxiPlateNumber },
+      });
+    } catch (notifyErr) {
+      console.log("[Drivers] welcome notify failed:", notifyErr);
+    }
 
     res.status(201).json({
       id: profile.id,

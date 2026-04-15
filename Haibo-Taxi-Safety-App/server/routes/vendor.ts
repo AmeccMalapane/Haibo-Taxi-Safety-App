@@ -4,6 +4,7 @@ import { db } from "../db";
 import { vendorProfiles, users, p2pTransfers } from "../../shared/schema";
 import { eq, desc, ilike, and, isNotNull, sql, SQL } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
+import { notifyUser } from "../services/notifications";
 
 const router = Router();
 
@@ -169,6 +170,23 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
         vendorRef,
       })
       .returning();
+
+    // Registration confirmation. Vendors start in "pending" — moderators
+    // review from the command-center drawer. Copy makes the pending
+    // state clear so the vendor isn't surprised when their listing
+    // doesn't appear in the public directory yet, while also noting
+    // that they can already print and share their QR.
+    try {
+      await notifyUser({
+        userId: req.user!.userId,
+        type: "system",
+        title: "Vendor registration received",
+        body: `${businessName} is in the review queue. Ref ${vendorRef} — you can share your pay link now, and we'll notify you once our team verifies your business.`,
+        data: { kind: "welcome_vendor", vendorRef },
+      });
+    } catch (notifyErr) {
+      console.log("[Vendor] welcome notify failed:", notifyErr);
+    }
 
     res.status(201).json({ data: row, created: true });
   } catch (error: any) {

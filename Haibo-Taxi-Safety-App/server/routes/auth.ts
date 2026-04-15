@@ -6,6 +6,7 @@ import { eq, and, gt, sql } from "drizzle-orm";
 import { generateToken, generateRefreshToken, verifyRefreshToken, authMiddleware, AuthRequest } from "../middleware/auth";
 import { authRateLimit, sensitiveRateLimit, otpSendPhoneRateLimit } from "../middleware/rateLimit";
 import { sendOtpSms } from "../services/sms";
+import { notifyUser } from "../services/notifications";
 import { generateOTP, generateReferralCode } from "../utils/helpers";
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -44,6 +45,21 @@ router.post("/register", authRateLimit, async (req: Request, res: Response) => {
       avatarType: avatarType || "commuter",
       referralCode,
     }).returning();
+
+    // Fire-and-forget welcome. Caught separately because a notify
+    // failure must never block the register response — we've already
+    // committed the user row and the client is waiting on a token.
+    try {
+      await notifyUser({
+        userId: newUser.id,
+        type: "system",
+        title: "Welcome to Haibo",
+        body: "You're all set. Head to the Hub to find rides, pay vendors, and keep your journeys safe.",
+        data: { kind: "welcome_commuter" },
+      });
+    } catch (notifyErr) {
+      console.log("[Auth] welcome notify failed:", notifyErr);
+    }
 
     const token = generateToken({
       userId: newUser.id,
@@ -232,6 +248,7 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
     // Check if user exists, if not create
     let userResult = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
     let user = userResult[0];
+    let isNewUser = false;
 
     if (!user) {
       const referralCode = generateReferralCode();
@@ -241,8 +258,26 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
         referralCode,
       }).returning();
       user = newUser;
+      isNewUser = true;
     } else {
       await db.update(users).set({ isVerified: true, lastActiveAt: new Date() }).where(eq(users.id, user.id));
+    }
+
+    // Welcome notification fires ONLY on the branch that just inserted
+    // the user row — existing users re-verifying via OTP (e.g. after
+    // clearing the app) must not receive a fresh "welcome" ping.
+    if (isNewUser) {
+      try {
+        await notifyUser({
+          userId: user.id,
+          type: "system",
+          title: "Welcome to Haibo",
+          body: "You're all set. Head to the Hub to find rides, pay vendors, and keep your journeys safe.",
+          data: { kind: "welcome_commuter" },
+        });
+      } catch (notifyErr) {
+        console.log("[Auth] welcome notify failed:", notifyErr);
+      }
     }
 
     const token = generateToken({
