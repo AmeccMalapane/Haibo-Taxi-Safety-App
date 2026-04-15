@@ -110,6 +110,18 @@
           "cameraPermission": "Haibo! needs access to your camera so you can take a profile picture, capture driver verification documents, and add photos to community posts, ratings, and reports."
         }
       ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Haibo! records short audio clips to attach to incident reports — only when you tap the record button, and only for the duration of the recording."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Haibo! uses Face ID to unlock the app quickly and safely when you enable biometric sign-in."
+        }
+      ],
       "expo-notifications"
     ],
     "extra": {

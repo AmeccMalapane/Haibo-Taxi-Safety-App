@@ -227,6 +227,56 @@ export default function NotificationsScreen() {
               color={BrandColors.primary.gradientStart}
             />
           </View>
+        ) : notificationsQ.isError ? (
+          <View style={styles.empty}>
+            <View
+              style={[
+                styles.emptyIcon,
+                { backgroundColor: BrandColors.status.emergency + "12" },
+              ]}
+            >
+              <Feather
+                name="wifi-off"
+                size={26}
+                color={BrandColors.status.emergency}
+              />
+            </View>
+            <ThemedText style={styles.emptyTitle}>
+              Couldn't load notifications
+            </ThemedText>
+            <ThemedText
+              style={[styles.emptyHint, { color: theme.textSecondary }]}
+            >
+              Check your connection and try again.
+            </ThemedText>
+            <Pressable
+              onPress={() => notificationsQ.refetch()}
+              style={({ pressed }) => [
+                styles.retryButton,
+                {
+                  backgroundColor: BrandColors.primary.gradientStart + "12",
+                  borderColor: BrandColors.primary.gradientStart,
+                },
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading notifications"
+            >
+              <Feather
+                name="refresh-cw"
+                size={15}
+                color={BrandColors.primary.gradientStart}
+              />
+              <ThemedText
+                style={[
+                  styles.retryText,
+                  { color: BrandColors.primary.gradientStart },
+                ]}
+              >
+                Try again
+              </ThemedText>
+            </Pressable>
+          </View>
         ) : rows.length === 0 ? (
           <View style={styles.empty}>
             <View
@@ -509,5 +559,19 @@ const styles = StyleSheet.create({
     ...Typography.small,
     textAlign: "center",
     maxWidth: 280,
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  retryText: {
+    ...Typography.small,
+    fontWeight: "600",
   },
 });

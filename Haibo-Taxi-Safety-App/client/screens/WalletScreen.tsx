@@ -59,7 +59,12 @@ export default function WalletScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { isAuthenticated, user } = useAuth();
-  const { data: apiBalance, refetch: refetchBalance } = useWalletBalance();
+  const {
+    data: apiBalance,
+    refetch: refetchBalance,
+    isLoading: balanceLoading,
+    isError: balanceError,
+  } = useWalletBalance();
   const { data: apiTransactions, refetch: refetchTransactions } = useWalletTransactions();
   const { data: withdrawalsData, refetch: refetchWithdrawals } = useMyWithdrawals();
   const withdrawals: MyWithdrawalRow[] = withdrawalsData?.data || [];
@@ -337,21 +342,45 @@ export default function WalletScreen() {
             <ThemedText style={styles.balanceLabel}>Available balance</ThemedText>
             <View style={styles.balanceAmountRow}>
               <ThemedText style={styles.balanceCurrency}>R</ThemedText>
-              <ThemedText style={styles.balanceAmount}>
-                {balance.amount.toFixed(2)}
-              </ThemedText>
+              {/* First-fetch loading — show a dash instead of "0.00" so a
+                  commuter opening the wallet screen doesn't think their
+                  balance got wiped. Same treatment on fetch error; the
+                  footer carries the retry hint. */}
+              {balanceLoading && apiBalance === undefined ? (
+                <ThemedText style={styles.balanceAmount}>—</ThemedText>
+              ) : balanceError && apiBalance === undefined ? (
+                <ThemedText style={styles.balanceAmount}>—</ThemedText>
+              ) : (
+                <ThemedText style={styles.balanceAmount}>
+                  {balance.amount.toFixed(2)}
+                </ThemedText>
+              )}
             </View>
 
             <View style={styles.balanceFooter}>
-              <Feather name="clock" size={12} color="rgba(255,255,255,0.7)" />
-              <ThemedText style={styles.balanceFooterText}>
-                Updated {new Date(balance.lastUpdated).toLocaleString("en-ZA", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  day: "numeric",
-                  month: "short",
-                })}
-              </ThemedText>
+              <Feather
+                name={balanceError ? "alert-circle" : "clock"}
+                size={12}
+                color="rgba(255,255,255,0.7)"
+              />
+              {balanceError && apiBalance === undefined ? (
+                <Pressable onPress={() => refetchBalance()} hitSlop={8}>
+                  <ThemedText style={styles.balanceFooterText}>
+                    Couldn't load balance — tap to retry
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText style={styles.balanceFooterText}>
+                  {balanceLoading && apiBalance === undefined
+                    ? "Loading balance…"
+                    : `Updated ${new Date(balance.lastUpdated).toLocaleString("en-ZA", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "numeric",
+                        month: "short",
+                      })}`}
+                </ThemedText>
+              )}
             </View>
           </LinearGradient>
         </Animated.View>
