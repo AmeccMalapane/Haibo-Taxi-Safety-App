@@ -1575,6 +1575,13 @@ router.post(
   }
 );
 
+// Broadcast copy caps. Every row lands in the notifications table and
+// a push notification payload — unbounded values either blow through
+// FCM's 4KB limit on push data or bloat the notification row size for
+// every recipient. 100/500 comfortably fits a reasonable announcement.
+const MAX_BROADCAST_TITLE = 100;
+const MAX_BROADCAST_BODY = 500;
+
 // POST /api/admin/broadcast — send the broadcast. Body:
 //   { title: string, body: string, audience: BroadcastAudience }
 // Returns: { recipients: N, sent: N, failed: N }
@@ -1590,12 +1597,20 @@ router.post(
         audience?: BroadcastAudience;
       };
 
-      if (!title || title.trim().length < 2) {
+      if (!title || typeof title !== "string" || title.trim().length < 2) {
         res.status(400).json({ error: "title is required (min 2 chars)" });
         return;
       }
-      if (!body || body.trim().length < 4) {
+      if (title.length > MAX_BROADCAST_TITLE) {
+        res.status(400).json({ error: `title must be ≤ ${MAX_BROADCAST_TITLE} characters` });
+        return;
+      }
+      if (!body || typeof body !== "string" || body.trim().length < 4) {
         res.status(400).json({ error: "body is required (min 4 chars)" });
+        return;
+      }
+      if (body.length > MAX_BROADCAST_BODY) {
+        res.status(400).json({ error: `body must be ≤ ${MAX_BROADCAST_BODY} characters` });
         return;
       }
       if (!audience) {
@@ -1644,30 +1659,43 @@ router.post(
 );
 
 // Audience → userIds resolver. Kept as a local helper so preview + send
-// share the exact same logic and can't drift.
+// share the exact same logic and can't drift. Every branch excludes
+// suspended users — POPIA-erased accounts stay in the table as tombstone
+// rows (isSuspended=true, PII nulled out) but broadcasting to them would
+// be both pointless and a consent violation.
 async function resolveAudienceUserIds(
   audience: BroadcastAudience
 ): Promise<string[]> {
+  const activeOnly = eq(users.isSuspended, false);
+
   if (audience.kind === "all") {
-    const rows = await db.select({ id: users.id }).from(users);
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(activeOnly);
     return rows.map((r) => r.id);
   }
   if (audience.kind === "role") {
     const rows = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.role, audience.role));
+      .where(and(eq(users.role, audience.role), activeOnly));
     return rows.map((r) => r.id);
   }
   if (audience.kind === "phones") {
+    // Cap the phone array to prevent an operator from blowing through
+    // the Postgres parameter limit (~65k for a prepared statement).
+    // 1000 phones is plenty for any sane targeted broadcast.
+    if (audience.phones.length > 1000) return [];
     const cleaned = audience.phones
+      .filter((p) => typeof p === "string")
       .map((p) => p.trim())
-      .filter((p) => p.length > 0);
+      .filter((p) => p.length > 0 && p.length <= 20);
     if (cleaned.length === 0) return [];
     const rows = await db
       .select({ id: users.id })
       .from(users)
-      .where(inArray(users.phone, cleaned));
+      .where(and(inArray(users.phone, cleaned), activeOnly));
     return rows.map((r) => r.id);
   }
   return [];
@@ -1676,17 +1704,22 @@ async function resolveAudienceUserIds(
 async function resolveAudienceCount(
   audience: BroadcastAudience
 ): Promise<number> {
+  const activeOnly = eq(users.isSuspended, false);
+
   // Count-only variant to avoid loading every user row for "all" when we
   // just want a number.
   if (audience.kind === "all") {
-    const [r] = await db.select({ count: count() }).from(users);
+    const [r] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(activeOnly);
     return r.count;
   }
   if (audience.kind === "role") {
     const [r] = await db
       .select({ count: count() })
       .from(users)
-      .where(eq(users.role, audience.role));
+      .where(and(eq(users.role, audience.role), activeOnly));
     return r.count;
   }
   if (audience.kind === "phones") {
