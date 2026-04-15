@@ -1,7 +1,13 @@
 import { Router, Response } from "express";
 import { db } from "../db";
-import { driverProfiles, driverRatings, users, locationUpdates } from "../../shared/schema";
-import { eq, desc, count, avg, sql } from "drizzle-orm";
+import {
+  driverProfiles,
+  driverRatings,
+  users,
+  locationUpdates,
+  p2pTransfers,
+} from "../../shared/schema";
+import { eq, desc, count, avg, sql, and, gte, isNull } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { generatePayReferenceCode, parsePagination, paginationResponse } from "../utils/helpers";
 
@@ -21,6 +27,102 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: "Failed to fetch driver profile" });
   }
 });
+
+// GET /api/drivers/me/earnings — today / week / month totals plus a
+// short recent-fares feed for the driver dashboard. Driver earnings on
+// Haibo come through the p2pTransfers rail: every commuter tap-to-pay
+// lands here as a completed row where recipientId = driverUserId. We
+// deliberately exclude rows with a vendorRef tag so vendor sales don't
+// get double-counted as ride fares (same user might run a taxi AND a
+// rank stall with one wallet).
+router.get(
+  "/me/earnings",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+
+      // Time boundaries — use UTC midnight + ISO week so "today" rolls
+      // over at midnight local for the overwhelming majority of
+      // our users (Southern African UTC+2, so UTC midnight ≈ 02:00 SAST,
+      // close enough for a dashboard summary).
+      const now = new Date();
+      const dayStart = new Date(now);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const weekStart = new Date(dayStart);
+      weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+      const monthStart = new Date(dayStart);
+      monthStart.setUTCDate(monthStart.getUTCDate() - 30);
+
+      // Base predicate: completed ride fares paid TO this driver.
+      // isNull(vendorRef) strips out any vendor sales so the totals
+      // only reflect transport income.
+      const rideFaresBase = and(
+        eq(p2pTransfers.recipientId, userId),
+        eq(p2pTransfers.status, "completed"),
+        isNull(p2pTransfers.vendorRef),
+      );
+
+      const [todayTotals] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${p2pTransfers.amount}), 0)::float`,
+          txns: sql<number>`COUNT(*)::int`,
+        })
+        .from(p2pTransfers)
+        .where(and(rideFaresBase, gte(p2pTransfers.createdAt, dayStart)));
+
+      const [weekTotals] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${p2pTransfers.amount}), 0)::float`,
+          txns: sql<number>`COUNT(*)::int`,
+        })
+        .from(p2pTransfers)
+        .where(and(rideFaresBase, gte(p2pTransfers.createdAt, weekStart)));
+
+      const [monthTotals] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${p2pTransfers.amount}), 0)::float`,
+          txns: sql<number>`COUNT(*)::int`,
+        })
+        .from(p2pTransfers)
+        .where(and(rideFaresBase, gte(p2pTransfers.createdAt, monthStart)));
+
+      const recent = await db
+        .select({
+          id: p2pTransfers.id,
+          amount: p2pTransfers.amount,
+          message: p2pTransfers.message,
+          createdAt: p2pTransfers.createdAt,
+          payerName: users.displayName,
+          payerPhone: users.phone,
+        })
+        .from(p2pTransfers)
+        .leftJoin(users, eq(p2pTransfers.senderId, users.id))
+        .where(rideFaresBase)
+        .orderBy(desc(p2pTransfers.createdAt))
+        .limit(15);
+
+      res.json({
+        today: {
+          total: Number(todayTotals?.total) || 0,
+          txns: Number(todayTotals?.txns) || 0,
+        },
+        week: {
+          total: Number(weekTotals?.total) || 0,
+          txns: Number(weekTotals?.txns) || 0,
+        },
+        month: {
+          total: Number(monthTotals?.total) || 0,
+          txns: Number(monthTotals?.txns) || 0,
+        },
+        recent,
+      });
+    } catch (error: any) {
+      console.error("Driver earnings error:", error);
+      res.status(500).json({ error: "Failed to fetch driver earnings" });
+    }
+  }
+);
 
 // POST /api/drivers/register - Register as a driver
 router.post("/register", authMiddleware, async (req: AuthRequest, res: Response) => {

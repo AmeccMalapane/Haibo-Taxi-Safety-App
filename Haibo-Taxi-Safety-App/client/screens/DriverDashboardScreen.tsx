@@ -52,6 +52,51 @@ interface DriverProfileRow {
   totalRides: number | null;
 }
 
+interface EarningsBucket {
+  total: number;
+  txns: number;
+}
+
+interface EarningsRecentFare {
+  id: string;
+  amount: number;
+  message: string | null;
+  createdAt: string | null;
+  payerName: string | null;
+  payerPhone: string | null;
+}
+
+interface EarningsResponse {
+  today: EarningsBucket;
+  week: EarningsBucket;
+  month: EarningsBucket;
+  recent: EarningsRecentFare[];
+}
+
+function formatEarningsAmount(value: number): string {
+  return `R${Number(value).toLocaleString("en-ZA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function formatFareTime(iso: string | null): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  const diffMs = Date.now() - then;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export default function DriverDashboardScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -75,6 +120,20 @@ export default function DriverDashboardScreen() {
 
   const profile = profileQ.data?.data ?? null;
   const plateNumber = profile?.taxiPlateNumber ?? null;
+
+  // Earnings feed — only fetch once the driver actually has a profile,
+  // otherwise we'd fire a query that always comes back empty (rideFares
+  // recipient filter would match nothing) and waste a round-trip.
+  const earningsQ = useQuery<EarningsResponse>({
+    queryKey: ["/api/drivers/me/earnings"],
+    queryFn: () => apiRequest("/api/drivers/me/earnings"),
+    enabled: !!profile,
+    // Refresh on a gentle interval — a driver leaving the screen open
+    // between fares should see new entries appear without needing to
+    // manually pull-to-refresh.
+    refetchInterval: 60_000,
+  });
+  const earnings = earningsQ.data;
   // Prefer the server-issued ref code, fall back to a plate-derived one
   // for legacy rows that were created before generatePayReferenceCode.
   const payRef =
@@ -381,22 +440,118 @@ export default function DriverDashboardScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeInDown.delay(200).duration(400)}
-            style={[styles.infoCard, { backgroundColor: cardSurface }]}
-          >
-            <Feather
-              name="info"
-              size={16}
-              color={BrandColors.primary.gradientStart}
-            />
-            <ThemedText style={styles.infoText}>
-              Trip stats and earnings tracking are coming soon. For now, your
-              wallet shows the totals from completed Haibo Pay transactions.
-            </ThemedText>
-          </Animated.View>
+          {profile ? (
+            <Animated.View
+              entering={reducedMotion ? undefined : FadeInDown.delay(200).duration(400)}
+              style={styles.section}
+            >
+              <ThemedText style={styles.sectionLabel}>Earnings</ThemedText>
+              <View style={[styles.earningsCard, { backgroundColor: cardSurface }]}>
+                <View style={styles.earningsStatsRow}>
+                  <EarningsStat
+                    label="Today"
+                    amount={earnings?.today.total ?? 0}
+                    txns={earnings?.today.txns ?? 0}
+                    loading={earningsQ.isLoading}
+                  />
+                  <View style={styles.earningsDivider} />
+                  <EarningsStat
+                    label="7 days"
+                    amount={earnings?.week.total ?? 0}
+                    txns={earnings?.week.txns ?? 0}
+                    loading={earningsQ.isLoading}
+                  />
+                  <View style={styles.earningsDivider} />
+                  <EarningsStat
+                    label="30 days"
+                    amount={earnings?.month.total ?? 0}
+                    txns={earnings?.month.txns ?? 0}
+                    loading={earningsQ.isLoading}
+                  />
+                </View>
+
+                <View style={styles.recentFaresLabelRow}>
+                  <ThemedText style={styles.recentFaresLabel}>
+                    Recent fares
+                  </ThemedText>
+                  {earningsQ.isRefetching ? (
+                    <ThemedText style={styles.recentFaresRefreshing}>
+                      refreshing…
+                    </ThemedText>
+                  ) : null}
+                </View>
+
+                {earningsQ.isLoading ? (
+                  <ThemedText style={styles.recentFaresEmpty}>
+                    Loading…
+                  </ThemedText>
+                ) : !earnings?.recent?.length ? (
+                  <ThemedText style={styles.recentFaresEmpty}>
+                    No Haibo Pay fares yet. Once commuters scan your QR,
+                    receipts land here.
+                  </ThemedText>
+                ) : (
+                  <View style={styles.faresList}>
+                    {earnings.recent.map((fare) => (
+                      <View key={fare.id} style={styles.fareRow}>
+                        <View style={styles.fareIcon}>
+                          <Feather
+                            name="user"
+                            size={14}
+                            color={BrandColors.primary.gradientStart}
+                          />
+                        </View>
+                        <View style={styles.fareText}>
+                          <ThemedText
+                            style={styles.fareName}
+                            numberOfLines={1}
+                          >
+                            {fare.payerName || fare.payerPhone || "Commuter"}
+                          </ThemedText>
+                          <ThemedText
+                            style={styles.fareMeta}
+                            numberOfLines={1}
+                          >
+                            {formatFareTime(fare.createdAt)}
+                            {fare.message ? ` · ${fare.message}` : ""}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.fareAmount}>
+                          +{formatEarningsAmount(fare.amount)}
+                        </ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          ) : null}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function EarningsStat({
+  label,
+  amount,
+  txns,
+  loading,
+}: {
+  label: string;
+  amount: number;
+  txns: number;
+  loading: boolean;
+}) {
+  return (
+    <View style={styles.earningsStatCol}>
+      <ThemedText style={styles.earningsStatLabel}>{label}</ThemedText>
+      <ThemedText style={styles.earningsStatAmount}>
+        {loading ? "—" : formatEarningsAmount(amount)}
+      </ThemedText>
+      <ThemedText style={styles.earningsStatTxns}>
+        {loading ? "" : `${txns} ${txns === 1 ? "fare" : "fares"}`}
+      </ThemedText>
     </View>
   );
 }
@@ -628,20 +783,112 @@ const styles = StyleSheet.create({
     color: BrandColors.gray[600],
     marginTop: 1,
   },
-  infoCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.xl,
-    borderWidth: 1,
-    borderColor: BrandColors.primary.gradientStart + "25",
+  earningsCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  infoText: {
-    ...Typography.small,
+  earningsStatsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  earningsStatCol: {
     flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+  },
+  earningsStatLabel: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  earningsStatAmount: {
+    ...Typography.h3,
+    color: BrandColors.primary.gradientStart,
+    fontVariant: ["tabular-nums"],
+    marginTop: 4,
+  },
+  earningsStatTxns: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    marginTop: 2,
+    fontSize: 11,
+  },
+  earningsDivider: {
+    width: 1,
+    backgroundColor: BrandColors.gray[200],
+    marginVertical: Spacing.xs,
+  },
+  recentFaresLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  recentFaresLabel: {
+    ...Typography.label,
     color: BrandColors.gray[700],
-    lineHeight: 20,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  recentFaresRefreshing: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    fontStyle: "italic",
+    fontSize: 10,
+  },
+  recentFaresEmpty: {
+    ...Typography.small,
+    color: BrandColors.gray[600],
+    lineHeight: 18,
+  },
+  faresList: {
+    gap: Spacing.sm,
+  },
+  fareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  fareIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BrandColors.primary.gradientStart + "14",
+  },
+  fareText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fareName: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  fareMeta: {
+    ...Typography.label,
+    color: BrandColors.gray[600],
+    fontSize: 11,
+    marginTop: 2,
+  },
+  fareAmount: {
+    ...Typography.body,
+    color: BrandColors.status.success,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+    fontSize: 14,
   },
 });
