@@ -1,20 +1,40 @@
 /**
  * Mapbox Configuration
- * 
- * The access token is loaded from environment variables.
- * For Expo, use `expo-constants` or `app.json` extra field.
- * For development, you can set EXPO_PUBLIC_MAPBOX_TOKEN in .env
- * or hardcode a public token here temporarily.
+ *
+ * The access token MUST be provided via `EXPO_PUBLIC_MAPBOX_TOKEN` in .env
+ * (or `expoConfig.extra.mapboxAccessToken` in app.json as a secondary fallback
+ * for EAS builds that prefer extras over env vars). No committed literal —
+ * the previous hardcoded fallback leaked the token to git history.
  */
 
 import Constants from "expo-constants";
 
-// Mapbox public access token
-// Priority: env var > Constants > fallback
-export const MAPBOX_ACCESS_TOKEN: string =
-  process.env.EXPO_PUBLIC_MAPBOX_TOKEN ||
-  (Constants.expoConfig?.extra?.mapboxAccessToken as string) ||
-  "pk.eyJ1IjoiaGFpYm9hZnJpY2EiLCJhIjoiY200dHp5ZW5kMDBhaTJqczRwcWdnMHBhZyJ9.5P-V0ePBMDwmEhLJCSJbhA";
+const envToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+const extrasToken = Constants.expoConfig?.extra?.mapboxAccessToken as
+  | string
+  | undefined;
+const resolved = envToken || extrasToken;
+
+if (!resolved) {
+  // Fail loudly at module load so a missing token surfaces the second the
+  // app boots instead of at first map render. A committed fallback is what
+  // leaked the old token — never add one back.
+  throw new Error(
+    "EXPO_PUBLIC_MAPBOX_TOKEN is not set. Add it to .env (local dev) or EAS " +
+      "build secrets (production builds). See .env.example for the variable name.",
+  );
+}
+
+if (!resolved.startsWith("pk.")) {
+  // A secret token in a mobile bundle is a wallet-draining incident waiting
+  // to happen. Reject it explicitly so the failure is impossible to miss.
+  throw new Error(
+    "EXPO_PUBLIC_MAPBOX_TOKEN must be a PUBLIC (pk.) token. Secret (sk.) " +
+      "tokens must never be embedded in client builds.",
+  );
+}
+
+export const MAPBOX_ACCESS_TOKEN: string = resolved;
 
 // Mapbox style URLs
 export const MAPBOX_STYLES = {
