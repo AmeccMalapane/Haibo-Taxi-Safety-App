@@ -3,7 +3,7 @@ import { db } from "../db";
 import {
   complaints, jobs, jobApplications, lostFoundItems,
   explorerProgress, fareSurveys, stopContributions,
-  photoContributions, explorerLeaderboard,
+  photoContributions, explorerLeaderboard, taxiLocations,
   associations, notifications, referralCodes, referralSignups,
   referralRewards,
 } from "../../shared/schema";
@@ -366,6 +366,263 @@ router.get("/explorer/leaderboard", async (req, res: Response) => {
   } catch (error: any) {
     console.error("Get leaderboard error:", error);
     res.status(500).json({ error: "Failed to fetch leaderboard" });
+  }
+});
+
+// ============ CITY EXPLORER CONTRIBUTIONS (Chunk 48) ============
+// Before this chunk the CityExplorerScreen flow was writing to four
+// endpoints that didn't exist on the server (404 on every engagement):
+// GET /api/explorer/fare-question, POST /api/explorer/fare-survey,
+// POST /api/explorer/stop, POST /api/explorer/photo. The schema had
+// fareSurveys, stopContributions, photoContributions tables all along
+// but nothing wrote to them. Now the mobile writes actually persist
+// and explorerProgress aggregate counters bump on each contribution.
+
+// Small helper to bump a single counter on explorerProgress. Creates
+// the progress row if it doesn't exist yet so a brand-new device can
+// immediately earn points without a separate init step.
+async function bumpExplorerProgress(
+  deviceId: string,
+  field: "faresVerified" | "stopsAdded" | "photosUploaded" | "surveysCompleted",
+  pointsEarned: number,
+) {
+  const existing = await db
+    .select({ id: explorerProgress.id })
+    .from(explorerProgress)
+    .where(eq(explorerProgress.deviceId, deviceId))
+    .limit(1);
+
+  if (existing.length === 0) {
+    await db.insert(explorerProgress).values({
+      deviceId,
+      [field]: 1,
+      totalPoints: pointsEarned,
+      surveysCompleted: field === "surveysCompleted" ? 1 : 0,
+      lastSurveyDate: new Date(),
+    } as any);
+    return;
+  }
+
+  const col = (explorerProgress as any)[field];
+  await db
+    .update(explorerProgress)
+    .set({
+      [field]: sql`${col} + 1`,
+      totalPoints: sql`${explorerProgress.totalPoints} + ${pointsEarned}`,
+      lastSurveyDate: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(explorerProgress.deviceId, deviceId));
+}
+
+// GET /api/explorer/fare-question — returns a random origin/destination
+// pair for the mobile fare-verification game. Picks two real taxi ranks
+// from taxi_locations when available so the question is anchored in
+// actual routes the commuter might know, falling back to a static
+// pair when the DB has fewer than two ranks (fresh installs, tests).
+router.get("/explorer/fare-question", async (req, res: Response) => {
+  try {
+    const ranks = await db
+      .select({ id: taxiLocations.id, name: taxiLocations.name })
+      .from(taxiLocations)
+      .where(eq(taxiLocations.type, "rank"))
+      .orderBy(sql`random()`)
+      .limit(2);
+
+    if (ranks.length >= 2) {
+      res.json({
+        origin: ranks[0].name,
+        originId: ranks[0].id,
+        destination: ranks[1].name,
+        destinationId: ranks[1].id,
+      });
+      return;
+    }
+
+    res.json({
+      origin: "Johannesburg CBD",
+      destination: "Soweto",
+    });
+  } catch (error: any) {
+    console.error("Fare question error:", error);
+    res.status(500).json({ error: "Failed to fetch fare question" });
+  }
+});
+
+// POST /api/explorer/fare-survey — persist a commuter's fare answer
+// and bump faresVerified on their explorer progress row. Points are
+// determined server-side so mobile can't cheat.
+router.post("/explorer/fare-survey", async (req, res: Response) => {
+  try {
+    const {
+      deviceId,
+      originRankId,
+      originName,
+      destinationName,
+      fareAmount,
+      responseType,
+    } = req.body as {
+      deviceId?: string;
+      originRankId?: string;
+      originName?: string;
+      destinationName?: string;
+      fareAmount?: number;
+      responseType?: string;
+    };
+
+    if (!deviceId || !originName || !destinationName || !responseType) {
+      res
+        .status(400)
+        .json({
+          error:
+            "deviceId, originName, destinationName, and responseType are required",
+        });
+      return;
+    }
+
+    const pointsEarned = responseType === "known" ? 10 : 5;
+
+    const [row] = await db
+      .insert(fareSurveys)
+      .values({
+        deviceId,
+        originRankId: originRankId || null,
+        originName,
+        destinationName,
+        fareAmount: typeof fareAmount === "number" ? fareAmount : null,
+        responseType,
+        pointsEarned,
+      })
+      .returning();
+
+    await bumpExplorerProgress(deviceId, "faresVerified", pointsEarned);
+
+    res.status(201).json({ ...row, pointsEarned });
+  } catch (error: any) {
+    console.error("Fare survey error:", error);
+    res.status(500).json({ error: "Failed to save fare survey" });
+  }
+});
+
+// POST /api/explorer/stop — persist a new stop the commuter spotted.
+// latitude/longitude are notNull() in the schema, so the server rejects
+// submissions without coordinates rather than defaulting to 0,0 (which
+// would pin bogus stops to the Gulf of Guinea). Mobile catches the 400
+// and shows a friendly "Could not save" alert.
+router.post("/explorer/stop", async (req, res: Response) => {
+  try {
+    const {
+      deviceId,
+      stopName,
+      latitude,
+      longitude,
+      tip,
+      landmark,
+      bestTime,
+    } = req.body as {
+      deviceId?: string;
+      stopName?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      tip?: string;
+      landmark?: string;
+      bestTime?: string;
+    };
+
+    if (!deviceId || !stopName) {
+      res
+        .status(400)
+        .json({ error: "deviceId and stopName are required" });
+      return;
+    }
+
+    if (typeof latitude !== "number" || typeof longitude !== "number") {
+      res
+        .status(400)
+        .json({
+          error:
+            "Location services are required to submit a stop — grant GPS access and try again.",
+        });
+      return;
+    }
+
+    const pointsEarned = 30;
+
+    const [row] = await db
+      .insert(stopContributions)
+      .values({
+        deviceId,
+        stopName,
+        latitude,
+        longitude,
+        tip: tip || null,
+        landmark: landmark || null,
+        bestTime: bestTime || null,
+        pointsEarned,
+      })
+      .returning();
+
+    await bumpExplorerProgress(deviceId, "stopsAdded", pointsEarned);
+
+    res.status(201).json({ ...row, pointsEarned });
+  } catch (error: any) {
+    console.error("Stop contribution error:", error);
+    res.status(500).json({ error: "Failed to save stop contribution" });
+  }
+});
+
+// POST /api/explorer/photo — persist a photo contribution. The mobile
+// flow currently doesn't upload the actual bytes so imageUrl stays
+// null for now; the description + landmark text are the useful payload.
+// Follow-up: wire the /api/uploads/image → POST /photo pipe so photos
+// actually ride along.
+router.post("/explorer/photo", async (req, res: Response) => {
+  try {
+    const {
+      deviceId,
+      locationId,
+      stopContributionId,
+      imageUrl,
+      description,
+      landmark,
+      bestTime,
+    } = req.body as {
+      deviceId?: string;
+      locationId?: string;
+      stopContributionId?: string;
+      imageUrl?: string;
+      description?: string;
+      landmark?: string;
+      bestTime?: string;
+    };
+
+    if (!deviceId) {
+      res.status(400).json({ error: "deviceId is required" });
+      return;
+    }
+
+    const pointsEarned = 20;
+
+    const [row] = await db
+      .insert(photoContributions)
+      .values({
+        deviceId,
+        locationId: locationId || null,
+        stopContributionId: stopContributionId || null,
+        imageUrl: imageUrl || null,
+        description: description || null,
+        landmark: landmark || null,
+        bestTime: bestTime || null,
+        pointsEarned,
+      })
+      .returning();
+
+    await bumpExplorerProgress(deviceId, "photosUploaded", pointsEarned);
+
+    res.status(201).json({ ...row, pointsEarned });
+  } catch (error: any) {
+    console.error("Photo contribution error:", error);
+    res.status(500).json({ error: "Failed to save photo contribution" });
   }
 });
 

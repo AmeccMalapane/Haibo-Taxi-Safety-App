@@ -6,6 +6,7 @@ import {
   associations, taxiDrivers, withdrawalRequests,
   reels, lostFoundItems, jobs, adminAuditLog, pasopReports,
   sosAlerts, driverRatings, routeContributions, p2pTransfers,
+  fareSurveys, stopContributions, photoContributions,
   referralCodes, referralSignups, referralRewards, vendorProfiles,
 } from "../../shared/schema";
 import { alias } from "drizzle-orm/pg-core";
@@ -2171,6 +2172,85 @@ router.put(
       res.status(500).json({ error: "Failed to update vendor status" });
     }
   }
+);
+
+// ============ CITY EXPLORER CONTRIBUTIONS (Chunk 48) ============
+// Read-only admin view across the three crowdsourced City Explorer
+// tables (fareSurveys, stopContributions, photoContributions). Lets
+// ops spot absurd fares, stops pinned outside the city, or repeat
+// offenders — before this endpoint the schema tables were being
+// populated with no way for the team to audit them at all.
+//
+// Hard delete/moderation actions intentionally not in scope for
+// Chunk 48: the audit gap was "no admin visibility"; once we know
+// what the real abuse patterns look like we can add targeted
+// hide/reject handlers. Premature approval gates are a non-goal
+// (see feedback_moderation_model.md in auto-memory).
+
+router.get(
+  "/explorer/contributions",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { kind, limit: rawLimit, offset: rawOffset } = req.query as {
+        kind?: string;
+        limit?: string;
+        offset?: string;
+      };
+      const limit = Math.min(Number(rawLimit) || 50, 200);
+      const offset = Math.max(Number(rawOffset) || 0, 0);
+
+      if (kind === "fare") {
+        const rows = await db
+          .select()
+          .from(fareSurveys)
+          .orderBy(desc(fareSurveys.createdAt))
+          .limit(limit)
+          .offset(offset);
+        const [totalResult] = await db
+          .select({ count: count() })
+          .from(fareSurveys);
+        res.json({ data: rows, total: Number(totalResult?.count || 0), kind });
+        return;
+      }
+
+      if (kind === "stop") {
+        const rows = await db
+          .select()
+          .from(stopContributions)
+          .orderBy(desc(stopContributions.createdAt))
+          .limit(limit)
+          .offset(offset);
+        const [totalResult] = await db
+          .select({ count: count() })
+          .from(stopContributions);
+        res.json({ data: rows, total: Number(totalResult?.count || 0), kind });
+        return;
+      }
+
+      if (kind === "photo") {
+        const rows = await db
+          .select()
+          .from(photoContributions)
+          .orderBy(desc(photoContributions.createdAt))
+          .limit(limit)
+          .offset(offset);
+        const [totalResult] = await db
+          .select({ count: count() })
+          .from(photoContributions);
+        res.json({ data: rows, total: Number(totalResult?.count || 0), kind });
+        return;
+      }
+
+      res.status(400).json({ error: "kind must be one of: fare, stop, photo" });
+    } catch (error: any) {
+      console.error("Explorer contributions error:", error);
+      res
+        .status(500)
+        .json({ error: "Failed to fetch explorer contributions" });
+    }
+  },
 );
 
 export default router;

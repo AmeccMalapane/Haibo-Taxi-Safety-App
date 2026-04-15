@@ -368,6 +368,21 @@ export const admin = {
    * Audit log — append-only record of admin writes. Supports optional
    * action/resource filters and cursor-style limit/offset pagination.
    */
+  /** Read the City Explorer crowdsourced contributions (fare surveys,
+   * stop pins, photos) for admin audit. Admins can spot bogus fares
+   * or off-grid stop pins before they contaminate taxi route data. */
+  async getExplorerContributions(params: {
+    kind: "fare" | "stop" | "photo";
+    limit?: number;
+    offset?: number;
+  }) {
+    const qs = new URLSearchParams();
+    qs.set("kind", params.kind);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    return request(`/api/admin/explorer/contributions?${qs.toString()}`);
+  },
+
   async getAuditLog(params: {
     action?: string;
     resource?: string;

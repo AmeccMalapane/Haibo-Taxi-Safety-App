@@ -21,6 +21,7 @@ import {
   Send,
   Gift,
   Store,
+  Compass,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const navItems: NavItem[] = [
   { to: "/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },
   { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
   { to: "/referrals", label: "Referrals", Icon: Gift, section: "Directory" },
+  { to: "/explorer", label: "City Explorer", Icon: Compass, section: "Directory" },
 
   // System — who did what
   { to: "/audit-log", label: "Audit log", Icon: ScrollText, section: "System" },
