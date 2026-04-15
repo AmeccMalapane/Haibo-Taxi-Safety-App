@@ -62,19 +62,26 @@ router.get("/transactions", authMiddleware, async (req: AuthRequest, res: Respon
 router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { amount, paymentReference } = req.body;
+    const userId = req.user!.userId;
 
     if (!amount || amount <= 0) {
       res.status(400).json({ error: "Valid amount is required" });
       return;
     }
 
-    if (!paymentReference) {
+    if (!paymentReference || typeof paymentReference !== "string") {
       res.status(400).json({ error: "Payment reference is required" });
       return;
     }
 
-    // Check idempotency — don't double-credit
-    const existing = await db.select().from(transactions)
+    // Early idempotency short-circuit — if a completed transaction for
+    // this reference already exists, we skip the Paystack verify roundtrip
+    // and return success. Still doesn't fully close the race with the
+    // webhook (hence the ON CONFLICT guard below), but saves an external
+    // API call in the common retry case.
+    const existing = await db
+      .select()
+      .from(transactions)
       .where(eq(transactions.reference, paymentReference))
       .limit(1);
 
@@ -83,43 +90,85 @@ router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) =>
       return;
     }
 
-    // Verify the payment with Paystack API
+    // Verify the payment with Paystack before touching the ledger.
     const verification = await verifyTransaction(paymentReference);
 
     if (!verification.verified) {
-      res.status(400).json({ error: "Payment verification failed", details: verification.error });
+      res.status(400).json({
+        error: "Payment verification failed",
+        details: verification.error,
+      });
       return;
     }
 
-    const verifiedAmount = (verification.amount || 0) / 100; // cents to rands
+    const verifiedAmount = (verification.amount || 0) / 100;
 
-    // Create wallet transaction
-    const [txn] = await db.insert(walletTransactions).values({
-      userId: req.user!.userId,
-      type: "topup",
+    // The webhook and this client-driven path can race — both see no
+    // completed transaction and both try to credit. Wrap the whole thing
+    // in a transaction AND gate on `transactions.reference` (unique) via
+    // INSERT ... ON CONFLICT DO NOTHING. The loser of the race gets an
+    // empty returning() array and the whole transaction aborts, leaving
+    // the wallet untouched. walletTransactions has no unique constraint
+    // so this gate is load-bearing.
+    let txn: typeof walletTransactions.$inferSelect | undefined;
+    let alreadyProcessed = false;
+    try {
+      await db.transaction(async (tx) => {
+        const [claim] = await tx
+          .insert(transactions)
+          .values({
+            userId,
+            amount: verifiedAmount,
+            type: "wallet_topup",
+            status: "completed",
+            reference: paymentReference,
+            description: `Wallet top-up`,
+            completedAt: new Date(),
+          })
+          .onConflictDoNothing({ target: transactions.reference })
+          .returning();
+
+        if (!claim) {
+          alreadyProcessed = true;
+          return;
+        }
+
+        await tx
+          .update(users)
+          .set({
+            walletBalance: sql`${users.walletBalance} + ${verifiedAmount}`,
+          })
+          .where(eq(users.id, userId));
+
+        const [walletTxn] = await tx
+          .insert(walletTransactions)
+          .values({
+            userId,
+            type: "topup",
+            amount: verifiedAmount,
+            description: `Wallet top-up of R${verifiedAmount.toFixed(2)}`,
+            status: "completed",
+            paymentReference,
+          })
+          .returning();
+        txn = walletTxn;
+      });
+    } catch (txErr) {
+      console.error("Top-up transaction error:", txErr);
+      res.status(500).json({ error: "Top-up failed" });
+      return;
+    }
+
+    if (alreadyProcessed) {
+      res.json({ message: "Top-up already processed", alreadyProcessed: true });
+      return;
+    }
+
+    res.json({
+      message: "Top-up successful",
       amount: verifiedAmount,
-      description: `Wallet top-up of R${verifiedAmount.toFixed(2)}`,
-      status: "completed",
-      paymentReference,
-    }).returning();
-
-    // Update user balance
-    await db.update(users)
-      .set({ walletBalance: sql`${users.walletBalance} + ${verifiedAmount}` })
-      .where(eq(users.id, req.user!.userId));
-
-    // Record in main transactions table
-    await db.insert(transactions).values({
-      userId: req.user!.userId,
-      amount: verifiedAmount,
-      type: "wallet_topup",
-      status: "completed",
-      reference: paymentReference,
-      description: `Wallet top-up`,
-      completedAt: new Date(),
+      transaction: txn,
     });
-
-    res.json({ message: "Top-up successful", amount: verifiedAmount, transaction: txn });
   } catch (error: any) {
     console.error("Top-up error:", error);
     res.status(500).json({ error: "Top-up failed" });
@@ -130,8 +179,9 @@ router.post("/topup", authMiddleware, async (req: AuthRequest, res: Response) =>
 router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthRequest, res: Response) => {
   try {
     const { recipientPhone, recipientUsername, amount, message } = req.body;
+    const senderId = req.user!.userId;
 
-    if (!amount || amount <= 0) {
+    if (!amount || typeof amount !== "number" || amount <= 0) {
       res.status(400).json({ error: "Valid amount is required" });
       return;
     }
@@ -141,17 +191,15 @@ router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthReq
       return;
     }
 
-    // Check sender balance
-    const [sender] = await db.select().from(users).where(eq(users.id, req.user!.userId)).limit(1);
-    if (!sender || (sender.walletBalance || 0) < amount) {
-      res.status(400).json({ error: "Insufficient balance" });
-      return;
-    }
-
-    // Find recipient
+    // Resolve recipient outside the transaction — read-only lookup, no
+    // need to hold a connection while we walk the phone index.
     let recipient;
     if (recipientPhone) {
-      const result = await db.select().from(users).where(eq(users.phone, recipientPhone)).limit(1);
+      const result = await db
+        .select()
+        .from(users)
+        .where(eq(users.phone, recipientPhone))
+        .limit(1);
       recipient = result[0];
     }
 
@@ -160,49 +208,94 @@ router.post("/transfer", authMiddleware, financialRateLimit, async (req: AuthReq
       return;
     }
 
-    // Deduct from sender
-    await db.update(users)
-      .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
-      .where(eq(users.id, req.user!.userId));
+    if (recipient.id === senderId) {
+      res.status(400).json({ error: "You can't transfer to yourself" });
+      return;
+    }
 
-    // Add to recipient
-    await db.update(users)
-      .set({ walletBalance: sql`${users.walletBalance} + ${amount}` })
-      .where(eq(users.id, recipient.id));
+    // Wrap the money movement + ledger writes in a single DB transaction
+    // so partial failures can't leave the ledger inconsistent. The
+    // conditional deduct guards against TOCTOU races — two concurrent
+    // transfers attempting to drain the same balance will have one
+    // updateCount === 0 and roll back. This closes the double-spend
+    // window where a SELECT-then-UPDATE pattern would succeed for both.
+    let senderSnapshot: typeof users.$inferSelect | undefined;
+    let transferRow: typeof p2pTransfers.$inferSelect | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const deduct = await tx
+          .update(users)
+          .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
+          .where(
+            and(
+              eq(users.id, senderId),
+              sql`${users.walletBalance} >= ${amount}`,
+            ),
+          )
+          .returning();
 
-    // Record transfer
-    const [transfer] = await db.insert(p2pTransfers).values({
-      senderId: req.user!.userId,
-      recipientId: recipient.id,
-      recipientPhone: recipient.phone,
-      amount,
-      message: message || null,
-      status: "completed",
-    }).returning();
+        if (deduct.length === 0) {
+          // Either the sender vanished (unlikely — authMiddleware just
+          // verified them) or the balance was insufficient. Throw to
+          // abort the transaction and surface an explicit 400.
+          throw new Error("INSUFFICIENT_FUNDS");
+        }
+        senderSnapshot = deduct[0];
 
-    // Record wallet transactions for both parties
-    await db.insert(walletTransactions).values([
-      {
-        userId: req.user!.userId,
-        type: "transfer_sent",
-        amount: -amount,
-        description: `Transfer to ${recipient.phone}`,
-        status: "completed",
-        relatedUserId: recipient.id,
-        relatedUserPhone: recipient.phone,
-      },
-      {
-        userId: recipient.id,
-        type: "transfer_received",
-        amount,
-        description: `Transfer from ${sender.phone}`,
-        status: "completed",
-        relatedUserId: req.user!.userId,
-        relatedUserPhone: sender.phone,
-      },
-    ]);
+        const credit = await tx
+          .update(users)
+          .set({ walletBalance: sql`${users.walletBalance} + ${amount}` })
+          .where(eq(users.id, recipient!.id))
+          .returning();
+        if (credit.length === 0) throw new Error("RECIPIENT_MISSING");
 
-    res.json({ message: "Transfer successful", transfer });
+        const [transfer] = await tx
+          .insert(p2pTransfers)
+          .values({
+            senderId,
+            recipientId: recipient!.id,
+            recipientPhone: recipient!.phone,
+            amount,
+            message: message || null,
+            status: "completed",
+          })
+          .returning();
+        transferRow = transfer;
+
+        await tx.insert(walletTransactions).values([
+          {
+            userId: senderId,
+            type: "transfer_sent",
+            amount: -amount,
+            description: `Transfer to ${recipient!.phone}`,
+            status: "completed",
+            relatedUserId: recipient!.id,
+            relatedUserPhone: recipient!.phone,
+          },
+          {
+            userId: recipient!.id,
+            type: "transfer_received",
+            amount,
+            description: `Transfer from ${senderSnapshot!.phone}`,
+            status: "completed",
+            relatedUserId: senderId,
+            relatedUserPhone: senderSnapshot!.phone,
+          },
+        ]);
+      });
+    } catch (txErr: any) {
+      if (txErr?.message === "INSUFFICIENT_FUNDS") {
+        res.status(400).json({ error: "Insufficient balance" });
+        return;
+      }
+      if (txErr?.message === "RECIPIENT_MISSING") {
+        res.status(404).json({ error: "Recipient not found" });
+        return;
+      }
+      throw txErr;
+    }
+
+    res.json({ message: "Transfer successful", transfer: transferRow });
   } catch (error: any) {
     console.error("Transfer error:", error);
     res.status(500).json({ error: "Transfer failed" });
@@ -246,18 +339,8 @@ router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthR
       return;
     }
 
-    // Check sender balance
-    const [sender] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, req.user!.userId))
-      .limit(1);
-    if (!sender || (sender.walletBalance || 0) < amount) {
-      res.status(400).json({ error: "Insufficient balance" });
-      return;
-    }
-
-    // Resolve vendor's user row for the transfer description
+    // Resolve vendor's user row for labelling — read-only, no need to
+    // hold this inside the transaction.
     const [vendorUser] = await db
       .select()
       .from(users)
@@ -268,64 +351,91 @@ router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthR
       return;
     }
 
-    // Money movement — deduct + credit
-    await db
-      .update(users)
-      .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
-      .where(eq(users.id, req.user!.userId));
+    // Atomic money movement — same pattern as /transfer. Conditional
+    // deduct guards against TOCTOU double-spend; transaction rollback
+    // guarantees the ledger is never partially written.
+    let sender: typeof users.$inferSelect | undefined;
+    let transfer: typeof p2pTransfers.$inferSelect | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const deduct = await tx
+          .update(users)
+          .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
+          .where(
+            and(
+              eq(users.id, req.user!.userId),
+              sql`${users.walletBalance} >= ${amount}`,
+            ),
+          )
+          .returning();
 
-    await db
-      .update(users)
-      .set({ walletBalance: sql`${users.walletBalance} + ${amount}` })
-      .where(eq(users.id, vendor.userId));
+        if (deduct.length === 0) throw new Error("INSUFFICIENT_FUNDS");
+        sender = deduct[0];
 
-    // Record the P2P row — vendorRef tag lets /api/admin/p2p-transfers
-    // classify this as a "sale" in reports without a second table.
-    const [transfer] = await db
-      .insert(p2pTransfers)
-      .values({
-        senderId: req.user!.userId,
-        recipientId: vendor.userId,
-        recipientPhone: vendorUser.phone,
-        amount,
-        message: message || null,
-        status: "completed",
-        vendorRef: vendor.vendorRef,
-      })
-      .returning();
+        const credit = await tx
+          .update(users)
+          .set({ walletBalance: sql`${users.walletBalance} + ${amount}` })
+          .where(eq(users.id, vendor.userId))
+          .returning();
+        if (credit.length === 0) throw new Error("VENDOR_USER_MISSING");
 
-    // Wallet transactions — both sides
-    await db.insert(walletTransactions).values([
-      {
-        userId: req.user!.userId,
-        type: "vendor_payment",
-        amount: -amount,
-        description: `Paid ${vendor.businessName}`,
-        status: "completed",
-        relatedUserId: vendor.userId,
-        relatedUserPhone: vendorUser.phone,
-      },
-      {
-        userId: vendor.userId,
-        type: "vendor_sale",
-        amount,
-        description: `Sale via ${sender.phone}`,
-        status: "completed",
-        relatedUserId: req.user!.userId,
-        relatedUserPhone: sender.phone,
-      },
-    ]);
+        const [transferRow] = await tx
+          .insert(p2pTransfers)
+          .values({
+            senderId: req.user!.userId,
+            recipientId: vendor.userId,
+            recipientPhone: vendorUser.phone,
+            amount,
+            message: message || null,
+            status: "completed",
+            vendorRef: vendor.vendorRef,
+          })
+          .returning();
+        transfer = transferRow;
 
-    // Update vendor sales counters. Using sql`` so concurrent sales
-    // increment atomically rather than racing on a read-modify-write.
-    await db
-      .update(vendorProfiles)
-      .set({
-        salesCount: sql`${vendorProfiles.salesCount} + 1`,
-        totalSales: sql`${vendorProfiles.totalSales} + ${amount}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(vendorProfiles.id, vendor.id));
+        await tx.insert(walletTransactions).values([
+          {
+            userId: req.user!.userId,
+            type: "vendor_payment",
+            amount: -amount,
+            description: `Paid ${vendor.businessName}`,
+            status: "completed",
+            relatedUserId: vendor.userId,
+            relatedUserPhone: vendorUser.phone,
+          },
+          {
+            userId: vendor.userId,
+            type: "vendor_sale",
+            amount,
+            description: `Sale via ${sender!.phone}`,
+            status: "completed",
+            relatedUserId: req.user!.userId,
+            relatedUserPhone: sender!.phone,
+          },
+        ]);
+
+        // Vendor sales counters — inside the same transaction so a
+        // failed wallet credit won't leave the counters stale.
+        await tx
+          .update(vendorProfiles)
+          .set({
+            salesCount: sql`${vendorProfiles.salesCount} + 1`,
+            totalSales: sql`${vendorProfiles.totalSales} + ${amount}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(vendorProfiles.id, vendor.id));
+      });
+    } catch (txErr: any) {
+      if (txErr?.message === "INSUFFICIENT_FUNDS") {
+        res.status(400).json({ error: "Insufficient balance" });
+        return;
+      }
+      if (txErr?.message === "VENDOR_USER_MISSING") {
+        res.status(404).json({ error: "Vendor account missing" });
+        return;
+      }
+      throw txErr;
+    }
 
     // Fire-and-forget push receipt to the vendor. Don't await — a
     // slow FCM call shouldn't delay the buyer's 200 response, and the
@@ -369,54 +479,77 @@ router.post("/pay-vendor", authMiddleware, financialRateLimit, async (req: AuthR
 router.post("/withdraw", authMiddleware, sensitiveRateLimit, async (req: AuthRequest, res: Response) => {
   try {
     const { amount, bankCode, accountNumber, accountName, narration } = req.body;
+    const userId = req.user!.userId;
 
-    if (!amount || amount <= 0 || !bankCode || !accountNumber) {
+    if (!amount || typeof amount !== "number" || amount <= 0 || !bankCode || !accountNumber) {
       res.status(400).json({ error: "Amount, bank code, and account number are required" });
       return;
     }
 
-    // Check balance
-    const [user] = await db.select().from(users).where(eq(users.id, req.user!.userId)).limit(1);
-    if (!user || (user.walletBalance || 0) < amount) {
-      res.status(400).json({ error: "Insufficient balance" });
-      return;
+    // Atomic balance freeze + withdrawal request creation. Same pattern
+    // as /transfer — concurrent withdrawal submissions could both pass a
+    // SELECT-then-UPDATE balance check and drain the wallet below zero.
+    // The conditional UPDATE on walletBalance >= amount eliminates that
+    // race, and wrapping in a transaction ensures the balance can never
+    // be frozen without a corresponding withdrawalRequests row to refund
+    // it if the submission fails downstream.
+    let withdrawal: typeof withdrawalRequests.$inferSelect | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const deduct = await tx
+          .update(users)
+          .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
+          .where(
+            and(
+              eq(users.id, userId),
+              sql`${users.walletBalance} >= ${amount}`,
+            ),
+          )
+          .returning();
+
+        if (deduct.length === 0) throw new Error("INSUFFICIENT_FUNDS");
+
+        const [row] = await tx
+          .insert(withdrawalRequests)
+          .values({
+            userId,
+            amount,
+            bankCode,
+            accountNumber,
+            accountName: accountName || null,
+            narration: narration || `Haibo withdrawal`,
+            status: "pending",
+            requires2FA: amount > 100,
+          })
+          .returning();
+        withdrawal = row;
+
+        await tx.insert(walletTransactions).values({
+          userId,
+          type: "transfer_sent",
+          amount: -amount,
+          description: `Withdrawal request - R${amount.toFixed(2)}`,
+          status: "pending",
+        });
+      });
+    } catch (txErr: any) {
+      if (txErr?.message === "INSUFFICIENT_FUNDS") {
+        res.status(400).json({ error: "Insufficient balance" });
+        return;
+      }
+      throw txErr;
     }
-
-    // Freeze the amount
-    await db.update(users)
-      .set({ walletBalance: sql`${users.walletBalance} - ${amount}` })
-      .where(eq(users.id, req.user!.userId));
-
-    const [withdrawal] = await db.insert(withdrawalRequests).values({
-      userId: req.user!.userId,
-      amount,
-      bankCode,
-      accountNumber,
-      accountName: accountName || null,
-      narration: narration || `Haibo withdrawal`,
-      status: "pending",
-      requires2FA: amount > 100,
-    }).returning();
-
-    // Record wallet transaction
-    await db.insert(walletTransactions).values({
-      userId: req.user!.userId,
-      type: "transfer_sent",
-      amount: -amount,
-      description: `Withdrawal request - R${amount.toFixed(2)}`,
-      status: "pending",
-    });
 
     // Fan out to Command Center so the approval queue lights up in realtime
     emitToAdmins("withdrawal:requested", {
-      id: withdrawal.id,
-      userId: req.user!.userId,
+      id: withdrawal!.id,
+      userId,
       userPhone: req.user!.phone,
       amount,
       bankCode,
       accountNumber,
-      requires2FA: withdrawal.requires2FA,
-      requestedAt: withdrawal.requestedAt,
+      requires2FA: withdrawal!.requires2FA,
+      requestedAt: withdrawal!.requestedAt,
     });
 
     res.json({ message: "Withdrawal request submitted", withdrawal });

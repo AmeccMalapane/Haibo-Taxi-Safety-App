@@ -1,0 +1,20 @@
+# Pre-commit hooks for the Haibo! Taxi Safety App.
+#
+# Single purpose for now: stop secrets from entering git. The Feb 25
+# API_CONFIG_AUDIT flagged a google-services.json leak that made it into
+# the repo before .gitignore caught up — this hook guarantees the same
+# class of mistake is impossible going forward.
+#
+# Install once per clone:
+#   pipx install pre-commit       # or: brew install pre-commit
+#   pre-commit install --install-hooks
+#
+# Run on-demand against the whole tree:
+#   pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        name: Detect secrets with gitleaks
+        description: Block commits that contain API keys, tokens, or private keys

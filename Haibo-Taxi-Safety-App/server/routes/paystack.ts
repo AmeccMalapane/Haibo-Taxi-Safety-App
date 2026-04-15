@@ -147,49 +147,60 @@ router.post("/webhook", async (req: Request, res: Response) => {
           break;
         }
 
-        // Check idempotency — don't double-credit
-        const existing = await db.select().from(transactions)
-          .where(eq(transactions.reference, reference))
-          .limit(1);
+        // Same race-safe credit path as /api/wallet/topup — the client
+        // and the webhook can fire concurrently on the same reference.
+        // INSERT ... ON CONFLICT on transactions.reference (unique) acts
+        // as the load-bearing gate; walletTransactions has no unique
+        // constraint, so touching it before the gate could double-credit.
+        let credited = false;
+        try {
+          await db.transaction(async (tx) => {
+            const [claim] = await tx
+              .insert(transactions)
+              .values({
+                userId,
+                amount: amountInRands,
+                type: "wallet_topup",
+                status: "completed",
+                reference,
+                description: `Wallet top-up via Paystack`,
+                completedAt: new Date(),
+              })
+              .onConflictDoNothing({ target: transactions.reference })
+              .returning();
 
-        if (existing.length > 0 && existing[0].status === "completed") {
+            if (!claim) return; // Already processed by /topup or a prior webhook.
+
+            await tx
+              .update(users)
+              .set({
+                walletBalance: sql`${users.walletBalance} + ${amountInRands}`,
+              })
+              .where(eq(users.id, userId));
+
+            await tx.insert(walletTransactions).values({
+              userId,
+              type: "topup",
+              amount: amountInRands,
+              description: `Wallet top-up R${amountInRands.toFixed(2)}`,
+              status: "completed",
+              paymentReference: reference,
+            });
+
+            credited = true;
+          });
+        } catch (txErr) {
+          console.error(`[Paystack Webhook] Credit transaction failed: ${reference}`, txErr);
+          break;
+        }
+
+        if (!credited) {
           console.log(`[Paystack Webhook] Already processed: ${reference}`);
           break;
         }
 
-        // Credit wallet
-        await db.update(users)
-          .set({ walletBalance: sql`${users.walletBalance} + ${amountInRands}` })
-          .where(eq(users.id, userId));
-
-        // Update or create transaction record
-        if (existing.length > 0) {
-          await db.update(transactions)
-            .set({ status: "completed", completedAt: new Date() })
-            .where(eq(transactions.reference, reference));
-        } else {
-          await db.insert(transactions).values({
-            userId,
-            amount: amountInRands,
-            type: "wallet_topup",
-            status: "completed",
-            reference,
-            description: `Wallet top-up via Paystack`,
-            completedAt: new Date(),
-          });
-        }
-
-        // Record in wallet transactions
-        await db.insert(walletTransactions).values({
-          userId,
-          type: "topup",
-          amount: amountInRands,
-          description: `Wallet top-up R${amountInRands.toFixed(2)}`,
-          status: "completed",
-          paymentReference: reference,
-        });
-
-        // Send push notification
+        // Receipt push — fire-and-forget, don't let a slow push block the
+        // 200 we owe Paystack (or they retry).
         try {
           await notifyUser({
             userId,

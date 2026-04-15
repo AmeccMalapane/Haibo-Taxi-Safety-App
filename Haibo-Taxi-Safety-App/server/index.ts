@@ -93,13 +93,44 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/health", async (req, res) => {
+  // Readiness summary for ops smoke tests. Database is the only hard
+  // requirement — if it's down we return 503 so the Azure App Service
+  // probe can pull the instance out of rotation. Everything else is
+  // advisory: SMS / Paystack / Firebase being unconfigured degrades
+  // specific features but doesn't take the whole server down. The
+  // Day 1 deployment runbook curls this to confirm all moving parts
+  // are live before flipping DNS.
+  const features = {
+    sms: Boolean(
+      process.env.AZURE_COMMUNICATION_CONNECTION_STRING &&
+        process.env.AZURE_SMS_SENDER_NUMBER,
+    ),
+    paystack: Boolean(process.env.PAYSTACK_SECRET_KEY),
+    firebase: Boolean(
+      process.env.FIREBASE_PROJECT_ID &&
+        process.env.FIREBASE_CLIENT_EMAIL &&
+        process.env.FIREBASE_PRIVATE_KEY,
+    ),
+    azureBlobStorage: Boolean(process.env.AZURE_STORAGE_CONNECTION_STRING),
+  };
+
   try {
     const client = await pool.connect();
     await client.query("SELECT 1");
     client.release();
-    res.json({ status: "healthy", database: "connected", timestamp: new Date().toISOString() });
+    res.json({
+      status: "healthy",
+      database: "connected",
+      features,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error: any) {
-    res.status(503).json({ status: "unhealthy", database: "disconnected", error: error.message });
+    res.status(503).json({
+      status: "unhealthy",
+      database: "disconnected",
+      features,
+      error: error.message,
+    });
   }
 });
 
