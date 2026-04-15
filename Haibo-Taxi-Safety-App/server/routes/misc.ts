@@ -522,29 +522,51 @@ router.post("/jobs/:id/apply", authMiddleware, async (req: AuthRequest, res: Res
 
 // ============ LOST & FOUND ============
 
-// GET /api/lost-found - List lost & found items
-router.get("/lost-found", async (req, res: Response) => {
+// Lost & found posters supply a contact phone so claimants can reach
+// them, and that phone is PII. We want the public listing (what users
+// browse to find their lost phone) to stay accessible, but don't want
+// the API to serve as a phone-number scraping endpoint for unauth'd
+// callers. Redact contact fields unless the caller is authenticated.
+function redactLostFoundForList(item: typeof lostFoundItems.$inferSelect) {
+  const { contactPhone: _phone, contactName: _name, ...safe } = item;
+  return safe;
+}
+
+const LOST_FOUND_TYPES = new Set(["lost", "found"]);
+
+// GET /api/lost-found - List lost & found items (public, phone redacted)
+router.get("/lost-found", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const { type } = req.query as any;
+    const { type } = req.query as { type?: string };
 
-    let results;
-    if (type) {
-      results = await db.select().from(lostFoundItems)
-        .where(and(eq(lostFoundItems.status, "active"), eq(lostFoundItems.type, type)))
-        .orderBy(desc(lostFoundItems.createdAt))
-        .limit(limit).offset(offset);
-    } else {
-      results = await db.select().from(lostFoundItems)
-        .where(eq(lostFoundItems.status, "active"))
-        .orderBy(desc(lostFoundItems.createdAt))
-        .limit(limit).offset(offset);
-    }
+    // Always include the status=active filter; layer type on top when set.
+    // Share the filter between the rows and count queries so pagination
+    // totals match the rendered list (the old code counted the whole
+    // table and the mobile UI would show "47 items" above 3 rows).
+    const filter = type
+      ? and(eq(lostFoundItems.status, "active"), eq(lostFoundItems.type, type))
+      : eq(lostFoundItems.status, "active");
 
-    const [totalResult] = await db.select({ count: count() }).from(lostFoundItems);
+    const results = await db
+      .select()
+      .from(lostFoundItems)
+      .where(filter)
+      .orderBy(desc(lostFoundItems.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(lostFoundItems)
+      .where(filter);
+
+    const data = req.user
+      ? results
+      : results.map(redactLostFoundForList);
 
     res.json({
-      data: results,
+      data,
       pagination: paginationResponse(totalResult.count, { page, limit, offset }),
     });
   } catch (error: any) {
@@ -555,8 +577,11 @@ router.get("/lost-found", async (req, res: Response) => {
 
 // GET /api/lost-found/:id - Fetch a single lost/found item.
 // Returns the raw schema plus a `contactInfo` alias for the Details screen
-// (which has a single contact field rather than name+phone).
-router.get("/lost-found/:id", async (req, res: Response) => {
+// (which has a single contact field rather than name+phone). Contact
+// fields are gated behind authMiddleware so the API can't be scraped
+// for phone numbers by random crawlers — claimants still need to log
+// in (which costs at least one OTP send) before seeing poster contact.
+router.get("/lost-found/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(lostFoundItems)
       .where(eq(lostFoundItems.id, req.params.id))
@@ -618,17 +643,89 @@ router.post("/lost-found", authMiddleware, async (req: AuthRequest, res: Respons
       return;
     }
 
+    // Type allowlist — schema takes any string but the mobile filter UI
+    // only knows "lost" / "found". Reject unknown values so a malformed
+    // client can't post items that show up in neither filter tab.
+    const resolvedType = type || "lost";
+    if (!LOST_FOUND_TYPES.has(resolvedType)) {
+      res.status(400).json({ error: "type must be 'lost' or 'found'" });
+      return;
+    }
+
+    // Length caps on every free-text field so the public listing read
+    // path stays bounded regardless of how long a post someone writes.
+    const strField = (v: unknown, max: number, label: string) => {
+      if (typeof v !== "string" || v.trim().length === 0) {
+        return `${label} must be a non-empty string`;
+      }
+      if (v.length > max) return `${label} must be ≤ ${max} characters`;
+      return null;
+    };
+    for (const [v, max, label] of [
+      [title, 150, "title"],
+      [description, 2000, "description"],
+      [contactPhone, 20, "contactPhone"],
+      [contactName, 100, "contactName"],
+      [category, 50, "category"],
+    ] as const) {
+      const err = strField(v, max, label);
+      if (err) {
+        res.status(400).json({ error: err });
+        return;
+      }
+    }
+    if (routeOrigin !== undefined && routeOrigin !== null &&
+        (typeof routeOrigin !== "string" || routeOrigin.length > 150)) {
+      res.status(400).json({ error: "routeOrigin must be ≤ 150 characters" });
+      return;
+    }
+    if (routeDestination !== undefined && routeDestination !== null &&
+        (typeof routeDestination !== "string" || routeDestination.length > 150)) {
+      res.status(400).json({ error: "routeDestination must be ≤ 150 characters" });
+      return;
+    }
+    if (reward !== undefined && reward !== null &&
+        (typeof reward !== "string" || reward.length > 100)) {
+      res.status(400).json({ error: "reward must be a short string (≤ 100 characters)" });
+      return;
+    }
+
+    // Image URL (if provided) must be an https:// or local /uploads/
+    // path. Same gate as vendor / driver KYC images.
+    if (imageUrl !== undefined && imageUrl !== null) {
+      if (
+        typeof imageUrl !== "string" || imageUrl.length > 500 ||
+        !(/^https:\/\//i.test(imageUrl) || imageUrl.startsWith("/uploads/"))
+      ) {
+        res.status(400).json({
+          error: "imageUrl must be an https:// URL or a Haibo upload path",
+        });
+        return;
+      }
+    }
+
+    // dateLost must parse cleanly if provided.
+    let dateLostParsed: Date | null = null;
+    if (dateLost) {
+      const d = new Date(dateLost);
+      if (Number.isNaN(d.getTime())) {
+        res.status(400).json({ error: "dateLost must be a valid ISO date" });
+        return;
+      }
+      dateLostParsed = d;
+    }
+
     const [item] = await db.insert(lostFoundItems).values({
-      type: type || "lost",
-      category,
-      title,
-      description,
+      type: resolvedType,
+      category: category.trim(),
+      title: title.trim(),
+      description: description.trim(),
       imageUrl: imageUrl || null,
       routeOrigin: routeOrigin || null,
       routeDestination: routeDestination || null,
-      dateLost: dateLost ? new Date(dateLost) : null,
-      contactPhone,
-      contactName,
+      dateLost: dateLostParsed,
+      contactPhone: contactPhone.trim(),
+      contactName: contactName.trim(),
       reward: reward || null,
       deviceId: deviceId || req.user?.userId || null,
       status: "active",
