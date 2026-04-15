@@ -49,19 +49,51 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Length caps on all text fields — these render in driver/admin
+    // dashboards and on receipts, so unbounded values become DoS
+    // vectors on every feed read.
+    if (typeof description !== "string" || description.length > 1000) {
+      res.status(400).json({ error: "description must be ≤ 1000 characters" });
+      return;
+    }
+    if (typeof pickupRank !== "string" || pickupRank.length > 200 ||
+        typeof dropoffRank !== "string" || dropoffRank.length > 200) {
+      res.status(400).json({ error: "pickupRank and dropoffRank must be ≤ 200 characters" });
+      return;
+    }
+    if (typeof taxiPlateNumber !== "string" || taxiPlateNumber.length > 20) {
+      res.status(400).json({ error: "taxiPlateNumber must be ≤ 20 characters" });
+      return;
+    }
+
+    // Amount validation — finite, positive, bounded. Mirrors the wallet
+    // MAX_TRANSACTION_AMOUNT (R100k) since deliveries settle against
+    // the same money rails downstream.
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || amount > 100_000) {
+      res.status(400).json({ error: "amount must be between 0 and 100000" });
+      return;
+    }
+    if (
+      insuranceAmount !== undefined && insuranceAmount !== null &&
+      (typeof insuranceAmount !== "number" || !Number.isFinite(insuranceAmount) || insuranceAmount < 0 || insuranceAmount > 100_000)
+    ) {
+      res.status(400).json({ error: "insuranceAmount must be between 0 and 100000" });
+      return;
+    }
+
     const confirmationCode = generateConfirmationCode();
 
     const [delivery] = await db.insert(deliveries).values({
       senderId: req.user!.userId,
-      taxiPlateNumber,
-      description,
-      pickupRank,
-      dropoffRank,
+      taxiPlateNumber: taxiPlateNumber.trim(),
+      description: description.trim(),
+      pickupRank: pickupRank.trim(),
+      dropoffRank: dropoffRank.trim(),
       amount,
       driverPhone: driverPhone || null,
       confirmationCode,
       insuranceIncluded: insuranceIncluded || false,
-      insuranceAmount: insuranceAmount || 0,
+      insuranceAmount: insuranceAmount ?? 0,
       status: "pending",
       paymentStatus: "pending",
     }).returning();
@@ -83,10 +115,15 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 
     const delivery = result[0];
-    const isSender = delivery.senderId === req.user!.userId;
+    const userId = req.user!.userId;
+    const isSender = delivery.senderId === userId;
     const isAdmin = req.user!.role === "admin";
-    const isDriver = req.user!.role === "driver";
-    if (!isSender && !isAdmin && !isDriver) {
+    // Mirror the /status fix — only the assigned driver, not every
+    // driver in the system, can read a delivery by id. A delivery with
+    // no driverId (still pending) is readable by sender + admins only.
+    const isAssignedDriver =
+      req.user!.role === "driver" && delivery.driverId === userId;
+    if (!isSender && !isAdmin && !isAssignedDriver) {
       res.status(403).json({ error: "Not authorized" });
       return;
     }
@@ -209,21 +246,61 @@ router.post("/packages", authMiddleware, async (req: AuthRequest, res: Response)
       fare, pickupHubId, dropoffHubId,
     } = req.body;
 
+    // Required-field presence + length caps. Previously the endpoint
+    // accepted completely empty bodies and trusted the DB's NOT NULL
+    // constraints to surface errors via a generic 500.
+    const requiredStrings: Array<[unknown, string, number]> = [
+      [senderName, "senderName", 150],
+      [senderPhone, "senderPhone", 20],
+      [senderAddress, "senderAddress", 300],
+      [receiverName, "receiverName", 150],
+      [receiverPhone, "receiverPhone", 20],
+      [receiverAddress, "receiverAddress", 300],
+      [contents, "contents", 500],
+    ];
+    for (const [v, label, max] of requiredStrings) {
+      if (typeof v !== "string" || v.trim().length === 0) {
+        res.status(400).json({ error: `${label} is required` });
+        return;
+      }
+      if (v.length > max) {
+        res.status(400).json({ error: `${label} must be ≤ ${max} characters` });
+        return;
+      }
+    }
+
+    // Numeric bounds — fare and declaredValue are money-adjacent so
+    // reject negative / non-finite / absurd values.
+    if (
+      fare !== undefined && fare !== null &&
+      (typeof fare !== "number" || !Number.isFinite(fare) || fare < 0 || fare > 100_000)
+    ) {
+      res.status(400).json({ error: "fare must be between 0 and 100000" });
+      return;
+    }
+    if (
+      declaredValue !== undefined && declaredValue !== null &&
+      (typeof declaredValue !== "number" || !Number.isFinite(declaredValue) || declaredValue < 0 || declaredValue > 1_000_000)
+    ) {
+      res.status(400).json({ error: "declaredValue must be between 0 and 1000000" });
+      return;
+    }
+
     const trackingNumber = generateTrackingNumber();
 
     const [pkg] = await db.insert(packages).values({
       trackingNumber,
-      senderName,
-      senderPhone,
-      senderAddress,
-      receiverName,
-      receiverPhone,
-      receiverAddress,
-      contents,
+      senderName: senderName.trim(),
+      senderPhone: senderPhone.trim(),
+      senderAddress: senderAddress.trim(),
+      receiverName: receiverName.trim(),
+      receiverPhone: receiverPhone.trim(),
+      receiverAddress: receiverAddress.trim(),
+      contents: contents.trim(),
       weight: weight || null,
       dimensions: dimensions || null,
-      declaredValue: declaredValue || null,
-      fare: fare || 25,
+      declaredValue: declaredValue ?? null,
+      fare: fare ?? 25,
       pickupHubId: pickupHubId || null,
       dropoffHubId: dropoffHubId || null,
       deviceId: req.user!.userId,
@@ -238,6 +315,20 @@ router.post("/packages", authMiddleware, async (req: AuthRequest, res: Response)
 });
 
 // GET /api/packages/track/:trackingNumber - Track a package
+//
+// SECURITY: tracking numbers are deliberately share-safe — the entire
+// point is that anyone the sender shares the number with (via SMS or
+// WhatsApp) can see delivery status without needing a Haibo account.
+// But the underlying row has sender + receiver PII (name / phone /
+// address) which previously shipped in the response, so any
+// authenticated user who could guess a tracking number (~24 bits of
+// entropy in the current generator) could extract that PII.
+//
+// Now we redact. The sender (who created the row) gets the full
+// record, and admins get it for support flows. Everyone else — the
+// recipient, a curious tracking-number-sharer, or an attacker — gets
+// only fields that are already on the physical parcel label: status,
+// hub references, tracking number, timestamps.
 router.get("/packages/track/:trackingNumber", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(packages)
@@ -249,11 +340,31 @@ router.get("/packages/track/:trackingNumber", authMiddleware, async (req: AuthRe
       return;
     }
 
+    const pkg = result[0];
     const history = await db.select().from(packageStatusHistory)
-      .where(eq(packageStatusHistory.packageId, result[0].id))
+      .where(eq(packageStatusHistory.packageId, pkg.id))
       .orderBy(desc(packageStatusHistory.createdAt));
 
-    res.json({ ...result[0], statusHistory: history });
+    const isSender = pkg.deviceId === req.user!.userId;
+    const isAdmin = req.user!.role === "admin";
+    if (isSender || isAdmin) {
+      res.json({ ...pkg, statusHistory: history });
+      return;
+    }
+
+    // Redacted view — no PII, no address info.
+    res.json({
+      id: pkg.id,
+      trackingNumber: pkg.trackingNumber,
+      status: pkg.status,
+      contents: pkg.contents,
+      weight: pkg.weight,
+      dimensions: pkg.dimensions,
+      pickupHubId: pkg.pickupHubId,
+      dropoffHubId: pkg.dropoffHubId,
+      createdAt: pkg.createdAt,
+      statusHistory: history,
+    });
   } catch (error: any) {
     console.error("Track package error:", error);
     res.status(500).json({ error: "Failed to track package" });
