@@ -119,6 +119,61 @@ router.get(
   },
 );
 
+// Vendor profile field caps. The public vendor directory renders these
+// on every page load so unbounded values become feed DoS.
+const MAX_VENDOR_BUSINESS_NAME = 120;
+const MAX_VENDOR_RANK_LOCATION = 200;
+const MAX_VENDOR_DESCRIPTION = 2000;
+const MAX_VENDOR_IMAGE_URL = 500;
+const VENDOR_TYPES = new Set(["taxi_vendor", "hawker", "accessories"]);
+
+// Validates the subset of fields that can be mutated via either POST (create)
+// or PUT /me (update). Returns null on success or an error string to surface
+// in a 400. Kept as a single helper so the two endpoints can't drift.
+function validateVendorFields(body: {
+  businessName?: unknown;
+  rankLocation?: unknown;
+  description?: unknown;
+  businessImageUrl?: unknown;
+}): string | null {
+  const { businessName, rankLocation, description, businessImageUrl } = body;
+
+  if (businessName !== undefined) {
+    if (typeof businessName !== "string" || businessName.trim().length === 0) {
+      return "businessName must be a non-empty string";
+    }
+    if (businessName.length > MAX_VENDOR_BUSINESS_NAME) {
+      return `businessName must be ≤ ${MAX_VENDOR_BUSINESS_NAME} characters`;
+    }
+  }
+  if (rankLocation !== undefined && rankLocation !== null) {
+    if (typeof rankLocation !== "string" || rankLocation.length > MAX_VENDOR_RANK_LOCATION) {
+      return `rankLocation must be a string ≤ ${MAX_VENDOR_RANK_LOCATION} characters`;
+    }
+  }
+  if (description !== undefined && description !== null) {
+    if (typeof description !== "string" || description.length > MAX_VENDOR_DESCRIPTION) {
+      return `description must be a string ≤ ${MAX_VENDOR_DESCRIPTION} characters`;
+    }
+  }
+  if (businessImageUrl !== undefined && businessImageUrl !== null) {
+    if (typeof businessImageUrl !== "string" || businessImageUrl.length > MAX_VENDOR_IMAGE_URL) {
+      return `businessImageUrl must be a string ≤ ${MAX_VENDOR_IMAGE_URL} characters`;
+    }
+    // Accept only https URLs (or local upload refs served from /uploads).
+    // This blocks data: / javascript: URIs from ever reaching the public
+    // directory render path, even though the command-center doesn't use
+    // dangerouslySetInnerHTML today.
+    if (
+      !/^https:\/\//i.test(businessImageUrl) &&
+      !businessImageUrl.startsWith("/uploads/")
+    ) {
+      return "businessImageUrl must be an https:// URL or a Haibo upload path";
+    }
+  }
+  return null;
+}
+
 // POST /api/vendor-profile — create own profile. Idempotent: if the
 // user already has a profile we return it instead of erroring, so
 // re-running onboarding doesn't wedge the UI.
@@ -130,9 +185,15 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: "vendorType and businessName are required" });
       return;
     }
-    const validTypes = ["taxi_vendor", "hawker", "accessories"];
-    if (!validTypes.includes(vendorType)) {
+    if (!VENDOR_TYPES.has(vendorType)) {
       res.status(400).json({ error: "Invalid vendorType" });
+      return;
+    }
+    const validationError = validateVendorFields({
+      businessName, rankLocation, description, businessImageUrl,
+    });
+    if (validationError) {
+      res.status(400).json({ error: validationError });
       return;
     }
 
@@ -201,6 +262,14 @@ router.put("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { businessName, rankLocation, description, businessImageUrl } = req.body;
 
+    const validationError = validateVendorFields({
+      businessName, rankLocation, description, businessImageUrl,
+    });
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+
     const [existing] = await db
       .select()
       .from(vendorProfiles)
@@ -214,7 +283,7 @@ router.put("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
     const [row] = await db
       .update(vendorProfiles)
       .set({
-        ...(businessName !== undefined && { businessName }),
+        ...(businessName !== undefined && { businessName: (businessName as string).trim() }),
         ...(rankLocation !== undefined && { rankLocation }),
         ...(description !== undefined && { description }),
         ...(businessImageUrl !== undefined && { businessImageUrl }),
