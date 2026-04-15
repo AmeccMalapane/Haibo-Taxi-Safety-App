@@ -100,14 +100,45 @@ router.post("/reports", optionalAuth, async (req: AuthRequest, res: Response) =>
   try {
     const { category, latitude, longitude, description, reporterName } = req.body;
 
-    if (!category || typeof latitude !== "number" || typeof longitude !== "number") {
-      res.status(400).json({ error: "category, latitude, longitude are required" });
+    // Pasop is open to anonymous reporting (optionalAuth), so it's the
+    // most exposed anonymous-write surface in the app and needs strict
+    // input bounds. Unbounded descriptions would DoS the map read path
+    // the same way unbounded community posts would; out-of-range lat/lon
+    // would pollute the hazard layer with bogus pins.
+    if (!category || !(category in CATEGORY_TTL_HOURS)) {
+      res.status(400).json({ error: "Valid category is required" });
       return;
     }
-
-    if (!(category in CATEGORY_TTL_HOURS)) {
-      res.status(400).json({ error: `Unknown category: ${category}` });
+    if (
+      typeof latitude !== "number" ||
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      typeof longitude !== "number" ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      res.status(400).json({
+        error: "Valid latitude (-90..90) and longitude (-180..180) are required",
+      });
       return;
+    }
+    if (description !== undefined && description !== null) {
+      if (typeof description !== "string") {
+        res.status(400).json({ error: "description must be a string" });
+        return;
+      }
+      if (description.length > 1000) {
+        res.status(400).json({ error: "description must be 1000 characters or fewer" });
+        return;
+      }
+    }
+    if (reporterName !== undefined && reporterName !== null) {
+      if (typeof reporterName !== "string" || reporterName.length > 80) {
+        res.status(400).json({ error: "reporterName must be ≤ 80 characters" });
+        return;
+      }
     }
 
     const expiresAt = computeExpiresAt(category);

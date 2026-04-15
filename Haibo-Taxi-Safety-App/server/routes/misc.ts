@@ -16,6 +16,22 @@ const router = Router();
 
 // ============ COMPLAINTS ============
 
+// Allowlists mirror the schema comments — kept here so an attacker can't
+// slip a junk category into the audit stream and break the admin filters.
+const COMPLAINT_CATEGORIES = new Set([
+  "reckless_driving",
+  "overcharging",
+  "harassment",
+  "vehicle_condition",
+  "overcrowding",
+  "rude_behavior",
+  "safety_violation",
+  "other",
+]);
+const COMPLAINT_SEVERITIES = new Set(["low", "medium", "high", "critical"]);
+const MAX_COMPLAINT_DESCRIPTION = 4000;
+const MAX_COMPLAINT_EVIDENCE = 10;
+
 // POST /api/complaints - Submit a complaint
 router.post("/complaints", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -29,19 +45,93 @@ router.post("/complaints", authMiddleware, async (req: AuthRequest, res: Respons
       res.status(400).json({ error: "Category and description are required" });
       return;
     }
+    if (typeof category !== "string" || !COMPLAINT_CATEGORIES.has(category)) {
+      res.status(400).json({ error: "Invalid complaint category" });
+      return;
+    }
+    if (severity !== undefined && (typeof severity !== "string" || !COMPLAINT_SEVERITIES.has(severity))) {
+      res.status(400).json({ error: "Invalid severity value" });
+      return;
+    }
+    if (typeof description !== "string" || description.trim().length === 0) {
+      res.status(400).json({ error: "Description is required" });
+      return;
+    }
+    if (description.length > MAX_COMPLAINT_DESCRIPTION) {
+      res.status(400).json({
+        error: `Description must be ${MAX_COMPLAINT_DESCRIPTION} characters or fewer`,
+      });
+      return;
+    }
+    // Coordinate bounds — reject out-of-range values that would pollute
+    // the admin incident map. Both fields are optional but if provided
+    // they must be valid finite numbers in the correct range.
+    if (
+      incidentLatitude !== undefined &&
+      incidentLatitude !== null &&
+      (typeof incidentLatitude !== "number" ||
+        !Number.isFinite(incidentLatitude) ||
+        incidentLatitude < -90 ||
+        incidentLatitude > 90)
+    ) {
+      res.status(400).json({ error: "incidentLatitude must be between -90 and 90" });
+      return;
+    }
+    if (
+      incidentLongitude !== undefined &&
+      incidentLongitude !== null &&
+      (typeof incidentLongitude !== "number" ||
+        !Number.isFinite(incidentLongitude) ||
+        incidentLongitude < -180 ||
+        incidentLongitude > 180)
+    ) {
+      res.status(400).json({ error: "incidentLongitude must be between -180 and 180" });
+      return;
+    }
+    // Evidence is a jsonb array of { type, url, description? } — cap the
+    // array size and validate each entry's shape so a malformed client
+    // can't poison the admin complaint drawer.
+    let evidenceValue: { type: string; url: string; description?: string }[] | null = null;
+    if (evidence !== undefined && evidence !== null) {
+      if (!Array.isArray(evidence)) {
+        res.status(400).json({ error: "evidence must be an array" });
+        return;
+      }
+      if (evidence.length > MAX_COMPLAINT_EVIDENCE) {
+        res.status(400).json({
+          error: `Max ${MAX_COMPLAINT_EVIDENCE} evidence items per complaint`,
+        });
+        return;
+      }
+      if (
+        evidence.some(
+          (e: any) =>
+            !e ||
+            typeof e.type !== "string" ||
+            typeof e.url !== "string" ||
+            (e.description !== undefined && typeof e.description !== "string"),
+        )
+      ) {
+        res.status(400).json({
+          error: "Each evidence item needs a string type and url",
+        });
+        return;
+      }
+      evidenceValue = evidence;
+    }
 
     const [complaint] = await db.insert(complaints).values({
       userId: req.user!.userId,
       taxiPlateNumber: taxiPlateNumber || null,
       category,
       severity: severity || "medium",
-      description,
+      description: description.trim(),
       incidentDate: incidentDate ? new Date(incidentDate) : null,
       incidentLocation: incidentLocation || null,
-      incidentLatitude: incidentLatitude || null,
-      incidentLongitude: incidentLongitude || null,
+      incidentLatitude: incidentLatitude ?? null,
+      incidentLongitude: incidentLongitude ?? null,
       routeName: routeName || null,
-      evidence: evidence || null,
+      evidence: evidenceValue,
       isAnonymous: isAnonymous || false,
       status: "pending",
     }).returning();
