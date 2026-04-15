@@ -206,6 +206,14 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
 // returned URL and optional caption. New contributions default to
 // verified=false so moderators can sweep them from the command center
 // before they show up on the location detail hero.
+const LOCATION_IMAGE_TYPES = new Set([
+  "general",
+  "entrance",
+  "interior",
+  "signage",
+  "route_board",
+]);
+
 router.post("/:id/images", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { url, caption, imageType } = req.body as {
@@ -216,6 +224,26 @@ router.post("/:id/images", authMiddleware, async (req: AuthRequest, res: Respons
 
     if (!url || typeof url !== "string") {
       res.status(400).json({ error: "url is required" });
+      return;
+    }
+    // The bytes must already be uploaded via /api/uploads/image (which
+    // returns either an https Azure Blob URL or a local /uploads/ path).
+    // Reject anything else so a user can't inject a data: / javascript:
+    // URI that then renders on the location detail hero.
+    if (url.length > 500 || !(/^https:\/\//i.test(url) || url.startsWith("/uploads/"))) {
+      res.status(400).json({
+        error: "url must be an https:// URL or a Haibo upload path (≤ 500 chars)",
+      });
+      return;
+    }
+    if (caption !== undefined && caption !== null &&
+        (typeof caption !== "string" || caption.length > 300)) {
+      res.status(400).json({ error: "caption must be a string ≤ 300 characters" });
+      return;
+    }
+    const resolvedImageType = imageType || "general";
+    if (!LOCATION_IMAGE_TYPES.has(resolvedImageType)) {
+      res.status(400).json({ error: "Invalid imageType" });
       return;
     }
 
@@ -235,7 +263,7 @@ router.post("/:id/images", authMiddleware, async (req: AuthRequest, res: Respons
         locationId: req.params.id,
         url,
         caption: caption || null,
-        imageType: imageType || "general",
+        imageType: resolvedImageType,
         uploadedBy: req.user!.userId,
         verified: false,
       })
@@ -249,34 +277,110 @@ router.post("/:id/images", authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 // POST /api/locations/:id/vote - Vote on a location
+//
+// Vote stuffing fix: locationVotes has no (locationId, userId) unique
+// constraint, and the old handler blindly inserted + incremented the
+// counter on every call. A single user could spam upvotes on their
+// own location submission to game the verification queue.
+//
+// Now we look up the user's existing vote for this location inside a
+// transaction. Four cases:
+//   1. No prior vote → insert + increment the chosen side.
+//   2. Prior vote same as new → no-op (already recorded, return 200).
+//   3. Prior vote opposite → update the row + decrement old side +
+//      increment new side (lets users change their mind).
+//   4. Prior vote of an unknown type → replace with the new vote, only
+//      increment the new side. Defensive path.
+//
+// Wrapped in db.transaction() so the counter updates can't diverge
+// from the ballot row under concurrent calls.
 router.post("/:id/vote", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { voteType } = req.body;
+    const { voteType } = req.body as { voteType?: string };
     const userId = req.user!.userId;
+    const locationId = req.params.id;
 
-    if (!userId || !voteType) {
-      res.status(400).json({ error: "Vote type and user identification required" });
+    if (voteType !== "up" && voteType !== "down") {
+      res.status(400).json({ error: "voteType must be 'up' or 'down'" });
       return;
     }
 
-    await db.insert(locationVotes).values({
-      locationId: req.params.id,
-      userId,
-      voteType,
-    });
-
-    // Update vote counts
-    if (voteType === "up") {
-      await db.update(taxiLocations)
-        .set({ upvotes: sql`${taxiLocations.upvotes} + 1` })
-        .where(eq(taxiLocations.id, req.params.id));
-    } else {
-      await db.update(taxiLocations)
-        .set({ downvotes: sql`${taxiLocations.downvotes} + 1` })
-        .where(eq(taxiLocations.id, req.params.id));
+    const [location] = await db
+      .select({ id: taxiLocations.id })
+      .from(taxiLocations)
+      .where(eq(taxiLocations.id, locationId))
+      .limit(1);
+    if (!location) {
+      res.status(404).json({ error: "Location not found" });
+      return;
     }
 
-    res.json({ message: "Vote recorded" });
+    let changed = false;
+    await db.transaction(async (tx) => {
+      const [prior] = await tx
+        .select()
+        .from(locationVotes)
+        .where(
+          and(eq(locationVotes.locationId, locationId), eq(locationVotes.userId, userId)),
+        )
+        .limit(1);
+
+      if (!prior) {
+        await tx.insert(locationVotes).values({ locationId, userId, voteType });
+        await tx
+          .update(taxiLocations)
+          .set(
+            voteType === "up"
+              ? { upvotes: sql`${taxiLocations.upvotes} + 1` }
+              : { downvotes: sql`${taxiLocations.downvotes} + 1` },
+          )
+          .where(eq(taxiLocations.id, locationId));
+        changed = true;
+        return;
+      }
+
+      if (prior.voteType === voteType) {
+        // Idempotent repeat — nothing to do.
+        return;
+      }
+
+      await tx
+        .update(locationVotes)
+        .set({ voteType })
+        .where(eq(locationVotes.id, prior.id));
+
+      if (prior.voteType === "up" && voteType === "down") {
+        await tx
+          .update(taxiLocations)
+          .set({
+            upvotes: sql`GREATEST(${taxiLocations.upvotes} - 1, 0)`,
+            downvotes: sql`${taxiLocations.downvotes} + 1`,
+          })
+          .where(eq(taxiLocations.id, locationId));
+      } else if (prior.voteType === "down" && voteType === "up") {
+        await tx
+          .update(taxiLocations)
+          .set({
+            upvotes: sql`${taxiLocations.upvotes} + 1`,
+            downvotes: sql`GREATEST(${taxiLocations.downvotes} - 1, 0)`,
+          })
+          .where(eq(taxiLocations.id, locationId));
+      } else {
+        // Defensive: prior vote was some unknown string — just bump
+        // the new side without touching the stale counter.
+        await tx
+          .update(taxiLocations)
+          .set(
+            voteType === "up"
+              ? { upvotes: sql`${taxiLocations.upvotes} + 1` }
+              : { downvotes: sql`${taxiLocations.downvotes} + 1` },
+          )
+          .where(eq(taxiLocations.id, locationId));
+      }
+      changed = true;
+    });
+
+    res.json({ message: changed ? "Vote recorded" : "Vote unchanged" });
   } catch (error: any) {
     console.error("Vote error:", error);
     res.status(500).json({ error: "Failed to record vote" });
@@ -288,15 +392,45 @@ router.post("/:id/review", authMiddleware, async (req: AuthRequest, res: Respons
   try {
     const { deviceId, userName, rating, comment } = req.body;
 
-    if (!deviceId || !userName || !rating) {
+    if (!deviceId || !userName || rating === undefined || rating === null) {
       res.status(400).json({ error: "Device ID, user name, and rating are required" });
+      return;
+    }
+
+    if (typeof deviceId !== "string" || deviceId.length > 100) {
+      res.status(400).json({ error: "deviceId must be a string ≤ 100 characters" });
+      return;
+    }
+    if (typeof userName !== "string" || userName.length === 0 || userName.length > 80) {
+      res.status(400).json({ error: "userName must be a non-empty string ≤ 80 characters" });
+      return;
+    }
+    if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      res.status(400).json({ error: "rating must be an integer between 1 and 5" });
+      return;
+    }
+    if (comment !== undefined && comment !== null &&
+        (typeof comment !== "string" || comment.length > 1000)) {
+      res.status(400).json({ error: "comment must be a string ≤ 1000 characters" });
+      return;
+    }
+
+    // Verify the location exists before accepting a review — otherwise
+    // we end up with orphaned review rows for invalid location ids.
+    const [location] = await db
+      .select({ id: taxiLocations.id })
+      .from(taxiLocations)
+      .where(eq(taxiLocations.id, req.params.id))
+      .limit(1);
+    if (!location) {
+      res.status(404).json({ error: "Location not found" });
       return;
     }
 
     const [review] = await db.insert(locationReviews).values({
       locationId: req.params.id,
       deviceId,
-      userName,
+      userName: userName.trim(),
       rating,
       comment: comment || null,
     }).returning();
