@@ -1881,8 +1881,12 @@ router.put(
     try {
       const { reason } = req.body as { reason?: string };
 
-      if (!reason || reason.trim().length < 4) {
+      if (!reason || typeof reason !== "string" || reason.trim().length < 4) {
         res.status(400).json({ error: "reason is required (min 4 chars)" });
+        return;
+      }
+      if (reason.length > 500) {
+        res.status(400).json({ error: "reason must be ≤ 500 characters" });
         return;
       }
       if (req.params.id === req.user!.userId) {
@@ -1968,7 +1972,23 @@ router.put(
   }
 );
 
+// String prefix used by /api/user/delete to mark accounts erased under
+// POPIA §24. Kept as an exact match to the reason /api/user/delete
+// writes, so any typo there or here surfaces as a test failure rather
+// than a silent unsuspend bypass. If this ever diverges, make it a
+// shared constant in a small module both files import.
+const POPIA_ERASURE_REASON_PREFIX = "Self-service POPIA erasure";
+
 // PUT /api/admin/users/:id/unsuspend
+//
+// Race-safe + POPIA-aware. The old handler did SELECT → check → UPDATE
+// which let two concurrent admin unsuspends both flip the row and fire
+// two push notifies. More importantly it would happily unsuspend a
+// POPIA-erased account (PII already nulled, phone already anonymized)
+// — admin pressing "unsuspend" on a deleted row would reinstate an
+// account the user explicitly asked us to tombstone, which is a
+// consent violation even if functionally useless (the user can't log
+// in with a DELETED- phone anyway). Reject erased rows here.
 router.put(
   "/users/:id/unsuspend",
   authMiddleware,
@@ -1989,8 +2009,22 @@ router.put(
         res.status(400).json({ error: "User is not suspended" });
         return;
       }
+      if (
+        target.suspensionReason &&
+        target.suspensionReason.startsWith(POPIA_ERASURE_REASON_PREFIX)
+      ) {
+        res.status(400).json({
+          error:
+            "Cannot unsuspend a POPIA-erased account. Ask the user to sign up again if they want to return to Haibo.",
+        });
+        return;
+      }
 
-      const [updated] = await db
+      // Conditional UPDATE serves as the race guard — only the winner
+      // of concurrent unsuspends gets a returning() row and fires the
+      // notification. Guard includes the POPIA marker again in case a
+      // delete races the unsuspend.
+      const updatedRows = await db
         .update(users)
         .set({
           isSuspended: false,
@@ -1998,8 +2032,25 @@ router.put(
           suspendedBy: null,
           suspensionReason: null,
         })
-        .where(eq(users.id, req.params.id))
+        .where(
+          and(
+            eq(users.id, req.params.id),
+            eq(users.isSuspended, true),
+            // sql`` here instead of another helper — checks the reason
+            // doesn't start with the POPIA prefix even if it races with
+            // a /api/user/delete that was in-flight.
+            sql`COALESCE(${users.suspensionReason}, '') NOT LIKE ${POPIA_ERASURE_REASON_PREFIX + "%"}`,
+          ),
+        )
         .returning();
+
+      if (updatedRows.length === 0) {
+        // Someone else handled it between our read and our write.
+        res.status(409).json({ error: "User state changed — refresh and try again" });
+        return;
+      }
+
+      const updated = updatedRows[0];
 
       await recordAdminAction(req, "user.unsuspend", "users", req.params.id, {
         targetPhone: target.phone,
