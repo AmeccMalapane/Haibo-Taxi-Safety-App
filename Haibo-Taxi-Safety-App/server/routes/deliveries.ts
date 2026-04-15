@@ -103,6 +103,19 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/deliveries/:id/status - Update delivery status (sender, assigned driver, or admin)
+// Valid delivery state transitions. Keys are the CURRENT state, values
+// are the states this delivery is allowed to move to. Prevents clients
+// from skipping past required steps (e.g. "pending" → "delivered"
+// bypassing the accepted + in_transit audit trail) or reverting to
+// earlier states after delivery is complete.
+const DELIVERY_TRANSITIONS: Record<string, Set<string>> = {
+  pending: new Set(["accepted", "cancelled"]),
+  accepted: new Set(["in_transit", "cancelled"]),
+  in_transit: new Set(["delivered", "cancelled"]),
+  delivered: new Set([]),
+  cancelled: new Set([]),
+};
+
 router.put("/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const existing = await db.select().from(deliveries).where(eq(deliveries.id, req.params.id)).limit(1);
@@ -112,10 +125,17 @@ router.put("/:id/status", authMiddleware, async (req: AuthRequest, res: Response
     }
 
     const delivery = existing[0];
-    const isSender = delivery.senderId === req.user!.userId;
+    const userId = req.user!.userId;
+    const isSender = delivery.senderId === userId;
     const isAdmin = req.user!.role === "admin";
-    const isDriver = req.user!.role === "driver";
-    if (!isSender && !isAdmin && !isDriver) {
+    // Before this fix, any authenticated user with role="driver" could
+    // mutate any delivery regardless of assignment. A driver can only
+    // act on a delivery they're actually assigned to — look it up on
+    // the row, not the token.
+    const isAssignedDriver =
+      req.user!.role === "driver" && delivery.driverId === userId;
+
+    if (!isSender && !isAdmin && !isAssignedDriver) {
       res.status(403).json({ error: "Not authorized to update this delivery" });
       return;
     }
@@ -124,6 +144,41 @@ router.put("/:id/status", authMiddleware, async (req: AuthRequest, res: Response
     if (!status || typeof status !== "string") {
       res.status(400).json({ error: "Status is required" });
       return;
+    }
+
+    const currentStatus = delivery.status || "pending";
+    const allowedNext = DELIVERY_TRANSITIONS[currentStatus];
+    if (!allowedNext) {
+      // Defensive — shouldn't happen with a clean schema, but don't
+      // let an unknown current state become a transition-check bypass.
+      res.status(409).json({ error: "Delivery is in an unknown state" });
+      return;
+    }
+    if (!allowedNext.has(status)) {
+      res.status(409).json({
+        error: `Cannot transition from ${currentStatus} to ${status}`,
+      });
+      return;
+    }
+
+    // Scope which party can drive which transition. Admins bypass this
+    // (they're the override path for support tickets).
+    if (!isAdmin) {
+      if (status === "cancelled") {
+        // Senders and the assigned driver may cancel at any pre-delivery stage.
+        if (!isSender && !isAssignedDriver) {
+          res.status(403).json({ error: "Not authorized to cancel this delivery" });
+          return;
+        }
+      } else {
+        // Forward transitions (accepted / in_transit / delivered) are
+        // the assigned driver's job only — a sender cannot self-mark
+        // their own package as delivered.
+        if (!isAssignedDriver) {
+          res.status(403).json({ error: "Only the assigned driver can advance this delivery" });
+          return;
+        }
+      }
     }
 
     const updateData: any = { status };

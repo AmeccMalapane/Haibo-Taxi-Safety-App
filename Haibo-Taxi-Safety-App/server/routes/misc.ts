@@ -365,6 +365,17 @@ router.get("/jobs/:id", async (req, res: Response) => {
   }
 });
 
+// Length caps on public-facing job listings — reactive moderation model
+// means these render immediately on app.haibo.africa/jobs, so the
+// validation layer is what protects the feed from DoS and junk content.
+const MAX_JOB_TITLE = 200;
+const MAX_JOB_COMPANY = 150;
+const MAX_JOB_DESCRIPTION = 5000;
+const MAX_JOB_REQUIREMENTS = 3000;
+const MAX_JOB_LOCATION = 200;
+const MAX_JOB_SALARY_STR = 100;
+const MAX_JOB_BENEFITS = 2000;
+
 // POST /api/jobs - Create a job listing
 router.post("/jobs", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -380,25 +391,92 @@ router.post("/jobs", authMiddleware, async (req: AuthRequest, res: Response) => 
       return;
     }
 
+    // String length caps on free-text fields.
+    const stringField = (value: unknown, max: number, label: string) => {
+      if (typeof value !== "string" || value.length === 0) {
+        return `${label} must be a non-empty string`;
+      }
+      if (value.length > max) {
+        return `${label} must be ≤ ${max} characters`;
+      }
+      return null;
+    };
+    for (const [v, max, label] of [
+      [title, MAX_JOB_TITLE, "Title"],
+      [company, MAX_JOB_COMPANY, "Company"],
+      [description, MAX_JOB_DESCRIPTION, "Description"],
+      [location, MAX_JOB_LOCATION, "Location"],
+    ] as const) {
+      const err = stringField(v, max, label);
+      if (err) {
+        res.status(400).json({ error: err });
+        return;
+      }
+    }
+    // Optional text fields — only check when provided.
+    for (const [v, max, label] of [
+      [requirements, MAX_JOB_REQUIREMENTS, "Requirements"],
+      [salary, MAX_JOB_SALARY_STR, "Salary"],
+      [benefits, MAX_JOB_BENEFITS, "Benefits"],
+    ] as const) {
+      if (v !== undefined && v !== null && (typeof v !== "string" || v.length > max)) {
+        res.status(400).json({ error: `${label} must be ≤ ${max} characters` });
+        return;
+      }
+    }
+
+    // Salary range must be non-negative finite numbers when provided.
+    for (const [v, label] of [
+      [salaryMin, "salaryMin"],
+      [salaryMax, "salaryMax"],
+    ] as const) {
+      if (
+        v !== undefined && v !== null &&
+        (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 10_000_000)
+      ) {
+        res.status(400).json({ error: `${label} must be a non-negative number` });
+        return;
+      }
+    }
+    if (
+      typeof salaryMin === "number" &&
+      typeof salaryMax === "number" &&
+      salaryMin > salaryMax
+    ) {
+      res.status(400).json({ error: "salaryMin cannot exceed salaryMax" });
+      return;
+    }
+
+    // Application deadline must parse cleanly if supplied.
+    let deadline: Date | null = null;
+    if (applicationDeadline) {
+      const d = new Date(applicationDeadline);
+      if (Number.isNaN(d.getTime())) {
+        res.status(400).json({ error: "applicationDeadline must be a valid ISO date" });
+        return;
+      }
+      deadline = d;
+    }
+
     const [job] = await db.insert(jobs).values({
-      title,
-      company,
-      description,
+      title: title.trim(),
+      company: company.trim(),
+      description: description.trim(),
       requirements: requirements || null,
       jobType: jobType || "full-time",
       category: category || "driver",
-      location,
+      location: location.trim(),
       province: province || null,
       salary: salary || null,
-      salaryMin: salaryMin || null,
-      salaryMax: salaryMax || null,
+      salaryMin: salaryMin ?? null,
+      salaryMax: salaryMax ?? null,
       contactPhone: contactPhone || null,
       contactEmail: contactEmail || null,
       contactWhatsapp: contactWhatsapp || null,
       experienceLevel: experienceLevel || "entry",
       licenseRequired: licenseRequired || null,
       benefits: benefits || null,
-      applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
+      applicationDeadline: deadline,
       postedBy: req.user!.userId,
       status: "active",
     }).returning();
