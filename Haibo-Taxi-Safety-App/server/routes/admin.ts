@@ -836,6 +836,28 @@ router.put(
         phone: existing.phone,
       });
 
+      // Tell the reporter their alert has been acknowledged (Chunk 45 —
+      // audit gap #8). Skipped for guest SOS submissions where userId is
+      // null — those came from a pre-login device and have no account
+      // to notify. The notification lets the user know someone is on
+      // their side, which matters more than any feature on this app.
+      if (existing.userId) {
+        try {
+          await notifyUser({
+            userId: existing.userId,
+            type: "sos",
+            title: "Your SOS alert has been acknowledged",
+            body: "A responder has reviewed your alert. Stay safe — if you still need help, call emergency services directly.",
+            data: {
+              kind: "sos_resolved",
+              sosAlertId: existing.id,
+            },
+          });
+        } catch (notifyErr) {
+          console.log("[Admin] sos resolve notify failed:", notifyErr);
+        }
+      }
+
       res.json(updated);
     } catch (error: any) {
       console.error("SOS resolve error:", error);
