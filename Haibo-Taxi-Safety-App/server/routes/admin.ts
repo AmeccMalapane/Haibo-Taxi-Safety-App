@@ -525,6 +525,12 @@ router.put("/withdrawals/:id/reject", authMiddleware, requireRole("admin"), asyn
 // later resource needs extra levers (e.g. pinning, shadow-ban), add them
 // here explicitly rather than letting the client patch arbitrary columns.
 
+// Per-resource status allowlists. The moderation endpoint is generic
+// across many surfaces so each resource tells us what its `status`
+// column is allowed to hold. Sourced from the schema comments; keep
+// these in sync when schema values change. Previously the handler
+// accepted any string at all, which meant a patched-in typo could
+// land rows in states the admin UI has no render path for.
 const MODERATION_RESOURCES: Record<
   string,
   {
@@ -532,6 +538,7 @@ const MODERATION_RESOURCES: Record<
     idColumn: any;
     listColumns: any;
     allowedFields: Array<"status" | "isVerified" | "isFeatured">;
+    statusValues?: Set<string>;
   }
 > = {
   reels: {
@@ -552,6 +559,7 @@ const MODERATION_RESOURCES: Record<
       shareCount: reels.shareCount,
     },
     allowedFields: ["status"],
+    statusValues: new Set(["published", "hidden", "removed"]),
   },
   "lost-found": {
     table: lostFoundItems,
@@ -571,6 +579,7 @@ const MODERATION_RESOURCES: Record<
       reward: lostFoundItems.reward,
     },
     allowedFields: ["status"],
+    statusValues: new Set(["active", "claimed", "resolved", "hidden"]),
   },
   jobs: {
     table: jobs,
@@ -592,6 +601,7 @@ const MODERATION_RESOURCES: Record<
       applicationCount: jobs.applicationCount,
     },
     allowedFields: ["status", "isVerified", "isFeatured"],
+    statusValues: new Set(["active", "closed", "hidden"]),
   },
   taxis: {
     table: taxis,
@@ -617,6 +627,7 @@ const MODERATION_RESOURCES: Record<
       isVerified: taxis.isVerified,
     },
     allowedFields: ["status", "isVerified"],
+    statusValues: new Set(["active", "suspended", "retired"]),
   },
   events: {
     table: events,
@@ -642,6 +653,7 @@ const MODERATION_RESOURCES: Record<
       imageUrl: events.imageUrl,
     },
     allowedFields: ["status", "isVerified", "isFeatured"],
+    statusValues: new Set(["upcoming", "ongoing", "completed", "cancelled", "hidden"]),
   },
   pasop: {
     table: pasopReports,
@@ -660,6 +672,7 @@ const MODERATION_RESOURCES: Record<
       expiresAt: pasopReports.expiresAt,
     },
     allowedFields: ["status"],
+    statusValues: new Set(["active", "expired", "resolved", "hidden"]),
   },
   "route-contributions": {
     table: routeContributions,
@@ -689,6 +702,7 @@ const MODERATION_RESOURCES: Record<
       destinationLongitude: routeContributions.destinationLongitude,
     },
     allowedFields: ["status"],
+    statusValues: new Set(["pending", "approved", "rejected", "hidden"]),
   },
 };
 
@@ -747,9 +761,31 @@ router.put(
 
       const patch: Record<string, any> = {};
       for (const field of cfg.allowedFields) {
-        if (field in req.body) {
-          patch[field] = req.body[field];
+        if (!(field in req.body)) continue;
+        const value = req.body[field];
+
+        if (field === "status") {
+          if (typeof value !== "string") {
+            res.status(400).json({ error: "status must be a string" });
+            return;
+          }
+          if (cfg.statusValues && !cfg.statusValues.has(value)) {
+            res.status(400).json({
+              error: `Invalid status for ${resource}. Allowed: ${Array.from(cfg.statusValues).join(", ")}`,
+            });
+            return;
+          }
+        } else if (field === "isVerified" || field === "isFeatured") {
+          // Strict boolean — reject "true" strings, 1, 0, null, etc.
+          // Previously the ORM would coerce anything and the admin UI
+          // would silently patch rows to unexpected boolean states.
+          if (typeof value !== "boolean") {
+            res.status(400).json({ error: `${field} must be a boolean` });
+            return;
+          }
         }
+
+        patch[field] = value;
       }
 
       if (Object.keys(patch).length === 0) {
