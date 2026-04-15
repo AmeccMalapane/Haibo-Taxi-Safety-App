@@ -2,8 +2,14 @@ import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { verifyToken, AuthPayload } from "../middleware/auth";
 import { db } from "../db";
-import { locationUpdates, driverProfiles } from "../../shared/schema";
-import { eq } from "drizzle-orm";
+import {
+  locationUpdates,
+  driverProfiles,
+  users,
+  groupRides,
+  groupRideParticipants,
+} from "../../shared/schema";
+import { and, eq, or } from "drizzle-orm";
 
 let io: Server | null = null;
 
@@ -48,19 +54,45 @@ export function initRealtime(httpServer: HttpServer): Server {
     transports: ["websocket", "polling"],
   });
 
-  // Auth middleware — verify JWT on connection
-  io.use((socket, next) => {
+  // Auth middleware — verify JWT on connection, then do a single PK
+  // lookup to block suspended accounts. The HTTP authMiddleware does the
+  // same check on every request; without mirroring it here, a user whose
+  // /api/user/delete call just flipped isSuspended=true could keep
+  // connecting on WebSocket until their access token expires (up to 30
+  // days) and keep spamming events, watching map positions, or posting
+  // ride chat. Critical for POPIA erasure — "delete" has to mean the
+  // user stops being able to do anything immediately, not eventually.
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
     if (!token) {
       return next(new Error("Authentication required"));
     }
+    let user: AuthPayload;
     try {
-      const user = verifyToken(token as string);
-      (socket as any).user = user;
-      next();
+      user = verifyToken(token as string);
     } catch {
-      next(new Error("Invalid token"));
+      return next(new Error("Invalid token"));
     }
+
+    try {
+      const [row] = await db
+        .select({ isSuspended: users.isSuspended })
+        .from(users)
+        .where(eq(users.id, user.userId))
+        .limit(1);
+      if (!row) {
+        return next(new Error("Account not found"));
+      }
+      if (row.isSuspended) {
+        return next(new Error("Account suspended"));
+      }
+    } catch (err) {
+      console.error("[WS] Suspension lookup failed:", err);
+      return next(new Error("Authentication check failed"));
+    }
+
+    (socket as any).user = user;
+    next();
   });
 
   io.on("connection", (socket: Socket) => {
@@ -201,15 +233,78 @@ export function initRealtime(httpServer: HttpServer): Server {
     });
 
     // --- Group Ride Chat ---
-    socket.on("ride:join", (rideId: string) => {
+    // Any user who knows a ride UUID could previously join the ride room
+    // and eavesdrop on chat + GPS. Gate both join and message on actual
+    // membership: either the organizer of the ride, or a participant row
+    // for the ride. UUIDs aren't easily guessed but "hard to guess" is
+    // not a security control — check membership properly.
+    async function isRideMember(rideId: string): Promise<boolean> {
+      if (!rideId || typeof rideId !== "string") return false;
+      try {
+        const [organizerHit] = await db
+          .select({ id: groupRides.id })
+          .from(groupRides)
+          .where(
+            and(
+              eq(groupRides.id, rideId),
+              eq(groupRides.organizerId, user.userId),
+            ),
+          )
+          .limit(1);
+        if (organizerHit) return true;
+
+        const [participantHit] = await db
+          .select({ id: groupRideParticipants.id })
+          .from(groupRideParticipants)
+          .where(
+            and(
+              eq(groupRideParticipants.rideId, rideId),
+              eq(groupRideParticipants.userId, user.userId),
+            ),
+          )
+          .limit(1);
+        return Boolean(participantHit);
+      } catch (err) {
+        console.error("[WS] Ride membership check failed:", err);
+        return false;
+      }
+    }
+
+    socket.on("ride:join", async (rideId: string) => {
+      if (!(await isRideMember(rideId))) {
+        socket.emit("error", { event: "ride:join", reason: "Not a member of this ride" });
+        return;
+      }
       socket.join(`ride:${rideId}`);
     });
 
     socket.on("ride:leave", (rideId: string) => {
-      socket.leave(`ride:${rideId}`);
+      if (typeof rideId === "string" && rideId.length > 0) {
+        socket.leave(`ride:${rideId}`);
+      }
     });
 
-    socket.on("ride:message", (data: { rideId: string; message: string }) => {
+    socket.on("ride:message", async (data: { rideId: string; message: string }) => {
+      if (!data || typeof data.rideId !== "string" || typeof data.message !== "string") {
+        return;
+      }
+      // Cap message length to protect the feed read path — same rationale
+      // as the community post caption cap. 1000 chars is plenty for a
+      // group-ride chat message while refusing wall-of-text abuse.
+      if (data.message.length === 0 || data.message.length > 1000) {
+        socket.emit("error", {
+          event: "ride:message",
+          reason: "Message must be 1–1000 characters",
+        });
+        return;
+      }
+      if (!(await isRideMember(data.rideId))) {
+        socket.emit("error", {
+          event: "ride:message",
+          reason: "Not a member of this ride",
+        });
+        return;
+      }
       io?.to(`ride:${data.rideId}`).emit("ride:newMessage", {
         userId: user.userId,
         phone: user.phone,
@@ -222,11 +317,6 @@ export function initRealtime(httpServer: HttpServer): Server {
     socket.on("delivery:track", (deliveryId: string) => {
       socket.join(`delivery:${deliveryId}`);
     });
-
-    // --- Admin room ---
-    if (user.role === "admin") {
-      socket.join("admins");
-    }
 
     // --- Disconnect ---
     socket.on("disconnect", () => {
