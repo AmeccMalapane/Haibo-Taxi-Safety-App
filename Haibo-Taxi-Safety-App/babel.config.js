@@ -15,5 +15,15 @@ module.exports = function (api) {
         },
       ],
     ],
+    env: {
+      production: {
+        // Strip debug-level console calls from release bundles but keep
+        // warn/error so genuine failures still surface in crash reports
+        // and Android Vitals. Safety-relevant logging stays visible.
+        plugins: [
+          ["transform-remove-console", { exclude: ["error", "warn"] }],
+        ],
+      },
+    },
   };
 };

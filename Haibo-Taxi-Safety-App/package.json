@@ -109,6 +109,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "~18.2.45",
     "babel-plugin-module-resolver": "^5.0.2",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "typescript": "^5.9.3"
   },
   "private": true

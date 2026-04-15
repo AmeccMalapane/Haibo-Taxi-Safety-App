@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
+import { apiRequest } from "@/lib/query-client";
 import {
   Spacing,
   BrandColors,
@@ -123,6 +124,86 @@ export default function SettingsScreen() {
 
   const handleContactSupport = () => {
     openExternalUrl(`mailto:${SUPPORT_EMAIL}`, "Contact support");
+  };
+
+  // POPIA §23 — self-service data export. Calls the server endpoint and
+  // shows the inventory summary in a native dialog. Full row-level exports
+  // go through privacy@haibo.africa per the privacy policy.
+  const [isExporting, setIsExporting] = useState(false);
+  const handleExportData = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const data = await apiRequest("/api/user/export", { method: "POST" });
+      const counts = data?.relatedRecordCounts ?? {};
+      const summary = Object.entries(counts)
+        .map(([k, v]) => `• ${k}: ${v}`)
+        .join("\n");
+      Alert.alert(
+        "Your data",
+        `Profile fields returned.\n\nRecord counts:\n${summary}\n\nFor raw row-level exports email ${SUPPORT_EMAIL.replace("support", "privacy")}.`,
+      );
+    } catch (err: any) {
+      Alert.alert(
+        "Couldn't load your data",
+        err?.message || "Please try again or email privacy@haibo.africa.",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // POPIA §24 — self-service erasure. Two-step confirmation so a rage-tap
+  // can't nuke an account. Soft-suspends + anonymizes PII server-side,
+  // then forces a client-side logout.
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete account",
+      "This will permanently lock your account, anonymize your profile, and schedule remaining data for purge within 30 days. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you sure?",
+              "Tap Delete below to permanently close your Haibo! account.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await apiRequest("/api/user/delete", { method: "POST" });
+                      Alert.alert(
+                        "Account closed",
+                        "Your account has been locked and your data scheduled for purge. Signing you out now.",
+                        [
+                          {
+                            text: "OK",
+                            onPress: async () => {
+                              await logout();
+                            },
+                          },
+                        ],
+                      );
+                    } catch (err: any) {
+                      Alert.alert(
+                        "Couldn't delete account",
+                        err?.message ||
+                          "Please try again or email privacy@haibo.africa.",
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleSignOut = () => {
@@ -251,6 +332,37 @@ export default function SettingsScreen() {
               theme={theme}
             />
           </View>
+
+          {/* Your data — POPIA self-service. Only visible when authed
+              because both endpoints require a bearer token. */}
+          {isAuthenticated ? (
+            <>
+              <SectionHeader theme={theme} label="YOUR DATA" />
+              <View
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <SettingRow
+                  icon="download"
+                  label={isExporting ? "Loading your data…" : "Export my data"}
+                  hint="See what we have on file (POPIA §23)"
+                  onPress={handleExportData}
+                  theme={theme}
+                />
+                <Divider theme={theme} />
+                <SettingRow
+                  icon="trash-2"
+                  label="Delete my account"
+                  hint="Lock and anonymize — 30 day purge (POPIA §24)"
+                  onPress={handleDeleteAccount}
+                  theme={theme}
+                  destructive
+                />
+              </View>
+            </>
+          ) : null}
 
           {/* Support */}
           <SectionHeader theme={theme} label="SUPPORT" />
@@ -395,6 +507,7 @@ interface SettingRowProps {
   onValueChange?: (value: boolean) => void;
   onPress?: () => void;
   theme: any;
+  destructive?: boolean;
 }
 
 function SettingRow({
@@ -406,7 +519,11 @@ function SettingRow({
   onValueChange,
   onPress,
   theme,
+  destructive = false,
 }: SettingRowProps) {
+  const accentColor = destructive
+    ? BrandColors.status.emergency
+    : BrandColors.primary.gradientStart;
   return (
     <Pressable
       onPress={type === "link" ? onPress : undefined}
@@ -423,17 +540,20 @@ function SettingRow({
       <View
         style={[
           styles.settingIconContainer,
-          { backgroundColor: BrandColors.primary.gradientStart + "12" },
+          { backgroundColor: accentColor + "12" },
         ]}
       >
-        <Feather
-          name={icon}
-          size={18}
-          color={BrandColors.primary.gradientStart}
-        />
+        <Feather name={icon} size={18} color={accentColor} />
       </View>
       <View style={styles.settingLabelWrap}>
-        <ThemedText style={styles.settingLabel}>{label}</ThemedText>
+        <ThemedText
+          style={[
+            styles.settingLabel,
+            destructive && { color: accentColor },
+          ]}
+        >
+          {label}
+        </ThemedText>
         {hint ? (
           <ThemedText
             style={[styles.settingHint, { color: theme.textSecondary }]}

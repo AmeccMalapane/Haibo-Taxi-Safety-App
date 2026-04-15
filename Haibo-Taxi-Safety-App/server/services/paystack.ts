@@ -5,6 +5,8 @@ const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
 /**
  * Verify Paystack webhook signature (HMAC-SHA512).
+ * Uses timingSafeEqual to avoid exposing secret length via short-circuit
+ * comparison, and guards against length-mismatch throws.
  */
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   if (!PAYSTACK_SECRET || !signature) return false;
@@ -14,7 +16,13 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
     .update(body)
     .digest("hex");
 
-  return hash === signature;
+  if (hash.length !== signature.length) return false;
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
+  } catch {
+    return false;
+  }
 }
 
 /**

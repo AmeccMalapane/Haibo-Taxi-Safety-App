@@ -29,6 +29,7 @@ import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
 import vendorRoutes from "./routes/vendor";
 import uploadRoutes from "./routes/uploads";
+import userRoutes from "./routes/user";
 import { getLocalUploadDir, getLocalUrlPrefix, isAzureConfigured } from "./services/storage";
 
 const app = express();
@@ -62,7 +63,20 @@ app.use(cors({
 
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
-app.use(express.json({ limit: "10mb" }));
+// Capture the raw body alongside the parsed JSON so webhook handlers
+// (Paystack etc.) can compute HMAC signatures against the exact bytes
+// the provider sent. Re-serializing via JSON.stringify reorders keys
+// and breaks signature verification intermittently.
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req: any, _res, buf) => {
+      if (buf && buf.length) {
+        req.rawBody = buf.toString("utf8");
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Apply global rate limit to all /api routes
@@ -106,6 +120,7 @@ app.use("/api/paystack", paystackRoutes);
 app.use("/api/pasop", pasopRoutes);
 app.use("/api/vendor-profile", vendorRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/user", userRoutes);
 
 // Serve locally-stored uploads when the Azure Blob backend is NOT
 // configured. Only registers in local-dev mode so production deploys

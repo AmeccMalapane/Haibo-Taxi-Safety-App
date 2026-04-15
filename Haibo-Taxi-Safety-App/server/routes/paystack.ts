@@ -115,9 +115,17 @@ router.get("/verify/:reference", authMiddleware, async (req: AuthRequest, res: R
 router.post("/webhook", async (req: Request, res: Response) => {
   try {
     const signature = req.headers["x-paystack-signature"] as string;
-    const rawBody = JSON.stringify(req.body);
+    // Raw body captured by the express.json verify callback in index.ts.
+    // Re-serializing req.body would reorder keys and break the HMAC —
+    // signature verification must run against the exact bytes Paystack
+    // sent. If rawBody is somehow missing, fall back gracefully but log.
+    const rawBody = (req as any).rawBody as string | undefined;
+    if (!rawBody) {
+      console.error("[Paystack Webhook] rawBody missing — signature cannot be verified");
+      res.status(400).json({ error: "Missing request body" });
+      return;
+    }
 
-    // Verify webhook signature
     if (!verifyWebhookSignature(rawBody, signature)) {
       console.warn("[Paystack Webhook] Invalid signature — rejected");
       res.status(401).json({ error: "Invalid signature" });

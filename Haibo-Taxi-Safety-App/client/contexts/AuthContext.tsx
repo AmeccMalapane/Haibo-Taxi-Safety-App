@@ -234,7 +234,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { success: true };
     } catch (error: any) {
-      return { success: false, error: "Failed to send OTP. Please try again." };
+      // apiRequest throws `${status}: ${body}` for non-2xx — strip the
+      // status prefix so users see the server's actual reason (e.g. the
+      // 502 message from SMS delivery failures) instead of a generic
+      // "try again". Fall back to the generic string if the shape isn't
+      // what we expect.
+      const raw = String(error?.message || "");
+      const match = raw.match(/^\d+:\s*(\{.*\}|.+)$/);
+      let serverMessage: string | undefined;
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[1]);
+          serverMessage = parsed?.error || parsed?.message;
+        } catch {
+          serverMessage = match[1];
+        }
+      }
+      return {
+        success: false,
+        error: serverMessage || "Failed to send OTP. Please try again.",
+      };
     }
   }, []);
 

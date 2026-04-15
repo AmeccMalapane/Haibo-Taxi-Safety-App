@@ -836,7 +836,7 @@ async function getOrCreateReferralCode(deviceId: string) {
 router.get("/referral/code/:deviceId", async (req, res: Response) => {
   try {
     const row = await getOrCreateReferralCode(req.params.deviceId);
-    const shareBase = process.env.REFERRAL_SHARE_BASE_URL || "https://haibo.africa/r";
+    const shareBase = process.env.REFERRAL_SHARE_BASE_URL || "https://app.haibo.africa/r";
     res.json({
       referralCode: row.code,
       shareLink: `${shareBase}/${row.code}`,

@@ -187,9 +187,11 @@ export default function EmergencyContactsScreen() {
             entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
-            <ThemedText style={styles.heroTitle}>Emergency contacts</ThemedText>
+            <ThemedText style={styles.heroTitle}>Quick-share contacts</ThemedText>
             <ThemedText style={styles.heroSubtitle}>
-              These people get an instant SMS with your live location when you trigger SOS.
+              Saved on this device for one-tap location sharing during an SOS.
+              Your primary emergency contact from your profile is auto-notified
+              by our servers — these extras are for quick manual sharing.
             </ThemedText>
           </Animated.View>
         </View>

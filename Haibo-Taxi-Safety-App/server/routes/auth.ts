@@ -187,8 +187,17 @@ router.post("/send-otp", authRateLimit, otpSendPhoneRateLimit, async (req: Reque
       attempts: 0,
     });
 
-    // Send OTP via Azure Communication Services SMS
-    await sendOtpSms(phone, code);
+    // Send OTP via Azure Communication Services SMS. If delivery fails
+    // we must tell the client — silently claiming success would leave
+    // the user waiting for a code that never arrives.
+    const smsResult = await sendOtpSms(phone, code);
+    if (!smsResult.success) {
+      res.status(502).json({
+        error:
+          "We couldn't deliver the verification SMS. Please check your number or try again in a moment.",
+      });
+      return;
+    }
 
     res.json({ message: "OTP sent successfully", expiresIn: OTP_TTL_MS / 1000 });
   } catch (error: any) {

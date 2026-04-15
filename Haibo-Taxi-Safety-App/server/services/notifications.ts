@@ -90,7 +90,8 @@ export async function notifyUsers(
     ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
     : undefined;
 
-  return await sendMulticastNotification(tokens, title, body, stringData);
+  const result = await sendMulticastNotification(tokens, title, body, stringData);
+  return { sent: result.success, failed: result.failure };
 }
 
 export type SOSSource = "api" | "websocket" | "guest_api";

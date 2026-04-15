@@ -23,18 +23,30 @@ export interface SendSmsResult {
 
 /**
  * Send an OTP code via Azure Communication Services SMS.
- * Falls back to console.log if SMS is not configured.
+ *
+ * In dev (NODE_ENV !== "production") without SMS configured, the code is
+ * logged to stdout as a fallback delivery channel and success is returned
+ * so local testing works. In production, failure returns { success: false }
+ * so the caller can surface a real error instead of silently leaving the
+ * user waiting for a code that never arrives.
  */
 export async function sendOtpSms(phone: string, code: string): Promise<SendSmsResult> {
   const client = getClient();
-
-  // Always log for debugging (remove in production)
-  console.log(`[OTP] Code for ${phone}: ${code}`);
+  const isDev = process.env.NODE_ENV !== "production";
 
   if (!client || !SENDER_NUMBER) {
-    console.warn("[SMS] SMS not configured — OTP logged to console only");
-    console.warn("[SMS] Set AZURE_SMS_SENDER_NUMBER in .env to enable real SMS");
-    return { success: true };
+    if (isDev) {
+      // Dev fallback — stdout is the delivery channel for local testing.
+      // In prod we refuse to fall back: a misconfigured production SMS
+      // pipeline must be visible, not silently degraded.
+      console.log(`[OTP] (dev fallback) Code for ${phone}: ${code}`);
+      console.warn("[SMS] SMS not configured — OTP logged to console only");
+      return { success: true };
+    }
+    console.error(
+      "[SMS] AZURE_COMMUNICATION_CONNECTION_STRING / AZURE_SMS_SENDER_NUMBER missing in production",
+    );
+    return { success: false, error: "SMS delivery not configured" };
   }
 
   try {
@@ -47,15 +59,17 @@ export async function sendOtpSms(phone: string, code: string): Promise<SendSmsRe
     const result = sendResults[0];
 
     if (result.successful) {
+      // Never log the code itself — only the phone + message id. Azure
+      // captures stdout and anyone with log access would otherwise be
+      // able to read OTPs in flight (POPIA leak + credential exposure).
       console.log(`[SMS] OTP sent to ${phone} (messageId: ${result.messageId})`);
       return { success: true };
-    } else {
-      console.error(`[SMS] Failed to send to ${phone}: ${result.errorMessage}`);
-      return { success: true, error: result.errorMessage || undefined };
     }
+    console.error(`[SMS] Failed to send to ${phone}: ${result.errorMessage}`);
+    return { success: false, error: result.errorMessage || "SMS delivery failed" };
   } catch (error: any) {
     console.error(`[SMS] Error sending OTP to ${phone}:`, error.message);
-    return { success: true, error: error.message };
+    return { success: false, error: error.message || "SMS delivery error" };
   }
 }
 
