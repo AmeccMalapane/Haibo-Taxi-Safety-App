@@ -1915,6 +1915,82 @@ router.get(
   }
 );
 
+// GET /api/admin/vendors/:id — full vendor record + a short recent
+// sales feed for the detail drawer. Separate endpoint (rather than
+// bundling into the list query) keeps the list fast; most moderators
+// only open a detail view for the row they want to action.
+router.get(
+  "/vendors/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const [vendor] = await db
+        .select({
+          id: vendorProfiles.id,
+          userId: vendorProfiles.userId,
+          vendorType: vendorProfiles.vendorType,
+          businessName: vendorProfiles.businessName,
+          rankLocation: vendorProfiles.rankLocation,
+          description: vendorProfiles.description,
+          businessImageUrl: vendorProfiles.businessImageUrl,
+          vendorRef: vendorProfiles.vendorRef,
+          status: vendorProfiles.status,
+          salesCount: vendorProfiles.salesCount,
+          totalSales: vendorProfiles.totalSales,
+          reviewedBy: vendorProfiles.reviewedBy,
+          reviewedAt: vendorProfiles.reviewedAt,
+          createdAt: vendorProfiles.createdAt,
+          updatedAt: vendorProfiles.updatedAt,
+          ownerPhone: users.phone,
+          ownerName: users.displayName,
+          ownerRole: users.role,
+          ownerIsSuspended: users.isSuspended,
+        })
+        .from(vendorProfiles)
+        .leftJoin(users, eq(vendorProfiles.userId, users.id))
+        .where(eq(vendorProfiles.id, id))
+        .limit(1);
+
+      if (!vendor) {
+        res.status(404).json({ error: "Vendor not found" });
+        return;
+      }
+
+      // Pull the 10 most recent sales tagged to this vendorRef. We
+      // leftJoin users so the drawer can show buyer display name /
+      // phone next to the amount, same shape as the mobile sales feed.
+      const recentSales = await db
+        .select({
+          id: p2pTransfers.id,
+          amount: p2pTransfers.amount,
+          message: p2pTransfers.message,
+          status: p2pTransfers.status,
+          createdAt: p2pTransfers.createdAt,
+          buyerName: users.displayName,
+          buyerPhone: users.phone,
+        })
+        .from(p2pTransfers)
+        .leftJoin(users, eq(p2pTransfers.senderId, users.id))
+        .where(
+          and(
+            eq(p2pTransfers.vendorRef, vendor.vendorRef),
+            eq(p2pTransfers.status, "completed"),
+          ),
+        )
+        .orderBy(desc(p2pTransfers.createdAt))
+        .limit(10);
+
+      res.json({ data: vendor, recentSales });
+    } catch (error: any) {
+      console.error("Get vendor detail error:", error);
+      res.status(500).json({ error: "Failed to fetch vendor" });
+    }
+  }
+);
+
 // PUT /api/admin/vendors/:id/status — transition a vendor between
 // pending / verified / suspended. Writes review audit columns so
 // we know who last actioned the row.

@@ -325,6 +325,11 @@ export const admin = {
     return request(`/api/admin/vendors${q}`);
   },
 
+  /** Full vendor record plus the 10 most recent completed sales. */
+  async getVendorDetail(vendorId: string) {
+    return request(`/api/admin/vendors/${vendorId}`);
+  },
+
   /** Transition a vendor profile between pending/verified/suspended. */
   async setVendorStatus(vendorId: string, status: "pending" | "verified" | "suspended") {
     return request(`/api/admin/vendors/${vendorId}/status`, {
