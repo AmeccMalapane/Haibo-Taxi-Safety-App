@@ -1076,6 +1076,15 @@ router.get(
 // `amount` is always positive in the request; the server writes a signed
 // walletTransactions row and updates the user's balance in the right
 // direction. Debits are rejected if they would overdraw the wallet.
+//
+// Race-safe: the previous implementation did SELECT current balance,
+// computed a new absolute value client-side, then wrote it back with
+// `set({ walletBalance: newBalance })`. Any concurrent wallet mutation
+// (a topup, a transfer, another admin adjust) landing between the
+// SELECT and the UPDATE would be CLOBBERED — classic lost update bug.
+// Now the balance mutation is a single conditional UPDATE using
+// `walletBalance + signedAmount` SQL math inside a transaction, with
+// `walletBalance >= amount` guard on debit that aborts via row count.
 router.post(
   "/users/:id/wallet/adjust",
   authMiddleware,
@@ -1088,63 +1097,98 @@ router.post(
         reason?: string;
       };
 
-      if (!amount || amount <= 0) {
-        res.status(400).json({ error: "amount must be a positive number" });
+      // Finite, positive, bounded — same rules the wallet routes use
+      // so an admin can't accidentally credit R1e308 and nuke the float
+      // precision on users.walletBalance.
+      if (
+        typeof amount !== "number" ||
+        !Number.isFinite(amount) ||
+        amount <= 0 ||
+        amount > 100_000
+      ) {
+        res.status(400).json({ error: "amount must be a positive number ≤ 100000" });
         return;
       }
       if (direction !== "credit" && direction !== "debit") {
         res.status(400).json({ error: "direction must be 'credit' or 'debit'" });
         return;
       }
-      if (!reason || reason.trim().length < 4) {
-        res
-          .status(400)
-          .json({ error: "reason is required (min 4 chars)" });
+      if (!reason || typeof reason !== "string" || reason.trim().length < 4) {
+        res.status(400).json({ error: "reason is required (min 4 chars)" });
+        return;
+      }
+      if (reason.length > 500) {
+        res.status(400).json({ error: "reason must be ≤ 500 characters" });
         return;
       }
 
-      const [target] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, req.params.id))
-        .limit(1);
+      const signedAmount = direction === "credit" ? amount : -amount;
+      const reasonTrim = reason.trim();
 
-      if (!target) {
+      let txn: typeof walletTransactions.$inferSelect | undefined;
+      let newBalanceOut: number | null = null;
+      let outcome: "ok" | "not_found" | "insufficient" = "not_found";
+
+      await db.transaction(async (tx) => {
+        // Conditional UPDATE is the race guard: for a debit we require
+        // walletBalance >= amount so two concurrent debits can't both
+        // pass the check and drain past zero. returning() lets us read
+        // the fresh post-update balance without a second SELECT.
+        const updated = await tx
+          .update(users)
+          .set({
+            walletBalance: sql`${users.walletBalance} + ${signedAmount}`,
+          })
+          .where(
+            direction === "debit"
+              ? and(
+                  eq(users.id, req.params.id),
+                  sql`${users.walletBalance} >= ${amount}`,
+                )
+              : eq(users.id, req.params.id),
+          )
+          .returning({ newBalance: users.walletBalance });
+
+        if (updated.length === 0) {
+          // Distinguish between "user doesn't exist" and "insufficient
+          // balance" so the admin UI can surface the right error.
+          const [exists] = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.id, req.params.id))
+            .limit(1);
+          outcome = exists ? "insufficient" : "not_found";
+          return;
+        }
+
+        outcome = "ok";
+        newBalanceOut = updated[0].newBalance ?? 0;
+
+        // Signed wallet_transactions row inside the same transaction so
+        // a failed ledger insert rolls back the balance change.
+        const [inserted] = await tx
+          .insert(walletTransactions)
+          .values({
+            userId: req.params.id,
+            type: "adjustment",
+            amount: signedAmount,
+            description: `Admin ${direction}: ${reasonTrim}`,
+            status: "completed",
+          })
+          .returning();
+        txn = inserted;
+      });
+
+      if (outcome === "not_found") {
         res.status(404).json({ error: "User not found" });
         return;
       }
-
-      const currentBalance = target.walletBalance || 0;
-      if (direction === "debit" && currentBalance < amount) {
+      if (outcome === "insufficient") {
         res.status(400).json({
           error: "Insufficient balance — cannot debit more than current balance",
-          currentBalance,
-          requestedDebit: amount,
         });
         return;
       }
-
-      // Signed amount for the wallet_transactions row: credits positive,
-      // debits negative. Matches the existing convention from topups
-      // (+) and withdrawals (-).
-      const signedAmount = direction === "credit" ? amount : -amount;
-      const newBalance = currentBalance + signedAmount;
-
-      await db
-        .update(users)
-        .set({ walletBalance: newBalance })
-        .where(eq(users.id, req.params.id));
-
-      const [txn] = await db
-        .insert(walletTransactions)
-        .values({
-          userId: req.params.id,
-          type: "adjustment",
-          amount: signedAmount,
-          description: `Admin ${direction}: ${reason.trim()}`,
-          status: "completed",
-        })
-        .returning();
 
       await recordAdminAction(
         req,
@@ -1154,10 +1198,9 @@ router.post(
         {
           direction,
           amount,
-          reason: reason.trim(),
-          previousBalance: currentBalance,
-          newBalance,
-        }
+          reason: reasonTrim,
+          newBalance: newBalanceOut,
+        },
       );
 
       try {
@@ -1165,7 +1208,7 @@ router.post(
           userId: req.params.id,
           type: "payment",
           title: direction === "credit" ? "Wallet credited" : "Wallet debited",
-          body: `${direction === "credit" ? "+" : "-"}R${amount.toFixed(2)} — ${reason.trim()}`,
+          body: `${direction === "credit" ? "+" : "-"}R${amount.toFixed(2)} — ${reasonTrim}`,
         });
       } catch (notifyErr) {
         console.log("[Admin] wallet adjust notify failed:", notifyErr);
@@ -1173,7 +1216,7 @@ router.post(
 
       res.json({
         transaction: txn,
-        newBalance,
+        newBalance: newBalanceOut,
       });
     } catch (error: any) {
       console.error("Adjust wallet error:", error);
