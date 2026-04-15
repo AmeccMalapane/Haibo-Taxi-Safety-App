@@ -172,7 +172,7 @@ export function LoginPage() {
           gap: spacing.xs,
           padding: `${spacing.sm}px ${spacing.md}px`,
           borderRadius: radius.full,
-          background: "rgba(255, 255, 255, 0.7)",
+          background: "color-mix(in oklab, var(--card) 75%, transparent)",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           border: `1px solid ${colors.border}`,

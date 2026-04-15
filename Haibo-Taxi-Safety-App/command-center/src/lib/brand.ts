@@ -1,73 +1,129 @@
 /**
- * Command Center brand tokens — mirrors client/constants/theme.ts so the
- * admin UI stays visually consistent with the mobile app.
+ * Command Center brand tokens.
  *
- * Rose was darkened from #E72369 → #C81E5E to meet WCAG AA 4.5:1 on white;
- * gradient end moved from #EA4F52 → #D13A52 for the same reason. Small white
- * bold text on the gradient now passes across the full range.
+ * The deployed reference at app.haibo.africa uses Tailwind v4 with
+ * shadcn-style CSS variables (`--background`, `--foreground`, `--primary`
+ * etc.) and a `.dark` class on `<html>` to flip between light and dark
+ * themes. We mirror that token system here as `var(--name)` strings so
+ * every inline style in the codebase participates in the theme flip
+ * automatically — no React-side re-render needed.
+ *
+ * The literal hex fallbacks are only used when a component reaches for
+ * a brand-specific color the semantic tokens don't expose (e.g.
+ * `colors.haiboPink` for a gradient stop or shadow tint). Everything
+ * else should prefer the semantic tokens (`colors.background`,
+ * `colors.foreground`, etc.) so dark mode just works.
+ *
+ * CSS variable definitions live in `command-center/index.html` inside
+ * the inline `:root` / `html.dark` blocks so the very first paint
+ * respects the persisted theme before React mounts.
  */
 
+// Semantic tokens — values come from CSS variables so `.dark` on <html>
+// flips them automatically. Same names as the deployed reference uses.
 export const colors = {
-  // Rose brand (WCAG AA on white)
-  rose: "#C81E5E",
-  roseDark: "#A01849",
-  roseLight: "#D13A52",
-  roseSoft: "#FCE4EC",
-  roseFaint: "rgba(200, 30, 94, 0.08)",
-  roseAccent: "rgba(200, 30, 94, 0.15)",
+  // shadcn-style semantic tokens
+  background: "var(--background)",
+  foreground: "var(--foreground)",
+  card: "var(--card)",
+  cardForeground: "var(--card-foreground)",
+  popover: "var(--popover)",
+  popoverForeground: "var(--popover-foreground)",
+  primary: "var(--primary)",
+  primaryForeground: "var(--primary-foreground)",
+  secondary: "var(--secondary)",
+  secondaryForeground: "var(--secondary-foreground)",
+  muted: "var(--muted)",
+  mutedForeground: "var(--muted-foreground)",
+  accent: "var(--accent)",
+  accentForeground: "var(--accent-foreground)",
+  destructive: "var(--destructive)",
+  destructiveForeground: "var(--destructive-foreground)",
+  border: "var(--border)",
+  input: "var(--input)",
+  ring: "var(--ring)",
+  sidebarBg: "var(--sidebar)",
+  sidebarFg: "var(--sidebar-foreground)",
+  sidebarBorder: "var(--sidebar-border)",
 
-  // Gradient stops — use via `gradients.primary` below
-  gradientStart: "#C81E5E",
-  gradientEnd: "#D13A52",
+  // Brand-literal hex values — use only for gradient stops, shadow tints,
+  // or anywhere you need a specific swatch rather than the semantic token.
+  // These match the deployed reference's haibo-* custom palette.
+  haiboPink: "#E72369",
+  haiboPinkDark: "#D42281",
+  haiboCoral: "#DD4D57",
+  haiboCoralAccent: "#EA4F52",
+  haiboGold: "#E49E22",
+  haiboError: "#C21725",
+  haiboSuccess: "#2F9F3D",
+  haiboInfo: "#0079B3",
+  haiboDark: "#0C121A",
 
-  // Surfaces
-  bg: "#F5F6F8",
-  surface: "#FFFFFF",
-  surfaceAlt: "#FAFAFB",
-  surfaceElevated: "#FFFFFF",
-  border: "#EEEEEF",
-  borderStrong: "#D9DADD",
+  // Haibo gray scale — used for non-semantic accents (e.g. divider tints).
+  haiboGray100: "#F0F2F4",
+  haiboGray200: "#E7E8EA",
+  haiboGray300: "#D6D7D9",
+  haiboGray400: "#ACAEB1",
+  haiboGray500: "#8D8F92",
+  haiboGray600: "#616366",
+  haiboGray700: "#4B4D50",
 
-  // Sidebar (dark — matches mobile's dark-mode nav tone)
-  sidebarBg: "#1A1A2E",
+  // ─── Back-compat aliases ────────────────────────────────────────────
+  // Older components were written against the previous token names.
+  // Keep them alive as view-through aliases so the refactor doesn't
+  // need a flag-day rewrite of every page; new code should use the
+  // semantic names above.
+  rose: "var(--primary)",
+  roseDark: "#D42281",
+  roseLight: "#EA4F52",
+  roseSoft: "#F5E8EE",
+  roseFaint: "rgba(231, 35, 105, 0.08)",
+  roseAccent: "rgba(231, 35, 105, 0.15)",
+  gradientStart: "#E72369",
+  gradientEnd: "#D42281",
+  bg: "var(--background)",
+  surface: "var(--card)",
+  surfaceAlt: "var(--muted)",
+  surfaceElevated: "var(--card)",
+  borderStrong: "var(--border)",
   sidebarFgDim: "rgba(255, 255, 255, 0.72)",
   sidebarFgFaint: "rgba(255, 255, 255, 0.42)",
-  sidebarDivider: "rgba(255, 255, 255, 0.08)",
-
-  // Text
-  text: "#1A1A1F",
-  textSecondary: "#5A5A62",
-  textTertiary: "#8A8A92",
+  sidebarDivider: "var(--sidebar-border)",
+  text: "var(--foreground)",
+  textSecondary: "var(--muted-foreground)",
+  textTertiary: "var(--muted-foreground)",
   textOnBrand: "#FFFFFF",
 
-  // Status (match mobile BrandColors.status)
-  success: "#2E7D32",
-  successSoft: "#E8F5E9",
-  warning: "#F57F17",
-  warningSoft: "#FFF8E1",
-  danger: "#C62828",
-  dangerSoft: "#FCE4EC",
-  info: "#1565C0",
-  infoSoft: "#E3F2FD",
+  // Status palette (mobile BrandColors.status parity)
+  success: "#2F9F3D",
+  successSoft: "rgba(47, 159, 61, 0.10)",
+  warning: "#E49E22",
+  warningSoft: "rgba(228, 158, 34, 0.10)",
+  danger: "#C21725",
+  dangerSoft: "rgba(194, 23, 37, 0.10)",
+  info: "#0079B3",
+  infoSoft: "rgba(0, 121, 179, 0.10)",
 
-  // Grayscale (mobile BrandColors.gray)
+  // Grayscale (mobile BrandColors.gray) — keep the old names aliased
+  // to the haibo-gray palette so existing components don't break.
   gray50: "#FAFAFA",
-  gray100: "#F5F5F5",
-  gray200: "#EEEEEE",
-  gray300: "#E0E0E0",
-  gray400: "#BDBDBD",
-  gray500: "#9E9E9E",
-  gray600: "#757575",
-  gray700: "#616161",
-  gray800: "#424242",
-  gray900: "#212121",
+  gray100: "#F0F2F4",
+  gray200: "#E7E8EA",
+  gray300: "#D6D7D9",
+  gray400: "#ACAEB1",
+  gray500: "#8D8F92",
+  gray600: "#616366",
+  gray700: "#4B4D50",
+  gray800: "#2A2E33",
+  gray900: "#0C121A",
 } as const;
 
 /** CSS gradient strings — drop straight into `background`. */
 export const gradients = {
-  primary: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)`,
-  primaryReversed: `linear-gradient(135deg, ${colors.gradientEnd} 0%, ${colors.gradientStart} 100%)`,
-  subtle: `linear-gradient(180deg, ${colors.surface} 0%, ${colors.surfaceAlt} 100%)`,
+  primary: `linear-gradient(135deg, ${colors.haiboPink} 0%, ${colors.haiboPinkDark} 100%)`,
+  primaryReversed: `linear-gradient(135deg, ${colors.haiboPinkDark} 0%, ${colors.haiboPink} 100%)`,
+  warm: `linear-gradient(135deg, ${colors.haiboPink} 0%, ${colors.haiboGold} 100%)`,
+  subtle: `linear-gradient(180deg, var(--card) 0%, var(--muted) 100%)`,
 } as const;
 
 /**
@@ -102,19 +158,20 @@ export const radius = {
 } as const;
 
 /**
- * Shadow tokens — tiered elevation + brand-tinted variants for gradient CTAs.
- * Web equivalents of BrandShadows from mobile theme.ts.
+ * Shadow tokens sourced from CSS variables so dark mode can soften them
+ * without touching component code. Brand-tinted variants stay literal
+ * because their color comes from the haibo-pink palette, not the theme.
  */
 export const shadows = {
   none: "none",
-  sm: "0 2px 8px rgba(0, 0, 0, 0.05)",
-  md: "0 4px 12px rgba(0, 0, 0, 0.08)",
-  lg: "0 8px 16px rgba(0, 0, 0, 0.12)",
-  xl: "0 12px 24px rgba(0, 0, 0, 0.18)",
-  brandSm: "0 4px 12px rgba(200, 30, 94, 0.25)",
-  brandLg: "0 8px 20px rgba(200, 30, 94, 0.35)",
-  successLg: "0 8px 20px rgba(46, 125, 50, 0.25)",
-  dangerLg: "0 8px 20px rgba(198, 40, 40, 0.25)",
+  sm: "var(--shadow-sm)",
+  md: "var(--shadow-md)",
+  lg: "var(--shadow-lg)",
+  xl: "var(--shadow-lg)",
+  brandSm: "0 4px 12px rgba(231, 35, 105, 0.25)",
+  brandLg: "var(--shadow-brand)",
+  successLg: "0 8px 20px rgba(47, 159, 61, 0.25)",
+  dangerLg: "0 8px 20px rgba(194, 23, 37, 0.25)",
 } as const;
 
 /**
@@ -127,27 +184,27 @@ export const transitions = {
   fast: "all 0.12s cubic-bezier(0.2, 0.8, 0.4, 1)",
   medium: "all 0.22s cubic-bezier(0.2, 0.8, 0.4, 1)",
   slow: "all 0.35s cubic-bezier(0.2, 0.8, 0.4, 1)",
-  // Specific-property variants for cases where animating `all` would be
-  // too aggressive (e.g., buttons that already have their own internal
-  // style transitions). Use when you want precision.
   transform: "transform 0.12s cubic-bezier(0.2, 0.8, 0.4, 1)",
   color: "color 0.15s, background 0.15s, border-color 0.15s",
 } as const;
 
 /**
- * Font family stacks — Space Grotesk for headings, Inter for body.
- * Matches mobile `Fonts.web` in theme.ts.
+ * Font family stacks — Nunito for body/UI, Space Grotesk for headings,
+ * DM Sans as a friendly variant for marketing surfaces. Matches the
+ * deployed app.haibo.africa reference.
  */
 export const fonts = {
-  sans: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-  heading: "'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif",
+  sans: "'Nunito', 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  body: "'Nunito', 'DM Sans', system-ui, -apple-system, sans-serif",
+  heading: "'Space Grotesk', 'Nunito', system-ui, -apple-system, sans-serif",
+  accent: "'DM Sans', 'Nunito', system-ui, -apple-system, sans-serif",
   mono: "'SFMono-Regular', Menlo, Monaco, Consolas, monospace",
 } as const;
 
 /**
- * Typography tokens — drop-in style objects.
- * Headings use Space Grotesk, body uses Inter. Sizes and weights mirror
- * mobile Typography in theme.ts but scaled up slightly for desktop reading.
+ * Typography tokens — drop-in style objects. Headings use Space Grotesk,
+ * body uses Nunito. Sizes and weights mirror the mobile Typography
+ * tokens but scaled up slightly for desktop reading.
  */
 export const typography = {
   pageTitle: {
@@ -170,7 +227,7 @@ export const typography = {
     color: colors.textTertiary,
     textTransform: "uppercase" as const,
     letterSpacing: 0.8,
-    fontWeight: 600,
+    fontWeight: 700,
   },
   cardValue: {
     fontFamily: fonts.heading,
@@ -194,7 +251,7 @@ export const typography = {
   label: {
     fontFamily: fonts.sans,
     fontSize: 11,
-    fontWeight: 600,
+    fontWeight: 700,
     textTransform: "uppercase" as const,
     letterSpacing: 0.8,
   },

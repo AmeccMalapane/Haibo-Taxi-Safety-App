@@ -11,6 +11,7 @@ import {
   fonts,
 } from "../lib/brand";
 import { auth } from "../api/client";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
@@ -32,7 +33,10 @@ export function PublicNavbar() {
         position: "sticky",
         top: 0,
         zIndex: 50,
-        background: "rgba(255, 255, 255, 0.85)",
+        // Frosted glass overlay on top of whatever the current theme's
+        // background is — works for both light and dark because the
+        // backdrop filter blurs whatever sits behind it.
+        background: "color-mix(in oklab, var(--background) 80%, transparent)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
         borderBottom: `1px solid ${colors.border}`,
@@ -108,6 +112,7 @@ export function PublicNavbar() {
 
         {/* Desktop CTAs */}
         <div className="hb-public-cta" style={{ display: "flex", alignItems: "center", gap: spacing.md }}>
+          <ThemeToggle />
           {isAuthed && isAdmin ? (
             <Link
               to="/admin"

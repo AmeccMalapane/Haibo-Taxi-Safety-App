@@ -79,13 +79,17 @@ export const Colors: { light: Colors; dark: Colors } = {
 
 export const BrandColors = {
   primary: {
-    // Rose darkened from #E72369 → #C81E5E (5.52:1 on white, WCAG AA)
-    // Coral darkened from #EA4F52 → #D13A52 (4.73:1 on white, WCAG AA)
-    // Small white text on the gradient now passes 4.5:1 across its full range.
+    // `red` / `redDark` stay WCAG-safe so small white text on rose surfaces
+    // meets AA 4.5:1. `brandVivid` / `brandVividDark` mirror the deployed
+    // reference (app.haibo.africa) for large decorative surfaces — logos,
+    // hero glows, feature graphics — where the 4.34:1 original passes
+    // "large text" / "graphical" WCAG thresholds.
     gradientStart: "#C81E5E",
     gradientEnd: "#D13A52",
     red: "#C81E5E",
     redDark: "#C62828",
+    brandVivid: "#E72369",
+    brandVividDark: "#D42281",
     blue: "#1976D2",
     blueDark: "#1565C0",
     green: "#388E3C",
@@ -93,8 +97,12 @@ export const BrandColors = {
     orange: "#F57C00",
   },
   gradient: {
+    // Small-text-safe gradient (use on CTAs with labels <18px)
     primary: ["#C81E5E", "#D13A52"] as string[],
     primaryReversed: ["#D13A52", "#C81E5E"] as string[],
+    // Brand-vivid gradient (use on large hero surfaces, splash screens,
+    // feature graphics — NOT on CTAs with small labels)
+    brandVivid: ["#E72369", "#D42281"] as string[],
   },
   secondary: {
     orange: "#F57C00",

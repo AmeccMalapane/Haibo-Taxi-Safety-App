@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#C81E5E" />
+    <meta name="theme-color" content="#E72369" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0C121A" media="(prefers-color-scheme: dark)" />
 
     <!-- Primary meta -->
     <title>Haibo! — Safety for South Africa's taxis</title>
@@ -36,31 +37,152 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Typography matches the deployed app.haibo.africa design language:
+         Nunito for body + UI (primary), Space Grotesk for headings,
+         DM Sans as a friendly body variant for marketing surfaces. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
       rel="stylesheet"
     />
 
+    <!-- Theme bootstrap: read saved preference (or OS) BEFORE React mounts so
+         the first paint matches the persisted theme instead of flashing light
+         and then switching to dark. Writes to <html class="dark"> to match
+         the token system in src/lib/brand.ts and the Tailwind-style dark
+         variant the deployed command-center uses. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("haibo_cc_theme");
+          var prefers = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var theme = stored || (prefers ? "dark" : "light");
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {
+          // ignore — defaults to light
+        }
+      })();
+    </script>
+
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      /* Design tokens — mirror the deployed command-center's shadcn-style
+         token names so every page can reference `var(--background)` etc.
+         and flip with the <html class="dark"> toggle. Colors use hex here
+         for browser compatibility; oklch() equivalents live in the deployed
+         reference but hex renders identically at this precision. */
+      :root {
+        /* Haibo brand (original #E72369 restored from the WCAG-adjusted mobile
+           variant — the command-center isn't a safety app so we can ship the
+           brighter pink on the marketing surfaces). */
+        --haibo-pink: #E72369;
+        --haibo-pink-dark: #D42281;
+        --haibo-coral: #DD4D57;
+        --haibo-coral-accent: #EA4F52;
+        --haibo-gold: #E49E22;
+        --haibo-error: #C21725;
+        --haibo-success: #2F9F3D;
+        --haibo-info: #0079B3;
+        --haibo-dark: #0C121A;
+        --haibo-bg: #FCFBFA;
+
+        /* Haibo gray scale (matches deployed reference). */
+        --haibo-gray-100: #F0F2F4;
+        --haibo-gray-200: #E7E8EA;
+        --haibo-gray-300: #D6D7D9;
+        --haibo-gray-400: #ACAEB1;
+        --haibo-gray-500: #8D8F92;
+        --haibo-gray-600: #616366;
+        --haibo-gray-700: #4B4D50;
+
+        /* shadcn-style semantic tokens — LIGHT theme. */
+        --background: #FCFBFA;
+        --foreground: #0C121A;
+        --card: #FFFFFF;
+        --card-foreground: #0C121A;
+        --popover: #FFFFFF;
+        --popover-foreground: #0C121A;
+        --primary: #E72369;
+        --primary-foreground: #FFFFFF;
+        --secondary: #F0F2F4;
+        --secondary-foreground: #0C121A;
+        --muted: #F0F2F4;
+        --muted-foreground: #616366;
+        --accent: #F5E8EE;
+        --accent-foreground: #0C121A;
+        --destructive: #C21725;
+        --destructive-foreground: #FFFFFF;
+        --border: #E7E8EA;
+        --input: #E7E8EA;
+        --ring: #E72369;
+        --sidebar: #0C121A;
+        --sidebar-foreground: rgba(255, 255, 255, 0.88);
+        --sidebar-border: rgba(255, 255, 255, 0.08);
+
+        /* Gradient + shadow — brand-tinted versions of Tailwind elevation. */
+        --gradient-primary: linear-gradient(135deg, #E72369 0%, #D42281 100%);
+        --gradient-warm: linear-gradient(135deg, #E72369 0%, #E49E22 100%);
+        --shadow-sm: 0 2px 8px rgba(12, 18, 26, 0.06);
+        --shadow-md: 0 4px 12px rgba(12, 18, 26, 0.08);
+        --shadow-lg: 0 8px 16px rgba(12, 18, 26, 0.12);
+        --shadow-brand: 0 8px 20px rgba(231, 35, 105, 0.28);
+      }
+
+      html.dark {
+        /* shadcn-style semantic tokens — DARK theme. Cool-blue-black
+           backgrounds with warm off-white foreground so the pink accent
+           pops without needing to shift hue. Matches the oklch values in
+           the deployed reference translated to hex. */
+        --background: #0C121A;
+        --foreground: #ECEDEE;
+        --card: #141B26;
+        --card-foreground: #ECEDEE;
+        --popover: #141B26;
+        --popover-foreground: #ECEDEE;
+        --primary: #E72369;
+        --primary-foreground: #FFFFFF;
+        --secondary: #1D2530;
+        --secondary-foreground: #ECEDEE;
+        --muted: #1D2530;
+        --muted-foreground: #9BA1A6;
+        --accent: #2A1620;
+        --accent-foreground: #ECEDEE;
+        --destructive: #EF3B4A;
+        --destructive-foreground: #FFFFFF;
+        --border: #252D38;
+        --input: #252D38;
+        --ring: #E72369;
+        --sidebar: #0C121A;
+        --sidebar-foreground: rgba(255, 255, 255, 0.92);
+        --sidebar-border: rgba(255, 255, 255, 0.06);
+
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
+        --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.42);
+        --shadow-brand: 0 8px 20px rgba(231, 35, 105, 0.35);
+      }
+
       html, body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #F5F6F8;
-        color: #1A1A1F;
+        font-family: 'Nunito', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--background);
+        color: var(--foreground);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        transition: background-color 0.25s ease, color 0.25s ease;
       }
       h1, h2, h3, h4, h5, h6 {
-        font-family: 'Space Grotesk', 'Inter', -apple-system, sans-serif;
+        font-family: 'Space Grotesk', 'Nunito', -apple-system, sans-serif;
         letter-spacing: -0.01em;
       }
       input, button, textarea, select {
         font-family: inherit;
       }
       ::selection {
-        background: rgba(200, 30, 94, 0.18);
-        color: #1A1A1F;
+        background: rgba(231, 35, 105, 0.22);
+        color: inherit;
       }
     </style>
   </head>
