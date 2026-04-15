@@ -6,10 +6,13 @@ import {
   Dimensions,
   Pressable,
   ViewToken,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 import type { SvgProps } from "react-native-svg";
 
@@ -18,6 +21,9 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
+
+const PRIVACY_URL = "https://app.haibo.africa/privacy";
+const TERMS_URL = "https://app.haibo.africa/terms";
 
 import SosIllustration from "@/assets/svg/SOS.svg";
 import TaxiStopIllustration from "@/assets/svg/TXISTOP.svg";
@@ -83,6 +89,11 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Consent gate — shown after the marketing slides finish. Non-dismissable:
+  // the only way past is to tick the box. Captures POPIA §11 consent +
+  // doubles as the privacy/terms acceptance Play Store requires.
+  const [consentStep, setConsentStep] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
 
   const handleNext = () => {
@@ -92,14 +103,29 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onComplete();
+      setConsentStep(true);
     }
   };
 
   const handleSkip = () => {
     Haptics.selectionAsync();
+    // Skip jumps past the marketing slides straight to the consent gate,
+    // but cannot bypass consent itself.
+    setConsentStep(true);
+  };
+
+  const handleAcceptAndContinue = () => {
+    if (!consentAccepted) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onComplete();
+  };
+
+  const openPrivacy = () => {
+    WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {});
+  };
+
+  const openTerms = () => {
+    WebBrowser.openBrowserAsync(TERMS_URL).catch(() => {});
   };
 
   const onViewableItemsChanged = useRef(
@@ -142,6 +168,134 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   };
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
+
+  if (consentStep) {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.gradientStage, { height: HERO_HEIGHT + insets.top }]}
+        />
+
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(300)}
+          style={[
+            styles.consentHero,
+            { paddingTop: insets.top + Spacing["3xl"] + Spacing.lg },
+          ]}
+        >
+          <View style={styles.consentIconWrap}>
+            <Feather name="shield" size={56} color="#FFFFFF" />
+          </View>
+          <ThemedText style={styles.consentEyebrow}>ONE QUICK THING</ThemedText>
+        </Animated.View>
+
+        <View
+          style={[
+            styles.consentCard,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+        >
+          <ScrollView
+            contentContainerStyle={styles.consentCardInner}
+            showsVerticalScrollIndicator={false}
+          >
+            <ThemedText style={styles.consentTitle}>
+              Your privacy, your call
+            </ThemedText>
+            <ThemedText
+              style={[styles.consentBody, { color: theme.textSecondary }]}
+            >
+              Haibo! is a safety app, so we take data seriously. Before you get
+              started, please read how we collect and protect your information
+              under South Africa's POPIA, and what you can expect from us.
+            </ThemedText>
+
+            <View style={styles.consentLinkRow}>
+              <Pressable
+                onPress={openPrivacy}
+                accessibilityRole="link"
+                accessibilityLabel="Open privacy policy"
+                style={styles.consentLinkChip}
+              >
+                <ThemedText style={styles.consentLinkText}>
+                  Privacy policy
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={openTerms}
+                accessibilityRole="link"
+                accessibilityLabel="Open terms of service"
+                style={styles.consentLinkChip}
+              >
+                <ThemedText style={styles.consentLinkText}>
+                  Terms of service
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                setConsentAccepted((v) => !v);
+              }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: consentAccepted }}
+              accessibilityLabel="I accept the privacy policy and terms of service"
+              style={styles.consentCheckRow}
+            >
+              <View
+                style={[
+                  styles.consentCheckbox,
+                  {
+                    borderColor: consentAccepted
+                      ? BrandColors.primary.gradientStart
+                      : theme.border,
+                    backgroundColor: consentAccepted
+                      ? BrandColors.primary.gradientStart
+                      : "transparent",
+                  },
+                ]}
+              >
+                {consentAccepted ? (
+                  <Feather name="check" size={16} color="#FFFFFF" />
+                ) : null}
+              </View>
+              <ThemedText
+                style={[
+                  styles.consentCheckLabel,
+                  { color: theme.text },
+                ]}
+              >
+                I've read and accept the Privacy Policy and Terms of Service,
+                and I understand Haibo!'s SOS feature is not a substitute for
+                emergency services.
+              </ThemedText>
+            </Pressable>
+          </ScrollView>
+
+          <View
+            style={[
+              styles.consentFooter,
+              { paddingBottom: insets.bottom + Spacing.xl },
+            ]}
+          >
+            <GradientButton
+              onPress={handleAcceptAndContinue}
+              size="large"
+              disabled={!consentAccepted}
+              icon="check"
+              iconPosition="right"
+            >
+              Get started
+            </GradientButton>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -310,5 +464,100 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
+  },
+  consentHero: {
+    alignItems: "center",
+    paddingBottom: Spacing.xl,
+  },
+  consentIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.32)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  consentEyebrow: {
+    ...Typography.label,
+    color: "#FFFFFF",
+    letterSpacing: 2,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  consentCard: {
+    flex: 1,
+    alignSelf: "stretch",
+    marginTop: -Spacing["2xl"],
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  consentCardInner: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing["3xl"],
+    paddingBottom: Spacing.xl,
+  },
+  consentTitle: {
+    ...Typography.h1,
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  consentBody: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+  },
+  consentLinkRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  consentLinkChip: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: BrandColors.primary.gradientStart,
+  },
+  consentLinkText: {
+    ...Typography.label,
+    color: BrandColors.primary.gradientStart,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  consentCheckRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: "rgba(200, 30, 94, 0.04)",
+  },
+  consentCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  consentCheckLabel: {
+    ...Typography.body,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  consentFooter: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
   },
 });

@@ -136,7 +136,7 @@ export function P2PTransfersPage() {
                 </TD>
                 <TD>
                   <div
-                    onClick={() => navigate(`/users/${t.senderId}/wallet`)}
+                    onClick={() => navigate(`/admin/users/${t.senderId}/wallet`)}
                     style={{
                       cursor: "pointer",
                       display: "inline-block",
@@ -162,7 +162,7 @@ export function P2PTransfersPage() {
                 <TD>
                   {t.recipientId ? (
                     <div
-                      onClick={() => navigate(`/users/${t.recipientId}/wallet`)}
+                      onClick={() => navigate(`/admin/users/${t.recipientId}/wallet`)}
                       style={{ cursor: "pointer", display: "inline-block" }}
                       onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
                       onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}

@@ -493,6 +493,10 @@ export const jobs = {
     const q = category ? `?category=${category}` : "";
     return request(`/api/jobs${q}`);
   },
+
+  async getById(id: string) {
+    return request(`/api/jobs/${id}`);
+  },
 };
 
 // ─── Complaints ──────────────────────────────────────────────────────────────

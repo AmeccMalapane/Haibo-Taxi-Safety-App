@@ -254,14 +254,28 @@ export default function EmergencyScreen() {
             </ThemedText>
           </Animated.View>
         ) : locationDenied ? (
+          // Tappable so the user has a one-tap path to grant permission
+          // mid-SOS — non-negotiable on a safety app, the old pill was
+          // informational-only and left the user stranded.
           <Animated.View
             entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(350)}
-            style={styles.locationPill}
           >
-            <Feather name="alert-circle" size={16} color="#FFFFFF" />
-            <ThemedText style={styles.locationText}>
-              Location unavailable — enable in settings
-            </ThemedText>
+            <Pressable
+              onPress={() => Linking.openSettings()}
+              style={({ pressed }) => [
+                styles.locationPill,
+                styles.locationPillPressable,
+                pressed && styles.locationPillPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Open settings to enable location for SOS"
+            >
+              <Feather name="alert-circle" size={16} color="#FFFFFF" />
+              <ThemedText style={styles.locationText}>
+                Location off — tap to enable in settings
+              </ThemedText>
+              <Feather name="chevron-right" size={16} color="#FFFFFF" />
+            </Pressable>
           </Animated.View>
         ) : (
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(300)} style={styles.locationPill}>
@@ -423,6 +437,15 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     backgroundColor: "rgba(0,0,0,0.2)",
     maxWidth: "100%",
+  },
+  locationPillPressable: {
+    backgroundColor: "rgba(0,0,0,0.32)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  locationPillPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   locationText: {
     ...Typography.small,

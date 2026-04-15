@@ -5,9 +5,9 @@ import {
   explorerProgress, fareSurveys, stopContributions,
   photoContributions, explorerLeaderboard, taxiLocations,
   associations, notifications, referralCodes, referralSignups,
-  referralRewards,
+  referralRewards, taxis, taxiDrivers, driverRatings, driverProfiles,
 } from "../../shared/schema";
-import { eq, desc, sql, count, and } from "drizzle-orm";
+import { eq, desc, sql, count, and, avg } from "drizzle-orm";
 import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
 import { emitToAdmins } from "../services/realtime";
 import { parsePagination, paginationResponse, generateReferralCode } from "../utils/helpers";
@@ -99,6 +99,129 @@ router.get("/complaints", authMiddleware, async (req: AuthRequest, res: Response
   }
 });
 
+// ============ TRIP RATINGS ============
+
+// POST /api/ratings/trip — commuter-facing trip rating.
+//
+// The RatingScreen in mobile collects driver + rank stars plus plate number
+// and free-text context. The existing `/api/drivers/rate` endpoint wants a
+// canonical driverId (UUID), which the commuter doesn't have. This endpoint
+// bridges the two worlds: we accept a plate number, best-effort resolve it
+// to an active driver via the taxi_drivers join, and if we find one we
+// insert into `driver_ratings` and refresh the driver's cached avg. If we
+// can't resolve (unregistered plate, no active driver), we still return 200
+// so the commuter's feedback isn't lost — it's logged server-side for the
+// Taxi Association to review.
+//
+// Rank rating lives in the review text for v1 (no rank_ratings table yet;
+// adding one is a post-launch schema change).
+router.post("/ratings/trip", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      plateNumber,
+      driverRating,
+      rankRating,
+      driverName,
+      location,
+      review,
+    } = req.body as {
+      plateNumber?: string;
+      driverRating?: number;
+      rankRating?: number;
+      driverName?: string;
+      location?: string;
+      review?: string;
+    };
+
+    if (!plateNumber || typeof plateNumber !== "string") {
+      res.status(400).json({ error: "Plate number is required" });
+      return;
+    }
+    if (!driverRating || driverRating < 1 || driverRating > 5) {
+      res.status(400).json({ error: "Driver rating must be between 1 and 5" });
+      return;
+    }
+    if (!rankRating || rankRating < 1 || rankRating > 5) {
+      res.status(400).json({ error: "Rank rating must be between 1 and 5" });
+      return;
+    }
+
+    const normalizedPlate = plateNumber.toUpperCase().replace(/\s+/g, "");
+
+    // Fold rank rating + free-text context into a single review string so
+    // nothing is lost even when we don't have a driver to attach it to.
+    const contextParts: string[] = [`[Rank ${rankRating}/5]`];
+    if (driverName?.trim()) contextParts.push(`driver: ${driverName.trim()}`);
+    if (location?.trim()) contextParts.push(`location: ${location.trim()}`);
+    if (review?.trim()) contextParts.push(review.trim());
+    const enrichedReview = contextParts.join(" · ");
+
+    // Try to resolve plate → taxi → active driver. Uppercase match against
+    // the stored plate_number (which we also uppercase-normalize on insert
+    // in the onboarding flow, but legacy rows may not be normalized — so
+    // match on a case-insensitive comparison instead of a direct equal).
+    const [taxiRow] = await db
+      .select({ id: taxis.id })
+      .from(taxis)
+      .where(sql`UPPER(REPLACE(${taxis.plateNumber}, ' ', '')) = ${normalizedPlate}`)
+      .limit(1);
+
+    let linkedDriverId: string | null = null;
+    if (taxiRow) {
+      const [driverLink] = await db
+        .select({ driverId: taxiDrivers.driverId })
+        .from(taxiDrivers)
+        .where(
+          and(
+            eq(taxiDrivers.taxiId, taxiRow.id),
+            eq(taxiDrivers.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (driverLink) linkedDriverId = driverLink.driverId;
+    }
+
+    if (linkedDriverId) {
+      await db.insert(driverRatings).values({
+        driverId: linkedDriverId,
+        userId: req.user!.userId,
+        rating: driverRating,
+        review: enrichedReview,
+      });
+
+      // Refresh the driver's cached average — same pattern as drivers.ts.
+      const [stats] = await db
+        .select({
+          avgRating: avg(driverRatings.rating),
+          total: count(),
+        })
+        .from(driverRatings)
+        .where(eq(driverRatings.driverId, linkedDriverId));
+
+      await db
+        .update(driverProfiles)
+        .set({
+          safetyRating: Number(stats.avgRating) || 5,
+          totalRatings: stats.total,
+        })
+        .where(eq(driverProfiles.userId, linkedDriverId));
+    } else {
+      // No matching driver — surface to server logs so the Taxi Association
+      // can still mine feedback on unregistered plates during the launch
+      // window. Post-launch this should write to a dedicated unlinked-ratings
+      // table for proper moderation.
+      console.info(
+        `[trip-rating] unlinked feedback from user ${req.user!.userId} for plate ${normalizedPlate}: ${enrichedReview}`,
+      );
+    }
+
+    res.json({ submitted: true, linkedToDriver: Boolean(linkedDriverId) });
+  } catch (error: any) {
+    console.error("Submit trip rating error:", error);
+    res.status(500).json({ error: "Failed to submit rating" });
+  }
+});
+
 // ============ JOBS ============
 
 // GET /api/jobs - List jobs
@@ -129,6 +252,26 @@ router.get("/jobs", async (req, res: Response) => {
   } catch (error: any) {
     console.error("Get jobs error:", error);
     res.status(500).json({ error: "Failed to fetch jobs" });
+  }
+});
+
+// GET /api/jobs/:id - Get a single job listing (public)
+router.get("/jobs/:id", async (req, res: Response) => {
+  try {
+    const result = await db.select().from(jobs).where(eq(jobs.id, req.params.id)).limit(1);
+    if (result.length === 0) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+    // Best-effort view counter — non-fatal if it errors.
+    db.update(jobs)
+      .set({ viewCount: sql`${jobs.viewCount} + 1` })
+      .where(eq(jobs.id, req.params.id))
+      .catch((err) => console.warn("Job view increment failed:", err));
+    res.json(result[0]);
+  } catch (error: any) {
+    console.error("Get job error:", error);
+    res.status(500).json({ error: "Failed to fetch job" });
   }
 });
 

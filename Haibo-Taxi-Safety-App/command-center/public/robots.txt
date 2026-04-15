@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /community
+Allow: /events
+Allow: /jobs
+Allow: /privacy
+Allow: /terms
+
+# Admin shell, auth, and internal APIs — not for crawlers.
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+
+Sitemap: https://app.haibo.africa/sitemap.xml

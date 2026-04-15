@@ -24,6 +24,7 @@
       }
     },
     "android": {
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -98,9 +99,17 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Show current location on map."
+          "locationWhenInUsePermission": "Haibo! uses your location to find nearby taxi ranks, share your position during an SOS alert, and show ride routes on the map."
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Haibo! needs access to your photos so you can upload a profile picture, verification documents, and images for community posts, ratings, and reports.",
+          "cameraPermission": "Haibo! needs access to your camera so you can take a profile picture, capture driver verification documents, and add photos to community posts, ratings, and reports."
+        }
+      ],
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

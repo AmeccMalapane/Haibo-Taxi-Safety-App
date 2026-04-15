@@ -36,6 +36,12 @@ import { registerForPushNotifications, onNotificationReceived, onNotificationTap
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 
 const ONBOARDING_KEY = "@haibo_onboarding_complete";
+// Versioned POPIA consent key. Bump the suffix (e.g. _v2) when the privacy
+// policy or terms change materially so existing users are forced through the
+// onboarding consent gate again. The onboarding marketing slides are tied to
+// this key, so bumping it replays the full flow — acceptable since we'd only
+// bump when users genuinely need to re-read the new policy.
+const CONSENT_KEY = "@haibo_consent_accepted_v1";
 
 // ─── Safe Error Boundary ─────────────────────────────────────────────────────
 type SafeErrorState = { error: Error | null; errorInfo: string };
@@ -125,10 +131,15 @@ function AuthGatedApp() {
 
   const checkOnboardingStatus = async () => {
     try {
-      const hasCompleted = await AsyncStorage.getItem(ONBOARDING_KEY);
-      setShowOnboarding(hasCompleted !== "true");
+      const [hasCompleted, hasConsented] = await Promise.all([
+        AsyncStorage.getItem(ONBOARDING_KEY),
+        AsyncStorage.getItem(CONSENT_KEY),
+      ]);
+      // Both gates must be green. If the privacy policy version is bumped,
+      // CONSENT_KEY changes and the user goes back through onboarding.
+      setShowOnboarding(hasCompleted !== "true" || hasConsented !== "true");
     } catch {
-      setShowOnboarding(false);
+      setShowOnboarding(true);
     } finally {
       setOnboardingChecked(true);
     }
@@ -136,7 +147,12 @@ function AuthGatedApp() {
 
   const handleOnboardingComplete = async () => {
     try {
-      await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+      // Onboarding calls this only after the consent checkbox is ticked,
+      // so writing both keys atomically is correct.
+      await Promise.all([
+        AsyncStorage.setItem(ONBOARDING_KEY, "true"),
+        AsyncStorage.setItem(CONSENT_KEY, "true"),
+      ]);
     } catch (error) {
       console.error("Failed to save onboarding status:", error);
     }

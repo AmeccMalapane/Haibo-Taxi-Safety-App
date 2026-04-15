@@ -239,30 +239,42 @@ export const BorderRadius = {
   full: 9999,
 };
 
+// Android's default `includeFontPadding: true` combined with Space Grotesk's
+// ascender-heavy metrics causes top-clipping on heading text — observed on
+// Profile, City Explorer, Emergency, and Dashboard hero titles. Turning the
+// font padding off and bumping line heights a few pixels gives headings
+// enough headroom to render without the tops of capitals getting clipped.
+const headingAndroidFix =
+  Platform.OS === "android" ? { includeFontPadding: false } : {};
+
 export const Typography = {
   h1: {
     fontSize: 30,
-    lineHeight: 38,
+    lineHeight: 42,
     fontWeight: "700" as const,
     fontFamily: "SpaceGrotesk_700Bold",
+    ...headingAndroidFix,
   },
   h2: {
     fontSize: 26,
-    lineHeight: 34,
+    lineHeight: 38,
     fontWeight: "700" as const,
     fontFamily: "SpaceGrotesk_700Bold",
+    ...headingAndroidFix,
   },
   h3: {
     fontSize: 22,
-    lineHeight: 30,
+    lineHeight: 32,
     fontWeight: "600" as const,
     fontFamily: "SpaceGrotesk_600SemiBold",
+    ...headingAndroidFix,
   },
   h4: {
     fontSize: 18,
-    lineHeight: 26,
+    lineHeight: 28,
     fontWeight: "600" as const,
     fontFamily: "SpaceGrotesk_600SemiBold",
+    ...headingAndroidFix,
   },
   body: {
     fontSize: 15,

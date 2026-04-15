@@ -48,9 +48,9 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 const NOTIFICATIONS_KEY = "@haibo_settings_notifications";
 const LOCATION_KEY = "@haibo_settings_location_sharing";
 
-const PRIVACY_URL = "https://haibo.africa/privacy";
-const TERMS_URL = "https://haibo.africa/terms";
-const HELP_URL = "https://haibo.africa/help";
+const PRIVACY_URL = "https://app.haibo.africa/privacy";
+const TERMS_URL = "https://app.haibo.africa/terms";
+const HELP_URL = "https://app.haibo.africa/help";
 const SUPPORT_EMAIL = "support@haibo.africa";
 
 export default function SettingsScreen() {

@@ -1,74 +1,64 @@
-import React from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  Outlet,
-  useLocation,
-} from "react-router-dom";
+import React, { lazy, Suspense } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import { auth } from "./api/client";
-import { closeSocket } from "./lib/socket";
-import { Sidebar } from "./components/Sidebar";
-import { LoginPage } from "./pages/LoginPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { UsersPage } from "./pages/UsersPage";
-import { ComplaintsPage } from "./pages/ComplaintsPage";
-import { WithdrawalsPage } from "./pages/WithdrawalsPage";
-import { SOSAlertsPage } from "./pages/SOSAlertsPage";
-import { PasopPage } from "./pages/PasopPage";
-import { UserWalletPage } from "./pages/UserWalletPage";
-import { DriversPage } from "./pages/DriversPage";
-import { DriverDetailPage } from "./pages/DriverDetailPage";
-import { BroadcastPage } from "./pages/BroadcastPage";
-import { GroupRidesPage } from "./pages/GroupRidesPage";
-import { DeliveriesPage } from "./pages/DeliveriesPage";
-import { P2PTransfersPage } from "./pages/P2PTransfersPage";
-import { ReferralsPage } from "./pages/ReferralsPage";
-import { ReelsModerationPage } from "./pages/ReelsModerationPage";
-import { LostFoundModerationPage } from "./pages/LostFoundModerationPage";
-import { JobsModerationPage } from "./pages/JobsModerationPage";
-import { RoutesModerationPage } from "./pages/RoutesModerationPage";
-import { VendorsPage } from "./pages/VendorsPage";
-import { ExplorerContributionsPage } from "./pages/ExplorerContributionsPage";
-import { FleetPage } from "./pages/FleetPage";
-import { EventsPage } from "./pages/EventsPage";
-import { AuditLogPage } from "./pages/AuditLogPage";
-import { colors, spacing } from "./lib/brand";
+import { PublicShell } from "./components/PublicShell";
+import { HomePage } from "./pages/public/HomePage";
+import { AboutPage } from "./pages/public/AboutPage";
+import { CommunityPage } from "./pages/public/CommunityPage";
+import { EventsPublicPage } from "./pages/public/EventsPublicPage";
+import { EventDetailPage } from "./pages/public/EventDetailPage";
+import { JobsPublicPage } from "./pages/public/JobsPublicPage";
+import { JobDetailPage } from "./pages/public/JobDetailPage";
+import { PrivacyPage } from "./pages/public/PrivacyPage";
+import { TermsPage } from "./pages/public/TermsPage";
+import { NotFoundPage } from "./pages/public/NotFoundPage";
+import { colors, gradients } from "./lib/brand";
+
+// Admin shell (Sidebar + 23 admin pages + recharts + socket.io) and the
+// login page are both lazy-loaded so public visitors landing at `/` never
+// download any of that code. Vite splits these into their own chunks.
+const AdminApp = lazy(() => import("./admin/AdminApp"));
+const LoginPage = lazy(() =>
+  import("./pages/LoginPage").then((m) => ({ default: m.LoginPage }))
+);
 
 /**
- * Guards the admin shell. Unauthenticated hits are redirected to /login
- * with the intended path in location.state so LoginPage can return the user
- * to where they were going after a successful sign-in.
+ * Full-page spinner used while a lazy route chunk is still downloading.
+ * Matches the mobile app's brand gradient so the transition feels like
+ * Haibo! rather than a generic React fallback.
  */
-function ProtectedShell() {
-  const location = useLocation();
-  if (!auth.isAuthenticated()) {
-    closeSocket();
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-  const user = auth.getUser();
-  if (user?.role && user.role !== "admin") {
-    // Non-admin session — sign out and bounce.
-    closeSocket();
-    auth.logout();
-    return null;
-  }
-
+function RouteSpinner() {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", background: colors.bg }}>
-      <Sidebar />
-      <main
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: colors.bg,
+      }}
+    >
+      <div
+        aria-label="Loading"
+        role="status"
         style={{
-          flex: 1,
-          padding: spacing["2xl"],
-          overflowY: "auto",
-          color: colors.text,
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          border: `3px solid ${colors.border}`,
+          borderTopColor: "transparent",
+          background: gradients.primary,
+          WebkitMask:
+            "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))",
+          mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))",
+          animation: "hb-route-spin 0.9s linear infinite",
         }}
-      >
-        <Outlet />
-      </main>
+      />
+      <style>{`
+        @keyframes hb-route-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -76,35 +66,32 @@ function ProtectedShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedShell />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="/sos" element={<SOSAlertsPage />} />
-          <Route path="/withdrawals" element={<WithdrawalsPage />} />
-          <Route path="/p2p-transfers" element={<P2PTransfersPage />} />
-          <Route path="/complaints" element={<ComplaintsPage />} />
-          <Route path="/broadcast" element={<BroadcastPage />} />
-          <Route path="/moderation/pasop" element={<PasopPage />} />
-          <Route path="/moderation/routes" element={<RoutesModerationPage />} />
-          <Route path="/moderation/reels" element={<ReelsModerationPage />} />
-          <Route path="/moderation/lost-found" element={<LostFoundModerationPage />} />
-          <Route path="/moderation/jobs" element={<JobsModerationPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/users/:userId/wallet" element={<UserWalletPage />} />
-          <Route path="/drivers" element={<DriversPage />} />
-          <Route path="/drivers/:driverId" element={<DriverDetailPage />} />
-          <Route path="/fleet" element={<FleetPage />} />
-          <Route path="/group-rides" element={<GroupRidesPage />} />
-          <Route path="/deliveries" element={<DeliveriesPage />} />
-          <Route path="/events" element={<EventsPage />} />
-          <Route path="/referrals" element={<ReferralsPage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/explorer" element={<ExplorerContributionsPage />} />
-          <Route path="/audit-log" element={<AuditLogPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteSpinner />}>
+        <Routes>
+          {/* Public marketing site */}
+          <Route element={<PublicShell />}>
+            <Route index element={<HomePage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/events" element={<EventsPublicPage />} />
+            <Route path="/events/:eventId" element={<EventDetailPage />} />
+            <Route path="/jobs" element={<JobsPublicPage />} />
+            <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            {/* Stray public URLs get a branded 404 inside the public shell
+                rather than silently redirecting — keeps navbar/footer so the
+                user has an obvious way out. */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+
+          {/* Auth — lazy so public visitors don't pay for it */}
+          <Route path="/login" element={<LoginPage />} />
+
+          {/* Command Center (admin only) — entire shell lazy-loaded */}
+          <Route path="/admin/*" element={<AdminApp />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

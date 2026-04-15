@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { auth } from "../api/client";
 import { Button } from "../components/Button";
 import {
@@ -18,7 +19,7 @@ type PhoneStep = "enter" | "verify";
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string })?.from || "/";
+  const from = (location.state as { from?: string })?.from || "/admin";
 
   const [mode, setMode] = useState<Mode>("email");
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +141,34 @@ export function LoginPage() {
           pointerEvents: "none",
         }}
       />
+
+      {/* Escape hatch back to the public marketing site — without it the
+          login page is a dead end for anyone who landed here by mistake. */}
+      <Link
+        to="/"
+        style={{
+          position: "absolute",
+          top: spacing.xl,
+          left: spacing.xl,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: spacing.xs,
+          padding: `${spacing.sm}px ${spacing.md}px`,
+          borderRadius: radius.full,
+          background: "rgba(255, 255, 255, 0.7)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          border: `1px solid ${colors.border}`,
+          color: colors.textSecondary,
+          fontSize: 12,
+          fontWeight: 600,
+          textDecoration: "none",
+          zIndex: 2,
+          transition: transitions.medium,
+        }}
+      >
+        <ArrowLeft size={14} /> Back to Haibo!
+      </Link>
 
       <div
         style={{

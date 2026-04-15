@@ -39,33 +39,33 @@ interface NavItem {
 const navItems: NavItem[] = [
   // Ops — urgent daily surfaces. SOS is first because it's the most
   // time-sensitive surface in the whole app.
-  { to: "/", label: "Dashboard", Icon: LayoutGrid, section: "Ops" },
-  { to: "/sos", label: "SOS alerts", Icon: AlertOctagon, section: "Ops" },
-  { to: "/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
-  { to: "/p2p-transfers", label: "Peer transfers", Icon: Send, section: "Ops" },
-  { to: "/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
-  { to: "/broadcast", label: "Broadcast", Icon: Megaphone, section: "Ops" },
+  { to: "/admin", label: "Dashboard", Icon: LayoutGrid, section: "Ops" },
+  { to: "/admin/sos", label: "SOS alerts", Icon: AlertOctagon, section: "Ops" },
+  { to: "/admin/withdrawals", label: "Withdrawals", Icon: Banknote, section: "Ops" },
+  { to: "/admin/p2p-transfers", label: "Peer transfers", Icon: Send, section: "Ops" },
+  { to: "/admin/complaints", label: "Complaints", Icon: AlertTriangle, section: "Ops" },
+  { to: "/admin/broadcast", label: "Broadcast", Icon: Megaphone, section: "Ops" },
 
   // Moderation — content + person review
-  { to: "/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
-  { to: "/drivers", label: "Driver KYC", Icon: BadgeCheck, section: "Moderation" },
-  { to: "/vendors", label: "Vault vendors", Icon: Store, section: "Moderation" },
-  { to: "/moderation/routes", label: "Routes", Icon: Route, section: "Moderation" },
-  { to: "/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
-  { to: "/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
-  { to: "/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
+  { to: "/admin/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
+  { to: "/admin/drivers", label: "Driver KYC", Icon: BadgeCheck, section: "Moderation" },
+  { to: "/admin/vendors", label: "Vault vendors", Icon: Store, section: "Moderation" },
+  { to: "/admin/moderation/routes", label: "Routes", Icon: Route, section: "Moderation" },
+  { to: "/admin/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
+  { to: "/admin/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
+  { to: "/admin/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
 
   // Directory — reference
-  { to: "/users", label: "Users", Icon: Users, section: "Directory" },
-  { to: "/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
-  { to: "/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
-  { to: "/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },
-  { to: "/events", label: "Events", Icon: Calendar, section: "Directory" },
-  { to: "/referrals", label: "Referrals", Icon: Gift, section: "Directory" },
-  { to: "/explorer", label: "City Explorer", Icon: Compass, section: "Directory" },
+  { to: "/admin/users", label: "Users", Icon: Users, section: "Directory" },
+  { to: "/admin/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
+  { to: "/admin/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
+  { to: "/admin/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },
+  { to: "/admin/events", label: "Events", Icon: Calendar, section: "Directory" },
+  { to: "/admin/referrals", label: "Referrals", Icon: Gift, section: "Directory" },
+  { to: "/admin/explorer", label: "City Explorer", Icon: Compass, section: "Directory" },
 
   // System — who did what
-  { to: "/audit-log", label: "Audit log", Icon: ScrollText, section: "System" },
+  { to: "/admin/audit-log", label: "Audit log", Icon: ScrollText, section: "System" },
 ];
 
 export function Sidebar() {
@@ -160,7 +160,7 @@ export function Sidebar() {
               ) : null}
               <NavLink
                 to={to}
-                end={to === "/"}
+                end={to === "/admin"}
                 className="cc-nav-link"
                 style={({ isActive }) => ({
                   display: "flex",

@@ -160,7 +160,7 @@ export function DriversPage() {
               return (
                 <tr
                   key={d.id}
-                  onClick={() => navigate(`/drivers/${d.id}`)}
+                  onClick={() => navigate(`/admin/drivers/${d.id}`)}
                   style={{ cursor: "pointer" }}
                   onMouseEnter={(e) =>
                     (e.currentTarget.style.background = colors.surfaceAlt)

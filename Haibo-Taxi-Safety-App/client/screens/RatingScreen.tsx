@@ -7,14 +7,32 @@ import {
   TextInput,
   Image,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { useMutation } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/hooks/useTheme";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { apiRequest } from "@/lib/query-client";
+
+interface TripRatingPayload {
+  plateNumber: string;
+  driverRating: number;
+  rankRating: number;
+  driverName?: string;
+  location?: string;
+  review?: string;
+}
+
+interface TripRatingResponse {
+  submitted: boolean;
+  linkedToDriver: boolean;
+}
 
 interface StarRatingProps {
   rating: number;
@@ -46,13 +64,37 @@ function StarRating({ rating, onRatingChange, label }: StarRatingProps) {
 export default function RatingScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  
+  const navigation = useNavigation();
+
   const [driverRating, setDriverRating] = useState(0);
   const [rankRating, setRankRating] = useState(0);
   const [plateNumber, setPlateNumber] = useState("");
   const [driverName, setDriverName] = useState("");
   const [location, setLocation] = useState("");
   const [image, setImage] = useState<string | null>(null);
+
+  const submitMutation = useMutation<TripRatingResponse, Error, TripRatingPayload>({
+    mutationFn: (payload) =>
+      apiRequest("/api/ratings/trip", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data) => {
+      Alert.alert(
+        "Thank You!",
+        data.linkedToDriver
+          ? "Your feedback has been submitted and linked to the driver's record."
+          : "Your feedback has been submitted to the Taxi Association.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
+    },
+    onError: (error) => {
+      Alert.alert(
+        "Submission failed",
+        error.message || "We couldn't send your rating. Please try again.",
+      );
+    },
+  });
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -86,12 +128,20 @@ export default function RatingScreen() {
   };
 
   const handleSubmit = () => {
-    if (driverRating === 0 || rankRating === 0 || !plateNumber) {
-      Alert.alert("Incomplete", "Please provide a rating and the taxi plate number.");
+    if (driverRating === 0 || rankRating === 0 || !plateNumber.trim()) {
+      Alert.alert(
+        "Incomplete",
+        "Please rate the driver, rate the rank, and enter the taxi plate number.",
+      );
       return;
     }
-    // Logic to send to Association Dashboard would go here
-    Alert.alert("Thank You!", "Your feedback has been submitted to the Taxi Association.");
+    submitMutation.mutate({
+      plateNumber: plateNumber.trim(),
+      driverRating,
+      rankRating,
+      driverName: driverName.trim() || undefined,
+      location: location.trim() || undefined,
+    });
   };
 
   return (
@@ -187,8 +237,19 @@ export default function RatingScreen() {
           </View>
         </View>
 
-        <Pressable style={styles.submitButton} onPress={handleSubmit}>
-          <ThemedText style={styles.submitButtonText}>Submit Feedback</ThemedText>
+        <Pressable
+          style={[
+            styles.submitButton,
+            submitMutation.isPending && styles.submitButtonDisabled,
+          ]}
+          onPress={handleSubmit}
+          disabled={submitMutation.isPending}
+        >
+          {submitMutation.isPending ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <ThemedText style={styles.submitButtonText}>Submit Feedback</ThemedText>
+          )}
         </Pressable>
       </ScrollView>
     </ThemedView>
@@ -325,5 +386,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "700",
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
 });

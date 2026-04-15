@@ -100,7 +100,7 @@ export function UsersPage() {
               return (
                 <tr
                   key={u.id}
-                  onClick={() => navigate(`/users/${u.id}/wallet`)}
+                  onClick={() => navigate(`/admin/users/${u.id}/wallet`)}
                   style={{
                     cursor: "pointer",
                     opacity: suspended ? 0.72 : 1,

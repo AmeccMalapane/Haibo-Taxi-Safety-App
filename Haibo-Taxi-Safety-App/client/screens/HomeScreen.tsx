@@ -486,6 +486,18 @@ export default function HomeScreen() {
     setPinnedLocation(null);
   };
 
+  // Flies the map camera back to the user's current GPS fix. If we don't
+  // have a location fix (permission denied, still acquiring), the button
+  // is hidden entirely so it never becomes a dead tap.
+  const handleRecenterMap = () => {
+    if (!userLocation) return;
+    triggerHaptic("light");
+    mapRef.current?.flyTo?.(
+      [userLocation.coords.longitude, userLocation.coords.latitude],
+      15,
+    );
+  };
+
   const handleMapLongPress = (event: { coordinate: { latitude: number; longitude: number } }) => {
     triggerHaptic("medium");
     setPinnedLocation(event.coordinate);
@@ -646,6 +658,42 @@ export default function HomeScreen() {
           />
         )}
 
+        {/* Recenter-to-current-location floating button. Right-edge, sits
+            above the collapsed nearby-ranks tray. Hidden while a rank or
+            route detail overlay is up so it doesn't fight for attention,
+            and hidden until we have a GPS fix so it can't be a dead tap. */}
+        {userLocation && !selectedRank && !selectedRoute ? (
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+            style={[
+              styles.recenterFab,
+              {
+                bottom:
+                  tabBarHeight +
+                  220 +
+                  Spacing.md +
+                  (mapShowPasopPins ? 60 : 0),
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={handleRecenterMap}
+              accessibilityRole="button"
+              accessibilityLabel="Recenter map on my location"
+              style={styles.recenterFabInner}
+              hitSlop={8}
+            >
+              <Feather
+                name="navigation"
+                size={20}
+                color={BrandColors.primary.gradientStart}
+              />
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* Floating "+ Report" FAB — only visible when the Pasop layer is on */}
         {mapShowPasopPins ? (
           <Animated.View
@@ -761,20 +809,38 @@ export default function HomeScreen() {
                 </ThemedText>
               </View>
             </View>
-            <Pressable
-              onPress={() => toggleSheet()}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isSheetExpanded ? "Collapse rank list" : "Expand rank list"
-              }
-            >
-              <Feather
-                name={isSheetExpanded ? "chevron-down" : "chevron-up"}
-                size={22}
-                color={theme.textSecondary}
-              />
-            </Pressable>
+            <View style={styles.sheetHeaderActions}>
+              <Pressable
+                onPress={handleAddLocation}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Add a new taxi rank or stop"
+                style={[
+                  styles.sheetAddRankButton,
+                  { backgroundColor: BrandColors.primary.gradientStart + "15" },
+                ]}
+              >
+                <Feather
+                  name="plus"
+                  size={16}
+                  color={BrandColors.primary.gradientStart}
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => toggleSheet()}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isSheetExpanded ? "Collapse rank list" : "Expand rank list"
+                }
+              >
+                <Feather
+                  name={isSheetExpanded ? "chevron-down" : "chevron-up"}
+                  size={22}
+                  color={theme.textSecondary}
+                />
+              </Pressable>
+            </View>
           </View>
 
           <View
@@ -982,6 +1048,37 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     zIndex: 5,
+  },
+  recenterFab: {
+    position: "absolute",
+    right: Spacing.lg,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+    zIndex: 5,
+  },
+  recenterFabInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  sheetAddRankButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pasopFabInner: {
     flexDirection: "row",

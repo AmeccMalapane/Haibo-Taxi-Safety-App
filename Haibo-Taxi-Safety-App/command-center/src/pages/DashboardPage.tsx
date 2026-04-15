@@ -55,7 +55,7 @@ export function DashboardPage() {
             duration: 15_000,
             action: {
               label: "View",
-              onClick: () => navigate("/sos"),
+              onClick: () => navigate("/admin/sos"),
             },
           }
         );
