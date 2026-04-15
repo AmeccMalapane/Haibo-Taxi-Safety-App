@@ -26,7 +26,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
-import { useWalletBalance, useWalletTransactions } from "@/hooks/useApiData";
+import {
+  useWalletBalance,
+  useWalletTransactions,
+  useMyWithdrawals,
+  type MyWithdrawalRow,
+} from "@/hooks/useApiData";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { getWalletBalance, getTransactions } from "@/lib/storage";
@@ -56,6 +61,9 @@ export default function WalletScreen() {
   const { isAuthenticated, user } = useAuth();
   const { data: apiBalance, refetch: refetchBalance } = useWalletBalance();
   const { data: apiTransactions, refetch: refetchTransactions } = useWalletTransactions();
+  const { data: withdrawalsData, refetch: refetchWithdrawals } = useMyWithdrawals();
+  const withdrawals: MyWithdrawalRow[] = withdrawalsData?.data || [];
+  const [withdrawalsExpanded, setWithdrawalsExpanded] = useState(false);
 
   const [balance, setBalance] = useState<WalletBalance>({
     amount: 0,
@@ -102,13 +110,14 @@ export default function WalletScreen() {
     if (isAuthenticated && getApiUrl()) {
       refetchBalance();
       refetchTransactions();
+      refetchWithdrawals();
     } else {
       const savedBalance = await getWalletBalance();
       const savedTransactions = await getTransactions();
       setBalance(savedBalance);
       setTransactions(savedTransactions);
     }
-  }, [isAuthenticated, refetchBalance, refetchTransactions]);
+  }, [isAuthenticated, refetchBalance, refetchTransactions, refetchWithdrawals]);
 
   const refreshPaystackStatus = useCallback(async () => {
     setPaystackConfigured(await checkPaystackStatus());
@@ -726,6 +735,26 @@ export default function WalletScreen() {
           </Animated.View>
         )}
 
+        {/* Withdrawals status strip — only renders when the user has
+            at least one withdrawal request on file. The endpoint
+            (/api/wallet/withdrawals/me) is the canonical source of
+            truth for approve/reject decisions that arrive via FCM; if
+            a push drops, the user can still pull down to refresh and
+            see the current status. Collapsed view shows per-status
+            chip counts; expanded view lists each request with its
+            bank, amount, timestamp, and rejection reason if any. */}
+        {isAuthenticated && withdrawals.length > 0 ? (
+          <WithdrawalsStatusStrip
+            withdrawals={withdrawals}
+            expanded={withdrawalsExpanded}
+            onToggle={() => {
+              triggerHaptic("selection");
+              setWithdrawalsExpanded((e) => !e);
+            }}
+            theme={theme}
+          />
+        ) : null}
+
         {/* Recent activity — always visible, expands on "History" */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeInUp.duration(500).delay(300)}
@@ -919,6 +948,180 @@ function TransactionRow({
         </ThemedText>
       </View>
     </Animated.View>
+  );
+}
+
+// Status-aware pill metadata. "approved" and "processing" both mean
+// ops has cleared the EFT but the bank hasn't confirmed receipt yet;
+// we group them under a single "approved" chip to keep the summary
+// row tight — the expanded list still shows the specific stage.
+const WITHDRAWAL_STATUS_META: Record<
+  string,
+  { label: string; tint: string; icon: keyof typeof Feather.glyphMap }
+> = {
+  pending: { label: "Pending", tint: BrandColors.status.warning, icon: "clock" },
+  approved: { label: "Approved", tint: BrandColors.status.info, icon: "check-circle" },
+  processing: { label: "Processing", tint: BrandColors.status.info, icon: "loader" },
+  completed: { label: "Completed", tint: BrandColors.status.success, icon: "check-circle" },
+  rejected: { label: "Rejected", tint: BrandColors.status.emergency, icon: "x-circle" },
+};
+
+function formatWithdrawalTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function WithdrawalsStatusStrip({
+  withdrawals,
+  expanded,
+  onToggle,
+  theme,
+}: {
+  withdrawals: MyWithdrawalRow[];
+  expanded: boolean;
+  onToggle: () => void;
+  theme: any;
+}) {
+  // Count by collapsed status buckets. "approved" absorbs processing
+  // so the summary reads as 3 chips max (pending / approved / rejected)
+  // rather than 5 — same bucketing the status meta uses for display
+  // tint, inverse for the chip count.
+  const counts = withdrawals.reduce(
+    (acc, w) => {
+      if (w.status === "pending") acc.pending += 1;
+      else if (w.status === "rejected") acc.rejected += 1;
+      else if (w.status === "completed") acc.completed += 1;
+      else acc.approved += 1;
+      return acc;
+    },
+    { pending: 0, approved: 0, completed: 0, rejected: 0 },
+  );
+
+  return (
+    <Animated.View
+      entering={FadeInUp.duration(400).delay(250)}
+      style={styles.withdrawalsSection}
+    >
+      <Pressable
+        onPress={onToggle}
+        style={styles.withdrawalsHeader}
+        accessibilityRole="button"
+        accessibilityLabel={
+          expanded ? "Collapse withdrawal status" : "Expand withdrawal status"
+        }
+      >
+        <ThemedText style={styles.activityTitle}>Withdrawals</ThemedText>
+        <Feather
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={20}
+          color={theme.textSecondary}
+        />
+      </Pressable>
+
+      <View style={styles.withdrawalChipsRow}>
+        {counts.pending > 0 ? (
+          <StatusChip
+            label={`${counts.pending} pending`}
+            tint={BrandColors.status.warning}
+          />
+        ) : null}
+        {counts.approved > 0 ? (
+          <StatusChip
+            label={`${counts.approved} approved`}
+            tint={BrandColors.status.info}
+          />
+        ) : null}
+        {counts.completed > 0 ? (
+          <StatusChip
+            label={`${counts.completed} completed`}
+            tint={BrandColors.status.success}
+          />
+        ) : null}
+        {counts.rejected > 0 ? (
+          <StatusChip
+            label={`${counts.rejected} rejected`}
+            tint={BrandColors.status.emergency}
+          />
+        ) : null}
+      </View>
+
+      {expanded ? (
+        <View style={styles.withdrawalsList}>
+          {withdrawals.map((w) => {
+            const meta =
+              WITHDRAWAL_STATUS_META[w.status] ||
+              WITHDRAWAL_STATUS_META.pending;
+            return (
+              <View
+                key={w.id}
+                style={[
+                  styles.withdrawalRow,
+                  { borderLeftColor: meta.tint },
+                ]}
+              >
+                <View style={styles.withdrawalRowMain}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <ThemedText style={styles.withdrawalAmount}>
+                      R{Number(w.amount).toFixed(2)}
+                    </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.withdrawalMeta,
+                        { color: theme.textSecondary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {w.bankCode} · ····{w.accountNumber.slice(-4)} ·{" "}
+                      {formatWithdrawalTime(w.requestedAt)}
+                    </ThemedText>
+                  </View>
+                  <View
+                    style={[
+                      styles.withdrawalStatusPill,
+                      { backgroundColor: `${meta.tint}18` },
+                    ]}
+                  >
+                    <Feather name={meta.icon} size={11} color={meta.tint} />
+                    <ThemedText
+                      style={[styles.withdrawalStatusText, { color: meta.tint }]}
+                    >
+                      {meta.label}
+                    </ThemedText>
+                  </View>
+                </View>
+                {w.status === "rejected" && w.rejectionReason ? (
+                  <ThemedText
+                    style={[
+                      styles.withdrawalReason,
+                      { color: BrandColors.status.emergency },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {w.rejectionReason}
+                  </ThemedText>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+function StatusChip({ label, tint }: { label: string; tint: string }) {
+  return (
+    <View style={[styles.statusChip, { backgroundColor: `${tint}18` }]}>
+      <View style={[styles.statusChipDot, { backgroundColor: tint }]} />
+      <ThemedText style={[styles.statusChipText, { color: tint }]}>
+        {label}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -1172,6 +1375,89 @@ const styles = StyleSheet.create({
   },
   formCta: {
     marginTop: Spacing.lg,
+  },
+
+  // Withdrawals strip
+  withdrawalsSection: {
+    marginTop: Spacing.md,
+  },
+  withdrawalsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 2,
+  },
+  withdrawalChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  statusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  statusChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusChipText: {
+    ...Typography.label,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  withdrawalsList: {
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  withdrawalRow: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderLeftWidth: 3,
+    borderRadius: BorderRadius.xs,
+    backgroundColor: "rgba(0,0,0,0.02)",
+  },
+  withdrawalRowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  withdrawalAmount: {
+    ...Typography.body,
+    fontSize: 15,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  withdrawalMeta: {
+    ...Typography.label,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  withdrawalStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.full,
+  },
+  withdrawalStatusText: {
+    ...Typography.label,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  withdrawalReason: {
+    ...Typography.label,
+    fontSize: 11,
+    marginTop: 6,
+    fontStyle: "italic",
   },
 
   // Activity section

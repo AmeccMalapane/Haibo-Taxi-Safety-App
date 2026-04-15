@@ -426,6 +426,44 @@ router.post("/withdraw", authMiddleware, sensitiveRateLimit, async (req: AuthReq
   }
 });
 
+// GET /api/wallet/withdrawals/me — list the caller's own withdrawal
+// requests so the mobile wallet can show a status strip (pending /
+// approved / rejected) while they wait for the EFT to clear. Ops
+// approves via /api/admin/withdrawals which fires a notifyUser push,
+// but push delivery is fragile (FCM token rot, permission revoked)
+// so this endpoint is the canonical source of truth the client can
+// always pull on refresh.
+router.get("/withdrawals/me", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const rawLimit = Number((req.query as any).limit) || 20;
+    const limit = Math.min(Math.max(rawLimit, 1), 50);
+
+    const rows = await db
+      .select({
+        id: withdrawalRequests.id,
+        amount: withdrawalRequests.amount,
+        status: withdrawalRequests.status,
+        bankCode: withdrawalRequests.bankCode,
+        accountNumber: withdrawalRequests.accountNumber,
+        accountName: withdrawalRequests.accountName,
+        narration: withdrawalRequests.narration,
+        requestedAt: withdrawalRequests.requestedAt,
+        approvedAt: withdrawalRequests.approvedAt,
+        completedAt: withdrawalRequests.completedAt,
+        rejectionReason: withdrawalRequests.rejectionReason,
+      })
+      .from(withdrawalRequests)
+      .where(eq(withdrawalRequests.userId, req.user!.userId))
+      .orderBy(desc(withdrawalRequests.requestedAt))
+      .limit(limit);
+
+    res.json({ data: rows });
+  } catch (error: any) {
+    console.error("Get own withdrawals error:", error);
+    res.status(500).json({ error: "Failed to fetch withdrawals" });
+  }
+});
+
 // GET /api/wallet/payment-methods - List payment methods
 router.get("/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

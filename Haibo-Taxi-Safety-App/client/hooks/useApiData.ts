@@ -245,3 +245,31 @@ export function useWalletTransactions() {
     staleTime: 60 * 1000,
   });
 }
+
+// Withdrawal requests filed by the current user. The mobile wallet
+// polls this on focus so the status strip reflects ops' approve/reject
+// decisions even when the FCM push ping got dropped.
+export interface MyWithdrawalRow {
+  id: string;
+  amount: number;
+  status: "pending" | "approved" | "processing" | "completed" | "rejected";
+  bankCode: string;
+  accountNumber: string;
+  accountName: string | null;
+  narration: string | null;
+  requestedAt: string | null;
+  approvedAt: string | null;
+  completedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export function useMyWithdrawals() {
+  return useQuery<{ data: MyWithdrawalRow[] }>({
+    queryKey: ["/api/wallet/withdrawals/me"],
+    queryFn: async () => {
+      if (!getApiUrl()) return { data: [] };
+      return await apiRequest("/api/wallet/withdrawals/me");
+    },
+    staleTime: 30 * 1000,
+  });
+}
