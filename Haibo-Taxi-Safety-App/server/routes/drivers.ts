@@ -14,6 +14,24 @@ import { generatePayReferenceCode, parsePagination, paginationResponse } from ".
 
 const router = Router();
 
+// Same plate normalization as taxis + ratings. Storing plates this way
+// guarantees the join from a rating → taxi → driver uses a consistent
+// key instead of hoping users type the plate the same way twice.
+function normalizePlate(plate: string): string {
+  return plate.toUpperCase().replace(/[\s-]/g, "");
+}
+
+// Optional image URL gate — must be https:// or a /uploads/ path we
+// serve ourselves. Blocks data: / javascript: / http: URIs from ever
+// reaching the admin KYC drawer via an <img src>.
+function isSafeImageUrl(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 500 &&
+    (/^https:\/\//i.test(value) || value.startsWith("/uploads/"))
+  );
+}
+
 // GET /api/drivers/me - Read the current user's driver profile (or null)
 router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -129,15 +147,85 @@ router.get(
 router.post("/register", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const {
-      taxiPlateNumber, licenseNumber, licenseExpiry,
+      taxiPlateNumber: rawPlate, licenseNumber, licenseExpiry,
       insuranceNumber, insuranceExpiry, vehicleColor,
       vehicleModel, vehicleYear, licenseImageUrl, vehicleImageUrl,
     } = req.body;
 
-    if (!taxiPlateNumber) {
+    if (!rawPlate) {
       res.status(400).json({ error: "Taxi plate number is required" });
       return;
     }
+    if (typeof rawPlate !== "string" || rawPlate.length === 0 || rawPlate.length > 20) {
+      res.status(400).json({ error: "taxiPlateNumber must be a non-empty string ≤ 20 characters" });
+      return;
+    }
+
+    // Simple string field caps — these land on the admin KYC drawer
+    // and the driver's own profile card.
+    if (licenseNumber !== undefined && licenseNumber !== null &&
+        (typeof licenseNumber !== "string" || licenseNumber.length > 50)) {
+      res.status(400).json({ error: "licenseNumber must be ≤ 50 characters" });
+      return;
+    }
+    if (insuranceNumber !== undefined && insuranceNumber !== null &&
+        (typeof insuranceNumber !== "string" || insuranceNumber.length > 50)) {
+      res.status(400).json({ error: "insuranceNumber must be ≤ 50 characters" });
+      return;
+    }
+    if (vehicleColor !== undefined && vehicleColor !== null &&
+        (typeof vehicleColor !== "string" || vehicleColor.length > 30)) {
+      res.status(400).json({ error: "vehicleColor must be ≤ 30 characters" });
+      return;
+    }
+    if (vehicleModel !== undefined && vehicleModel !== null &&
+        (typeof vehicleModel !== "string" || vehicleModel.length > 80)) {
+      res.status(400).json({ error: "vehicleModel must be ≤ 80 characters" });
+      return;
+    }
+
+    // Vehicle year sanity — same range as taxi registration.
+    const currentYear = new Date().getFullYear();
+    if (vehicleYear !== undefined && vehicleYear !== null) {
+      if (!Number.isInteger(vehicleYear) || vehicleYear < 1980 || vehicleYear > currentYear + 1) {
+        res.status(400).json({ error: `vehicleYear must be an integer between 1980 and ${currentYear + 1}` });
+        return;
+      }
+    }
+
+    // Expiry dates must parse cleanly if supplied.
+    let licenseExpiryDate: Date | null = null;
+    let insuranceExpiryDate: Date | null = null;
+    if (licenseExpiry) {
+      const d = new Date(licenseExpiry);
+      if (Number.isNaN(d.getTime())) {
+        res.status(400).json({ error: "licenseExpiry must be a valid ISO date" });
+        return;
+      }
+      licenseExpiryDate = d;
+    }
+    if (insuranceExpiry) {
+      const d = new Date(insuranceExpiry);
+      if (Number.isNaN(d.getTime())) {
+        res.status(400).json({ error: "insuranceExpiry must be a valid ISO date" });
+        return;
+      }
+      insuranceExpiryDate = d;
+    }
+
+    // KYC image URLs must be https:// or a /uploads/ path — never a
+    // raw data: URI or cross-origin http: link that could exfil on
+    // admin preview.
+    if (licenseImageUrl !== undefined && licenseImageUrl !== null && !isSafeImageUrl(licenseImageUrl)) {
+      res.status(400).json({ error: "licenseImageUrl must be an https:// URL or a Haibo upload path" });
+      return;
+    }
+    if (vehicleImageUrl !== undefined && vehicleImageUrl !== null && !isSafeImageUrl(vehicleImageUrl)) {
+      res.status(400).json({ error: "vehicleImageUrl must be an https:// URL or a Haibo upload path" });
+      return;
+    }
+
+    const taxiPlateNumber = normalizePlate(rawPlate);
 
     // Check if already registered
     const existing = await db.select().from(driverProfiles).where(eq(driverProfiles.userId, req.user!.userId)).limit(1);
@@ -152,12 +240,12 @@ router.post("/register", authMiddleware, async (req: AuthRequest, res: Response)
       userId: req.user!.userId,
       taxiPlateNumber,
       licenseNumber: licenseNumber || null,
-      licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null,
+      licenseExpiry: licenseExpiryDate,
       insuranceNumber: insuranceNumber || null,
-      insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null,
+      insuranceExpiry: insuranceExpiryDate,
       vehicleColor: vehicleColor || null,
       vehicleModel: vehicleModel || null,
-      vehicleYear: vehicleYear || null,
+      vehicleYear: vehicleYear ?? null,
       licenseImageUrl: licenseImageUrl || null,
       vehicleImageUrl: vehicleImageUrl || null,
       payReferenceCode,

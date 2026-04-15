@@ -72,6 +72,18 @@ router.get("/nearby", optionalAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/locations - Add a new taxi location
+// Allowlisted location types — kept in sync with the mobile HomeScreen
+// category filter. Rejecting unknown values prevents an attacker from
+// polluting the map with a "nuclear_bunker" type the render layer
+// silently ignores, plus protects the admin filter chips.
+const LOCATION_TYPES = new Set([
+  "taxi_rank",
+  "informal_stop",
+  "interchange",
+  "hub",
+  "minor_stop",
+]);
+
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -84,18 +96,71 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Length caps — every commuter's map pin tap loads these fields,
+    // so unbounded name/address/description become a DoS vector across
+    // every user on the platform, not just the one viewing the row.
+    if (typeof name !== "string" || name.trim().length === 0 || name.length > 200) {
+      res.status(400).json({ error: "name must be a non-empty string ≤ 200 characters" });
+      return;
+    }
+    if (address !== undefined && address !== null && (typeof address !== "string" || address.length > 300)) {
+      res.status(400).json({ error: "address must be a string ≤ 300 characters" });
+      return;
+    }
+    if (description !== undefined && description !== null && (typeof description !== "string" || description.length > 1000)) {
+      res.status(400).json({ error: "description must be a string ≤ 1000 characters" });
+      return;
+    }
+
+    // Coordinate bounds — same validation the WS driver path uses.
+    if (
+      typeof latitude !== "number" ||
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      typeof longitude !== "number" ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      res.status(400).json({
+        error: "Valid latitude (-90..90) and longitude (-180..180) are required",
+      });
+      return;
+    }
+
+    // Type allowlist — default to informal_stop when unset, reject
+    // unknown strings otherwise.
+    const locationType = type === undefined || type === null || type === ""
+      ? "informal_stop"
+      : type;
+    if (!LOCATION_TYPES.has(locationType)) {
+      res.status(400).json({ error: "Invalid location type" });
+      return;
+    }
+
+    // Capacity sanity — a rank maxes out around a few hundred seats
+    // across simultaneous departures; anything beyond 500 is pollution.
+    if (
+      capacity !== undefined && capacity !== null &&
+      (!Number.isInteger(capacity) || capacity < 0 || capacity > 500)
+    ) {
+      res.status(400).json({ error: "capacity must be an integer between 0 and 500" });
+      return;
+    }
+
     const [location] = await db.insert(taxiLocations).values({
-      name,
-      type: type || "informal_stop",
+      name: name.trim(),
+      type: locationType,
       latitude,
       longitude,
       address: address || null,
       description: description || null,
-      capacity: capacity || null,
+      capacity: capacity ?? null,
       opensAt: opensAt || null,
       closesAt: closesAt || null,
       operatingDays: operatingDays || null,
-      addedBy: req.user?.userId || null,
+      addedBy: req.user!.userId,
       routes: routes || null,
       verificationStatus: "pending",
     }).returning();
