@@ -38,22 +38,100 @@ router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Normalize a plate number the same way the rating lookup does:
+// uppercase, strip whitespace + hyphens. Stored this way so the
+// uniqueness constraint catches "GP 123 456" / "GP-123-456" / "gp123456"
+// as the same taxi, and /api/ratings/trip can resolve plate → driver
+// without having to do fuzzy matching on insert-time variants.
+function normalizePlate(plate: string): string {
+  return plate.toUpperCase().replace(/[\s-]/g, "");
+}
+
+// Optional ISO-date parse with friendly 400. Returns null for
+// undefined/null inputs, Date for valid strings, and throws a tagged
+// Error for garbage so the caller can map it to a per-field message.
+function parseOptionalDate(value: unknown, label: string): Date | null {
+  if (value === undefined || value === null || value === "") return null;
+  const d = new Date(value as string);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`__INVALID_DATE__${label}`);
+  }
+  return d;
+}
+
 // POST /api/taxis - Register a new taxi
 router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const {
-      plateNumber, make, model, year, color, seatingCapacity,
+      plateNumber: rawPlate, make, model, year, color, seatingCapacity,
       insuranceNumber, insuranceExpiry, registrationNumber,
       registrationExpiry, operatingPermitNumber, operatingPermitExpiry,
       primaryRoute, associationId,
     } = req.body;
 
-    if (!plateNumber || !make || !model) {
+    if (!rawPlate || !make || !model) {
       res.status(400).json({ error: "Plate number, make, and model are required" });
       return;
     }
+    if (typeof rawPlate !== "string" || rawPlate.length > 20) {
+      res.status(400).json({ error: "plateNumber must be ≤ 20 characters" });
+      return;
+    }
+    if (typeof make !== "string" || make.length > 50 ||
+        typeof model !== "string" || model.length > 50) {
+      res.status(400).json({ error: "make and model must be ≤ 50 characters" });
+      return;
+    }
+    if (color !== undefined && color !== null && (typeof color !== "string" || color.length > 30)) {
+      res.status(400).json({ error: "color must be ≤ 30 characters" });
+      return;
+    }
+    if (primaryRoute !== undefined && primaryRoute !== null &&
+        (typeof primaryRoute !== "string" || primaryRoute.length > 200)) {
+      res.status(400).json({ error: "primaryRoute must be ≤ 200 characters" });
+      return;
+    }
 
-    // Check for duplicate plate
+    // Year of manufacture — South African minibus fleet ranges roughly
+    // 1995–current, but allow a bit of slack for heritage plates.
+    const currentYear = new Date().getFullYear();
+    if (year !== undefined && year !== null) {
+      if (!Number.isInteger(year) || year < 1980 || year > currentYear + 1) {
+        res.status(400).json({ error: `year must be an integer between 1980 and ${currentYear + 1}` });
+        return;
+      }
+    }
+
+    // Seating capacity — a sprinter maxes out at ~22 seats, set the
+    // ceiling at 30 so unusual charter vehicles aren't rejected but
+    // `Infinity` / `-1` / `1e9` are.
+    if (seatingCapacity !== undefined && seatingCapacity !== null) {
+      if (!Number.isInteger(seatingCapacity) || seatingCapacity < 1 || seatingCapacity > 30) {
+        res.status(400).json({ error: "seatingCapacity must be an integer between 1 and 30" });
+        return;
+      }
+    }
+
+    // Parse each optional date into a real Date or throw a tagged error.
+    let insuranceExpiryDate: Date | null = null;
+    let registrationExpiryDate: Date | null = null;
+    let operatingPermitExpiryDate: Date | null = null;
+    try {
+      insuranceExpiryDate = parseOptionalDate(insuranceExpiry, "insuranceExpiry");
+      registrationExpiryDate = parseOptionalDate(registrationExpiry, "registrationExpiry");
+      operatingPermitExpiryDate = parseOptionalDate(operatingPermitExpiry, "operatingPermitExpiry");
+    } catch (err: any) {
+      const match = String(err?.message || "").match(/^__INVALID_DATE__(.+)$/);
+      if (match) {
+        res.status(400).json({ error: `${match[1]} must be a valid ISO date` });
+        return;
+      }
+      throw err;
+    }
+
+    const plateNumber = normalizePlate(rawPlate);
+
+    // Check for duplicate plate against the normalized form.
     const existing = await db.select().from(taxis).where(eq(taxis.plateNumber, plateNumber)).limit(1);
     if (existing.length > 0) {
       res.status(409).json({ error: "Taxi with this plate number already exists" });
@@ -63,17 +141,17 @@ router.post("/", authMiddleware, async (req: AuthRequest, res: Response) => {
     const [newTaxi] = await db.insert(taxis).values({
       ownerId: req.user!.userId,
       plateNumber,
-      make,
-      model,
-      year: year || null,
+      make: make.trim(),
+      model: model.trim(),
+      year: year ?? null,
       color: color || null,
       seatingCapacity: seatingCapacity || 15,
       insuranceNumber: insuranceNumber || null,
-      insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null,
+      insuranceExpiry: insuranceExpiryDate,
       registrationNumber: registrationNumber || null,
-      registrationExpiry: registrationExpiry ? new Date(registrationExpiry) : null,
+      registrationExpiry: registrationExpiryDate,
       operatingPermitNumber: operatingPermitNumber || null,
-      operatingPermitExpiry: operatingPermitExpiry ? new Date(operatingPermitExpiry) : null,
+      operatingPermitExpiry: operatingPermitExpiryDate,
       primaryRoute: primaryRoute || null,
       associationId: associationId || null,
     }).returning();
