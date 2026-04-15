@@ -84,6 +84,7 @@ router.post(
         "lost-found",
         "drivers",
         "profiles",
+        "locations",
       ]);
       if (!allowedFolders.has(folder)) {
         res.status(400).json({ error: "Invalid folder" });

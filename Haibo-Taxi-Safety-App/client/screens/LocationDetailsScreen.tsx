@@ -8,11 +8,14 @@ import {
   Dimensions,
   ScrollView,
   Linking,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
 import { ThemedText } from "@/components/ThemedText";
@@ -22,6 +25,18 @@ import { getTaxiLocationById, getTaxiRoutes } from "@/lib/localData";
 import { useLocationDetails } from "@/hooks/useApiData";
 import type { TaxiLocation, LocationType, TaxiRoute } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { uploadFromUri } from "@/lib/uploads";
+import { apiRequest } from "@/lib/query-client";
+
+const FALLBACK_HERO =
+  "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1000";
+
+type LocationImageRow = {
+  id: string;
+  url: string;
+  caption?: string | null;
+  verified?: boolean | null;
+};
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -40,11 +55,24 @@ export default function LocationDetailsScreen() {
   const { theme, isDark } = useTheme();
   const route = useRoute<LocationDetailsRouteProp>();
   const navigation = useNavigation<NavigationProp>();
+  const queryClient = useQueryClient();
   const { locationId } = route.params;
 
   const [location, setLocation] = useState<TaxiLocation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const { data: apiLocation } = useLocationDetails(locationId);
+
+  // Photos come from the locationImages table via GET /api/locations/:id.
+  // The hook shape is loose (useApiData returns the raw response) so we
+  // cast through a minimal local type instead of widening LocationDetails.
+  const contributedImages: LocationImageRow[] = useMemo(() => {
+    const raw = (apiLocation as any)?.images;
+    if (!Array.isArray(raw)) return [];
+    return raw as LocationImageRow[];
+  }, [apiLocation]);
+
+  const heroUrl = contributedImages[0]?.url || FALLBACK_HERO;
 
   useEffect(() => {
     // Use API data if available, fall back to local
@@ -105,6 +133,49 @@ export default function LocationDetailsScreen() {
 
   const config = locationTypeConfig[location.type] || locationTypeConfig.rank;
 
+  // Contribute a rank photo. New uploads land in locationImages with
+  // verified=false, so they still show immediately to the uploader (and
+  // everyone else) but the command-center team can sweep bad contributions.
+  const handleContributePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Grant photo library access to contribute a photo.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      setUploading(true);
+      const uploaded = await uploadFromUri(result.assets[0].uri, {
+        folder: "locations",
+        name: result.assets[0].fileName || undefined,
+      });
+      await apiRequest(`/api/locations/${locationId}/images`, {
+        method: "POST",
+        body: JSON.stringify({
+          url: uploaded.url,
+          imageType: "general",
+        }),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/locations", locationId],
+      });
+    } catch (error: any) {
+      Alert.alert("Upload failed", error.message || "Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const openInMaps = () => {
     const url = Platform.select({
       ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
@@ -119,7 +190,7 @@ export default function LocationDetailsScreen() {
         {/* Header with Map/Image */}
         <View style={styles.headerContainer}>
           <Image
-            source={{ uri: "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1000" }}
+            source={{ uri: heroUrl }}
             style={styles.headerImage}
             contentFit="cover"
           />
@@ -164,6 +235,57 @@ export default function LocationDetailsScreen() {
             <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
               {location.description || "This taxi rank is a major hub providing transport services to local and regional destinations. It features 24/7 security and verified taxi associations."}
             </ThemedText>
+          </View>
+
+          {/* Photos — contributed by commuters. Horizontal strip so a
+              location can slowly build up a visual wayfinding library
+              (pay-point signage, entry gates, recognizable landmarks). */}
+          <View style={styles.section}>
+            <View style={styles.photosHeader}>
+              <ThemedText style={styles.sectionTitle}>Photos</ThemedText>
+              <Pressable
+                onPress={handleContributePhoto}
+                disabled={uploading}
+                style={[
+                  styles.contributeButton,
+                  { borderColor: BrandColors.primary.red, opacity: uploading ? 0.6 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Add a photo"
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color={BrandColors.primary.red} />
+                ) : (
+                  <>
+                    <Feather name="camera" size={14} color={BrandColors.primary.red} />
+                    <ThemedText style={[styles.contributeText, { color: BrandColors.primary.red }]}>
+                      Add photo
+                    </ThemedText>
+                  </>
+                )}
+              </Pressable>
+            </View>
+            {contributedImages.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photosRow}
+              >
+                {contributedImages.map((img) => (
+                  <View key={img.id} style={styles.photoTile}>
+                    <Image
+                      source={{ uri: img.url }}
+                      style={styles.photoImage}
+                      contentFit="cover"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <ThemedText style={[styles.emptyPhotos, { color: theme.textSecondary }]}>
+                No photos yet — be the first to help commuters find this rank.
+              </ThemedText>
+            )}
           </View>
 
           {/* Connected Routes */}
@@ -229,4 +351,11 @@ const styles = StyleSheet.create({
   ratingCTA: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 16, borderRadius: 12, gap: 10, marginTop: 10 },
   ratingCTAText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
   backButton: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 25 },
+  photosHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  contributeButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, borderWidth: 1.5, minHeight: 32 },
+  contributeText: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
+  photosRow: { gap: 10, paddingRight: 4 },
+  photoTile: { width: 140, height: 100, borderRadius: 12, overflow: "hidden", backgroundColor: "#00000010" },
+  photoImage: { width: "100%", height: "100%" },
+  emptyPhotos: { fontSize: 13, lineHeight: 18 },
 });

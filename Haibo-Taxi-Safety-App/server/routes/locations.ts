@@ -135,6 +135,54 @@ router.get("/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/locations/:id/images — attach a user-contributed photo to a
+// location. The actual bytes are already uploaded via /api/uploads/image
+// (folder "lost-found" or "events" pattern); here we only persist the
+// returned URL and optional caption. New contributions default to
+// verified=false so moderators can sweep them from the command center
+// before they show up on the location detail hero.
+router.post("/:id/images", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { url, caption, imageType } = req.body as {
+      url?: string;
+      caption?: string;
+      imageType?: string;
+    };
+
+    if (!url || typeof url !== "string") {
+      res.status(400).json({ error: "url is required" });
+      return;
+    }
+
+    const [location] = await db
+      .select({ id: taxiLocations.id })
+      .from(taxiLocations)
+      .where(eq(taxiLocations.id, req.params.id))
+      .limit(1);
+    if (!location) {
+      res.status(404).json({ error: "Location not found" });
+      return;
+    }
+
+    const [image] = await db
+      .insert(locationImages)
+      .values({
+        locationId: req.params.id,
+        url,
+        caption: caption || null,
+        imageType: imageType || "general",
+        uploadedBy: req.user!.userId,
+        verified: false,
+      })
+      .returning();
+
+    res.status(201).json({ data: image });
+  } catch (error: any) {
+    console.error("Add location image error:", error);
+    res.status(500).json({ error: "Failed to add location image" });
+  }
+});
+
 // POST /api/locations/:id/vote - Vote on a location
 router.post("/:id/vote", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
