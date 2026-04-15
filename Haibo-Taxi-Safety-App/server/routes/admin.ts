@@ -1200,6 +1200,85 @@ router.get(
   }
 );
 
+// DELETE /api/admin/ratings/:id — dispute resolution path. Removes a
+// single driver_ratings row and recomputes the driver's safetyRating
+// + totalRatings aggregates so the unfair rating stops dragging the
+// average down. Hard delete rather than soft-hide because the table
+// has no hidden flag column — the audit trail lives in the admin
+// audit log row this handler writes, not in a tombstone.
+//
+// Why this exists: before Chunk 47 a driver who got hit with a
+// vindictive 1-star rating had no path to dispute it. Admins could
+// see the aggregate rating on DriverDetailPage but couldn't edit
+// individual rows. Now ops can review each rating and remove the
+// ones that are clearly retaliatory.
+router.delete(
+  "/ratings/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [existing] = await db
+        .select()
+        .from(driverRatings)
+        .where(eq(driverRatings.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        res.status(404).json({ error: "Rating not found" });
+        return;
+      }
+
+      await db
+        .delete(driverRatings)
+        .where(eq(driverRatings.id, req.params.id));
+
+      // Recompute aggregates from the remaining rows. Drizzle's avg()
+      // returns null when the set is empty; fall back to the schema
+      // default of 5 so a newly-cleaned profile doesn't render as 0/0.
+      const [stats] = await db
+        .select({
+          avgRating: avg(driverRatings.rating),
+          total: count(),
+        })
+        .from(driverRatings)
+        .where(eq(driverRatings.driverId, existing.driverId));
+
+      await db
+        .update(driverProfiles)
+        .set({
+          safetyRating: stats?.avgRating != null ? Number(stats.avgRating) : 5,
+          totalRatings: Number(stats?.total) || 0,
+        })
+        .where(eq(driverProfiles.userId, existing.driverId));
+
+      await recordAdminAction(
+        req,
+        "rating.delete",
+        "driver_ratings",
+        req.params.id,
+        {
+          driverId: existing.driverId,
+          raterId: existing.userId,
+          rating: existing.rating,
+          review: existing.review,
+        },
+      );
+
+      res.json({
+        message: "Rating removed",
+        aggregates: {
+          safetyRating: stats?.avgRating != null ? Number(stats.avgRating) : 5,
+          totalRatings: Number(stats?.total) || 0,
+        },
+      });
+    } catch (error: any) {
+      console.error("Delete driver rating error:", error);
+      res.status(500).json({ error: "Failed to delete rating" });
+    }
+  },
+);
+
 // PUT /api/admin/drivers/:id/verify — mark driver as KYC-verified
 router.put(
   "/drivers/:id/verify",

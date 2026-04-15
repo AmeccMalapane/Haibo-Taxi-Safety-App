@@ -252,6 +252,12 @@ export const admin = {
     return request(`/api/admin/drivers/${driverId}/verify`, { method: "PUT" });
   },
 
+  /** Remove a single driver rating (dispute resolution). Recomputes
+   * the driver's aggregate safetyRating + totalRatings server-side. */
+  async deleteDriverRating(ratingId: string) {
+    return request(`/api/admin/ratings/${ratingId}`, { method: "DELETE" });
+  },
+
   async unverifyDriver(driverId: string, reason?: string) {
     return request(`/api/admin/drivers/${driverId}/unverify`, {
       method: "PUT",

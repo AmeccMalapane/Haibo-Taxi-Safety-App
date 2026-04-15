@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Trash2,
 } from "lucide-react";
 import { admin } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
@@ -128,6 +129,19 @@ export function DriverDetailPage() {
       setUnverifyReason("");
     },
     onError: (err: any) => toast.error(err?.message || "Revocation failed"),
+  });
+
+  // Dispute resolution — remove a single unfair rating. The server
+  // recomputes safetyRating + totalRatings before responding so the
+  // driver query invalidation picks up the new aggregates.
+  const deleteRatingM = useMutation({
+    mutationFn: (ratingId: string) => admin.deleteDriverRating(ratingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "driver", driverId] });
+      qc.invalidateQueries({ queryKey: ["admin", "drivers"] });
+      toast.success("Rating removed — driver average recalculated");
+    },
+    onError: (err: any) => toast.error(err?.message || "Could not delete rating"),
   });
 
   if (driverQ.isLoading) return <LoadingState label="Loading driver profile…" />;
@@ -431,6 +445,37 @@ export function DriverDetailPage() {
                   ) : null}
                 </div>
               </div>
+              {/* Dispute path: remove a clearly unfair rating. Recomputes
+                  the driver's average server-side. */}
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remove this ${r.rating}-star rating from the driver's average? This cannot be undone.`,
+                    )
+                  ) {
+                    deleteRatingM.mutate(r.id);
+                  }
+                }}
+                disabled={deleteRatingM.isPending}
+                aria-label="Remove rating"
+                title="Remove rating"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: radius.sm,
+                  padding: 8,
+                  cursor: deleteRatingM.isPending ? "not-allowed" : "pointer",
+                  color: colors.danger,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: deleteRatingM.isPending ? 0.5 : 1,
+                  alignSelf: "start",
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
