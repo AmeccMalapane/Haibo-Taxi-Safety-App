@@ -192,42 +192,70 @@ router.post(
         res.status(400).json({ error: "petitionerId is required for guest petitions" });
         return;
       }
+      if (typeof petitionerId !== "string" || petitionerId.length > 100) {
+        res.status(400).json({ error: "petitionerId must be a string ≤ 100 characters" });
+        return;
+      }
 
-      const [existing] = await db
-        .select()
-        .from(pasopReports)
-        .where(eq(pasopReports.id, req.params.id))
-        .limit(1);
+      // Race-safe update. The previous implementation did SELECT → check
+      // petitioners array → UPDATE with [...petitioners, petitionerId],
+      // which let two concurrent petitions from the same user both slip
+      // past the "already petitioned" check and double-increment the
+      // counter. Worse: two concurrent petitions from DIFFERENT users
+      // both read the same base array, each computed their own
+      // [base, me] version, and the second write wiped the first one.
+      //
+      // Fixed by doing everything inside a transaction with a row-level
+      // lock. SELECT ... FOR UPDATE serializes concurrent petitions on
+      // the same report, so the check-then-write sequence is atomic.
+      let updatedPayload: ReturnType<typeof toClientShape> | null = null;
+      let alreadyPetitioned = false;
 
-      if (!existing) {
+      await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(pasopReports)
+          .where(eq(pasopReports.id, req.params.id))
+          .for("update")
+          .limit(1);
+
+        if (!existing) {
+          return; // Caller sees null → 404 below.
+        }
+
+        const petitioners = existing.petitioners || [];
+        if (petitioners.includes(petitionerId)) {
+          alreadyPetitioned = true;
+          updatedPayload = toClientShape(existing);
+          return;
+        }
+
+        const nextExpiresAt = new Date(
+          existing.expiresAt.getTime() + 30 * 60 * 1000,
+        );
+
+        const [updated] = await tx
+          .update(pasopReports)
+          .set({
+            petitionCount: sql`${pasopReports.petitionCount} + 1`,
+            petitioners: [...petitioners, petitionerId],
+            expiresAt: nextExpiresAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(pasopReports.id, req.params.id))
+          .returning();
+        updatedPayload = toClientShape(updated);
+      });
+
+      if (!updatedPayload) {
         res.status(404).json({ error: "Report not found" });
         return;
       }
 
-      const petitioners = existing.petitioners || [];
-      if (petitioners.includes(petitionerId)) {
-        // Idempotent — return the current state so clients can sync state
-        // without special-casing the "already petitioned" path.
-        res.json(toClientShape(existing));
-        return;
-      }
-
-      const nextExpiresAt = new Date(
-        existing.expiresAt.getTime() + 30 * 60 * 1000
-      );
-
-      const [updated] = await db
-        .update(pasopReports)
-        .set({
-          petitionCount: sql`${pasopReports.petitionCount} + 1`,
-          petitioners: [...petitioners, petitionerId],
-          expiresAt: nextExpiresAt,
-          updatedAt: new Date(),
-        })
-        .where(eq(pasopReports.id, req.params.id))
-        .returning();
-
-      res.json(toClientShape(updated));
+      // 200 whether the petition was new or already recorded — idempotent
+      // response so mobile clients can sync state without branching.
+      res.json(updatedPayload);
+      void alreadyPetitioned;
     } catch (error: any) {
       console.error("Pasop petition error:", error);
       res.status(500).json({ error: "Failed to petition pasop report" });

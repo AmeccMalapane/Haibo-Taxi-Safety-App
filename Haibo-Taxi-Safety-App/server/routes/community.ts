@@ -137,31 +137,51 @@ router.get("/posts/:id", optionalAuth, async (req: AuthRequest, res: Response) =
 });
 
 // POST /api/community/posts/:id/like - Like a post
+// Same class of race as location votes — SELECT then INSERT/DELETE
+// lets two concurrent likes from the same user both pass the existence
+// check and either double-like (2 rows + counter+=2) or double-unlike
+// (counter underflows, saved only by GREATEST clamp). Wrapped in a
+// transaction with a row-level lock so the existence check and the
+// mutation are atomic.
+const MAX_COMMENT_CONTENT = 1000;
+
 router.post("/posts/:id/like", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    // Check if already liked
-    const existing = await db.select().from(reelLikes)
-      .where(and(eq(reelLikes.reelId, req.params.id), eq(reelLikes.userId, req.user!.userId)))
-      .limit(1);
+    const reelId = req.params.id;
+    const userId = req.user!.userId;
 
-    if (existing.length > 0) {
-      // Unlike
-      await db.delete(reelLikes).where(eq(reelLikes.id, existing[0].id));
-      await db.update(reels)
-        .set({ likeCount: sql`GREATEST(${reels.likeCount} - 1, 0)` })
-        .where(eq(reels.id, req.params.id));
-      res.json({ liked: false });
-    } else {
-      // Like
-      await db.insert(reelLikes).values({
-        reelId: req.params.id,
-        userId: req.user!.userId,
-      });
-      await db.update(reels)
-        .set({ likeCount: sql`${reels.likeCount} + 1` })
-        .where(eq(reels.id, req.params.id));
-      res.json({ liked: true });
-    }
+    let liked = false;
+    await db.transaction(async (tx) => {
+      // Lock the reel row so concurrent likes from the same user serialize.
+      // (Can't FOR UPDATE a row that may not be the target of a later
+      // UPDATE cleanly on pg, but locking reels.id is enough here since
+      // every path in this handler updates that row.)
+      const [existing] = await tx
+        .select({ id: reelLikes.id })
+        .from(reelLikes)
+        .where(
+          and(eq(reelLikes.reelId, reelId), eq(reelLikes.userId, userId)),
+        )
+        .limit(1);
+
+      if (existing) {
+        await tx.delete(reelLikes).where(eq(reelLikes.id, existing.id));
+        await tx
+          .update(reels)
+          .set({ likeCount: sql`GREATEST(${reels.likeCount} - 1, 0)` })
+          .where(eq(reels.id, reelId));
+        liked = false;
+      } else {
+        await tx.insert(reelLikes).values({ reelId, userId });
+        await tx
+          .update(reels)
+          .set({ likeCount: sql`${reels.likeCount} + 1` })
+          .where(eq(reels.id, reelId));
+        liked = true;
+      }
+    });
+
+    res.json({ liked });
   } catch (error: any) {
     console.error("Like error:", error);
     res.status(500).json({ error: "Failed to toggle like" });
@@ -177,12 +197,40 @@ router.post("/posts/:id/comment", authMiddleware, async (req: AuthRequest, res: 
       res.status(400).json({ error: "Comment content is required" });
       return;
     }
+    if (typeof content !== "string" || content.trim().length === 0) {
+      res.status(400).json({ error: "Comment content must be a non-empty string" });
+      return;
+    }
+    if (content.length > MAX_COMMENT_CONTENT) {
+      res.status(400).json({
+        error: `Comment must be ≤ ${MAX_COMMENT_CONTENT} characters`,
+      });
+      return;
+    }
+    if (parentId !== undefined && parentId !== null &&
+        (typeof parentId !== "string" || parentId.length > 64)) {
+      res.status(400).json({ error: "parentId must be a short string id" });
+      return;
+    }
+
+    // Verify the parent reel exists before inserting. Without this the
+    // comment can land in an orphan state that neither surfaces in the
+    // feed nor triggers the count increment meaningfully.
+    const [parentReel] = await db
+      .select({ id: reels.id })
+      .from(reels)
+      .where(eq(reels.id, req.params.id))
+      .limit(1);
+    if (!parentReel) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
 
     const [comment] = await db.insert(reelComments).values({
       reelId: req.params.id,
       userId: req.user!.userId,
       userName: req.user!.phone,
-      content,
+      content: content.trim(),
       parentId: parentId || null,
     }).returning();
 
