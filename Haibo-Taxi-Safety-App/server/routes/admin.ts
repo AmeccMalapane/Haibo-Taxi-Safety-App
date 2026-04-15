@@ -14,6 +14,7 @@ import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-
 import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
 import { notifyUser, notifyUsers } from "../services/notifications";
 import { recordAdminAction } from "../services/audit";
+import { kickUserSockets } from "../services/realtime";
 
 const router = Router();
 
@@ -1758,6 +1759,26 @@ router.put(
         });
       } catch (notifyErr) {
         console.log("[Admin] suspend notify failed:", notifyErr);
+      }
+
+      // Forcefully disconnect the user's active WebSocket sessions.
+      // Without this, a suspended user stays connected to map:watchers
+      // and ride rooms until they naturally disconnect — able to keep
+      // receiving GPS + chat updates for the duration. HTTP
+      // authMiddleware blocks them per-request so their actions are
+      // contained, but live read access on an open socket is not.
+      try {
+        const kicked = await kickUserSockets(
+          req.params.id,
+          "account_suspended",
+        );
+        if (kicked > 0) {
+          console.log(
+            `[Admin] Kicked ${kicked} live socket(s) for suspended user ${req.params.id}`,
+          );
+        }
+      } catch (kickErr) {
+        console.error("[Admin] kickUserSockets on suspend failed:", kickErr);
       }
 
       res.json(updated);

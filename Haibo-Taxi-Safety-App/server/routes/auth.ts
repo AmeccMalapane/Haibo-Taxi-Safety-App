@@ -375,6 +375,15 @@ router.post("/refresh", authRateLimit, async (req: Request, res: Response) => {
       res.status(401).json({ error: "User no longer exists" });
       return;
     }
+    if (user.isSuspended) {
+      // A suspended user holding a still-valid refresh token should not
+      // be able to keep rolling it forward. Return 401 so the client
+      // treats this as a logout-and-re-auth flow; HTTP authMiddleware
+      // would 403 them per-request anyway, but issuing fresh tokens on
+      // refresh clutters logs and leaks "this account exists" info.
+      res.status(401).json({ error: "Account suspended" });
+      return;
+    }
 
     const token = generateToken({
       userId: user.id,

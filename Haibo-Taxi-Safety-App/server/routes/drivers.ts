@@ -198,8 +198,35 @@ router.post("/location-update", authMiddleware, async (req: AuthRequest, res: Re
   try {
     const { latitude, longitude, accuracy, speed, heading } = req.body;
 
-    if (latitude === undefined || longitude === undefined) {
-      res.status(400).json({ error: "Latitude and longitude are required" });
+    // Coordinate bounds — same validation the WS path uses. Rejects
+    // non-numbers, NaN, Infinity, and out-of-range lat/lon values that
+    // would otherwise pollute driver position history.
+    if (
+      typeof latitude !== "number" ||
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      typeof longitude !== "number" ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      res.status(400).json({ error: "Valid latitude (-90..90) and longitude (-180..180) are required" });
+      return;
+    }
+
+    // Only verified drivers may update driver position. Without this
+    // check, any authenticated commuter could spam the endpoint with
+    // their own userId and either mutate a stale driverProfiles row
+    // or inflate locationUpdates with junk history. Look up the row
+    // once and 403 if the caller isn't a registered driver.
+    const [driverRow] = await db
+      .select({ userId: driverProfiles.userId })
+      .from(driverProfiles)
+      .where(eq(driverProfiles.userId, req.user!.userId))
+      .limit(1);
+    if (!driverRow) {
+      res.status(403).json({ error: "Only registered drivers can post location updates" });
       return;
     }
 

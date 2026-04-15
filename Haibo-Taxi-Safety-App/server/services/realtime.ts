@@ -362,6 +362,25 @@ export function emitToAdmins(event: string, data: any): void {
 }
 
 /**
+ * Forcefully disconnect all live WebSocket sessions for a given user.
+ * Called by the admin suspend / unsuspend / user-delete flows so a
+ * suspended user can't keep an already-connected socket alive after
+ * their token has been invalidated at the DB level. A last-gasp
+ * `auth:revoked` event fires before the disconnect so the client can
+ * surface an appropriate toast instead of a silent drop.
+ */
+export async function kickUserSockets(userId: string, reason: string): Promise<number> {
+  if (!io) return 0;
+  const room = `user:${userId}`;
+  const sockets = await io.in(room).fetchSockets();
+  for (const socket of sockets) {
+    socket.emit("auth:revoked", { reason });
+    socket.disconnect(true);
+  }
+  return sockets.length;
+}
+
+/**
  * Get count of active drivers broadcasting GPS.
  */
 export function getActiveDriverCount(): number {

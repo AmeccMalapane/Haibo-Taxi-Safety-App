@@ -12,6 +12,7 @@ import {
 import { eq, count, sql } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { sensitiveRateLimit } from "../middleware/rateLimit";
+import { kickUserSockets } from "../services/realtime";
 
 // POPIA §23-§25 self-service data rights endpoints.
 //
@@ -152,6 +153,18 @@ router.post(
           phone: sql`${deletedPhonePrefix} || substr(${users.phone}, -4)`,
         })
         .where(eq(users.id, userId));
+
+      // Forcefully disconnect any live WebSocket sessions the erasing
+      // user currently holds. POPIA erasure must mean "stops being able
+      // to do anything immediately" — without this a user mid-session
+      // could keep watching GPS, posting to ride chat, and triggering
+      // SOS until their socket naturally disconnects. Non-fatal if it
+      // fails; the erasure itself already committed at this point.
+      try {
+        await kickUserSockets(userId, "account_deleted");
+      } catch (kickErr) {
+        console.error("[User delete] kickUserSockets failed:", kickErr);
+      }
 
       res.json({
         submitted: true,
