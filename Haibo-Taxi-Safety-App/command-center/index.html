@@ -184,6 +184,51 @@
         background: rgba(231, 35, 105, 0.22);
         color: inherit;
       }
+
+      /* Pulse markers used by the MapHero component. A solid rose dot with
+         two expanding rings so the map reads as "live activity" instead of
+         a static map. Sized once here so the marker DOM nodes stay tiny. */
+      .hb-pulse-marker {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #E72369;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 4px 14px rgba(231, 35, 105, 0.45);
+        position: relative;
+      }
+      html.dark .hb-pulse-marker {
+        box-shadow: 0 0 0 3px rgba(12, 18, 26, 0.85), 0 4px 14px rgba(231, 35, 105, 0.55);
+      }
+      .hb-pulse-marker::before,
+      .hb-pulse-marker::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid rgba(231, 35, 105, 0.55);
+        animation: hb-pulse 2.4s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
+      }
+      .hb-pulse-marker::after {
+        animation-delay: 1.2s;
+      }
+      @keyframes hb-pulse {
+        0% { transform: scale(0.6); opacity: 0.9; }
+        70% { transform: scale(2.4); opacity: 0; }
+        100% { transform: scale(2.4); opacity: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hb-pulse-marker::before,
+        .hb-pulse-marker::after { animation: none; }
+      }
+
+      /* Mapbox attribution should blend with the theme instead of shouting
+         white in the corner of the hero. */
+      .mapboxgl-ctrl-attrib {
+        background: color-mix(in oklab, var(--card) 80%, transparent) !important;
+        color: var(--muted-foreground) !important;
+        font-size: 10px !important;
+      }
+      .mapboxgl-ctrl-attrib a { color: var(--muted-foreground) !important; }
     </style>
   </head>
   <body>

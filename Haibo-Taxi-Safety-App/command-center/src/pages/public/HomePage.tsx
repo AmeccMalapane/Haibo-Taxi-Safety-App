@@ -26,6 +26,13 @@ import {
 import { events as eventsApi, jobs as jobsApi } from "../../api/client";
 import { usePageMeta } from "../../hooks/usePageMeta";
 
+// Lazy-load the Mapbox hero so the ~250kb mapbox-gl bundle doesn't block
+// first paint for users who bounce at the fold. Falls through gracefully
+// when VITE_MAPBOX_PUBLIC_TOKEN isn't set (local dev without the token).
+const MapHero = React.lazy(() =>
+  import("../../components/MapHero").then((m) => ({ default: m.MapHero })),
+);
+
 const FEATURES: Array<{
   Icon: typeof Shield;
   title: string;
@@ -101,27 +108,64 @@ function Hero() {
       style={{
         position: "relative",
         overflow: "hidden",
-        background: `
-          radial-gradient(ellipse at top right, ${colors.roseAccent} 0%, transparent 55%),
-          radial-gradient(ellipse at bottom left, rgba(26, 26, 46, 0.06) 0%, transparent 50%),
-          ${colors.bg}
-        `,
+        background: colors.bg,
+        minHeight: 640,
       }}
     >
-      {/* Decorative orb */}
+      {/* Live Mapbox layer — sits absolutely behind the hero content on the
+          right 60% of the viewport. The gradient scrim (below) fades it out
+          on the left side so the headline stays legible without needing a
+          solid card behind the text. */}
+      <div
+        className="hb-hero-map"
+        style={{
+          position: "absolute",
+          inset: 0,
+          left: "38%",
+          pointerEvents: "auto",
+        }}
+      >
+        <React.Suspense fallback={null}>
+          <MapHero />
+        </React.Suspense>
+      </div>
+
+      {/* Left-side scrim: opaque on the very left fading to transparent by
+          ~62% width. Keeps the map visible on the right while the headline
+          on the left reads on a solid background. Re-declared for dark
+          theme automatically via CSS variables. */}
       <div
         aria-hidden
         style={{
           position: "absolute",
-          top: "-25%",
-          right: "-8%",
+          inset: 0,
+          background: `linear-gradient(90deg,
+            var(--background) 0%,
+            var(--background) 30%,
+            color-mix(in oklab, var(--background) 88%, transparent) 48%,
+            color-mix(in oklab, var(--background) 30%, transparent) 70%,
+            transparent 100%)`,
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      />
+
+      {/* Top-right rose glow — echoes the SOS pulse markers and ties the
+          hero back to the brand gradient. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: "-20%",
+          right: "-10%",
           width: 520,
           height: 520,
           borderRadius: "50%",
           background: gradients.primary,
-          opacity: 0.08,
-          filter: "blur(80px)",
+          opacity: 0.12,
+          filter: "blur(90px)",
           pointerEvents: "none",
+          zIndex: 2,
         }}
       />
       <div
@@ -130,9 +174,10 @@ function Hero() {
           margin: "0 auto",
           padding: `${spacing["5xl"] * 2}px ${spacing["2xl"]}px ${spacing["5xl"] * 2}px`,
           position: "relative",
-          zIndex: 1,
+          zIndex: 3,
         }}
       >
+        <div style={{ maxWidth: 620 }} className="hb-hero-copy">
         <div
           style={{
             display: "inline-flex",
@@ -235,7 +280,19 @@ function Hero() {
             Our story
           </Link>
         </div>
+        </div>
       </div>
+      <style>{`
+        @media (max-width: 900px) {
+          .hb-hero-map {
+            left: 0 !important;
+            opacity: 0.18;
+          }
+          .hb-hero-copy {
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </section>
   );
 }
