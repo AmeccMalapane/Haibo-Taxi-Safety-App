@@ -179,6 +179,41 @@ router.put("/complaints/:id", authMiddleware, requireRole("admin"), async (req: 
       resolution,
     });
 
+    // Notify the reporter. Before Chunk 43 a reporter had no way to
+    // know their complaint was actioned — the resolution column was
+    // set server-side but nothing surfaced it on the mobile side.
+    // Skipped for anonymous complaints (userId still set for audit
+    // but the reporter asked not to be contacted) and when status
+    // didn't actually change.
+    if (status && updated && !updated.isAnonymous) {
+      try {
+        const friendlyStatus =
+          status === "resolved"
+            ? "resolved"
+            : status === "rejected"
+            ? "closed without action"
+            : status === "in_review"
+            ? "under review"
+            : status;
+
+        await notifyUser({
+          userId: updated.userId,
+          type: "complaint_update",
+          title: `Your complaint is ${friendlyStatus}`,
+          body: resolution
+            ? resolution
+            : `We've updated the status of your ${updated.category} report.`,
+          data: {
+            kind: "complaint_update",
+            complaintId: updated.id,
+            status,
+          },
+        });
+      } catch (notifyErr) {
+        console.log("[Admin] complaint update notify failed:", notifyErr);
+      }
+    }
+
     res.json(updated);
   } catch (error: any) {
     console.error("Update complaint error:", error);

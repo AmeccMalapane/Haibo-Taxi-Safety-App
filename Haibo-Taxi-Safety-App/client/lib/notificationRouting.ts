@@ -52,6 +52,33 @@ export function resolveNotificationRoute(
     return { screen: "TrackPackage", params: undefined };
   }
 
+  if (kind === "complaint_update") {
+    // Complaint resolutions are fired by PUT /api/admin/complaints/:id
+    // (Chunk 43) with the full resolution text already in the body,
+    // so the notification card itself is the payload — there's no
+    // separate "my complaints" screen to open yet. Returning null
+    // leaves the reader on the notifications feed where they can read
+    // the resolution in full. When that screen exists, route here.
+    return null;
+  }
+
+  // Welcome notifications from Chunk 41. Each is aimed at a role the
+  // user just entered, so the landing destination mirrors that: a
+  // fresh commuter lands on the Hub, a fresh driver on their dashboard,
+  // a fresh vendor on the onboarding/sales screen they just came from
+  // (confirms the pending state visually). Unknown welcome_* kinds
+  // fall through so we don't hard-code destinations that haven't
+  // been built yet.
+  if (kind === "welcome_commuter") {
+    return { screen: "Hub", params: undefined };
+  }
+  if (kind === "welcome_driver") {
+    return { screen: "DriverDashboard", params: undefined };
+  }
+  if (kind === "welcome_vendor") {
+    return { screen: "VendorOnboarding", params: undefined };
+  }
+
   // Generic type-based routes — cover the "admin pushed a status update"
   // cases where we don't have a kind.
   switch (n.type) {

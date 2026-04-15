@@ -57,17 +57,37 @@ router.post("/complaints", authMiddleware, async (req: AuthRequest, res: Respons
   }
 });
 
-// GET /api/complaints - List complaints (admin/owner)
+// GET /api/complaints - List complaints scoped to the caller.
+//
+// SECURITY: before Chunk 43 this endpoint returned every complaint row
+// to any authenticated user — the comment said "admin/owner" but neither
+// filter was enforced, so a plain commuter token could read every other
+// user's incident reports. Now admins see everything (the Command
+// Center ComplaintsPage calls this endpoint with an admin token and
+// relies on the full feed), everyone else sees only their own rows.
 router.get("/complaints", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const { status, category } = req.query as any;
+    const isAdmin = req.user!.role === "admin";
 
-    const results = await db.select().from(complaints)
+    const ownerFilter = isAdmin
+      ? undefined
+      : eq(complaints.userId, req.user!.userId);
+
+    const rowsQuery = db
+      .select()
+      .from(complaints)
       .orderBy(desc(complaints.createdAt))
-      .limit(limit).offset(offset);
+      .limit(limit)
+      .offset(offset);
+    const results = ownerFilter
+      ? await rowsQuery.where(ownerFilter)
+      : await rowsQuery;
 
-    const [totalResult] = await db.select({ count: count() }).from(complaints);
+    const countQuery = db.select({ count: count() }).from(complaints);
+    const [totalResult] = ownerFilter
+      ? await countQuery.where(ownerFilter)
+      : await countQuery;
 
     res.json({
       data: results,
