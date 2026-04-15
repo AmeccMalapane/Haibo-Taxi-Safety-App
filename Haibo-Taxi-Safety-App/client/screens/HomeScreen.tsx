@@ -31,6 +31,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { MapViewComponent } from "@/components/MapViewComponent";
 import { FloatingHeader } from "@/components/FloatingHeader";
 import { RankDetailPanel } from "@/components/RankDetailPanel";
+import { LocationInfoBubble } from "@/components/LocationInfoBubble";
 import { RouteDetailOverlay } from "@/components/RouteDetailOverlay";
 import { TransitRouteLegend } from "@/components/TransitRouteLegend";
 import { MapControlButtons } from "@/components/MapControlButtons";
@@ -265,6 +266,12 @@ export default function HomeScreen() {
       }
     : null;
 
+  // Tracks whether we've already played the initial zoom-in so the
+  // animation only fires once per screen mount — otherwise any later
+  // userLocation update (say, from a background GPS refresh) would
+  // yank the camera back and interrupt the user.
+  const hasZoomedToUserRef = useRef(false);
+
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -273,6 +280,27 @@ export default function HomeScreen() {
       setUserLocation(loc);
     })();
   }, []);
+
+  // Initial zoom-in animation: once we have the user's coordinates AND
+  // the map ref is ready, fly the camera from the default Gauteng view
+  // down into their neighborhood. Small delay gives the map a chance to
+  // mount its camera component before we call setCamera on it.
+  useEffect(() => {
+    if (hasZoomedToUserRef.current) return;
+    if (!userLocation || !mapRef.current) return;
+
+    const timeoutId = setTimeout(() => {
+      mapRef.current?.animateToRegion?.({
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      });
+      hasZoomedToUserRef.current = true;
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [userLocation]);
 
   // Refresh Pasop reports and the user's own petitions every time HomeScreen
   // is focused — covers coming back from PasopFeed/PasopReport so newly
@@ -664,6 +692,23 @@ export default function HomeScreen() {
           }}
         />
       )}
+
+      {/* Floating info bubble for user-contributed taxi location pins.
+          Shows beneath the top search bar so the tapped pin stays visible
+          on the map, leaving the bottom sheet alone for the nearby-ranks
+          list. Hidden whenever a transit rank or route is selected so
+          only one selection chrome is on screen at a time. */}
+      {selectedLocation && !selectedRank && !selectedRoute ? (
+        <LocationInfoBubble
+          location={selectedLocation}
+          onClose={() => setSelectedLocation(null)}
+          onViewDetails={() => {
+            const loc = selectedLocation;
+            setSelectedLocation(null);
+            handleLocationDetails(loc);
+          }}
+        />
+      ) : null}
 
       {selectedRoute && !selectedRank && (
         <RouteDetailOverlay
