@@ -29,6 +29,26 @@ router.post("/register-token", authMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
+// DELETE /api/notifications/register-token — Clear the caller's FCM token
+// so server-side pushes stop immediately. Backs the SettingsScreen
+// notification opt-out toggle: without this, flipping the toggle off
+// would only hide local pushes while the server kept dispatching them,
+// violating the user's consent. The in-app notification inbox (the
+// `notifications` table) is untouched — users still see history on
+// refresh, they just don't get the push interrupt.
+router.delete("/register-token", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await db.update(users)
+      .set({ fcmToken: null })
+      .where(eq(users.id, req.user!.userId));
+
+    res.json({ message: "Push notification token cleared" });
+  } catch (error: any) {
+    console.error("Unregister token error:", error);
+    res.status(500).json({ error: "Failed to clear token" });
+  }
+});
+
 // GET /api/notifications — Get user's notifications
 router.get("/", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

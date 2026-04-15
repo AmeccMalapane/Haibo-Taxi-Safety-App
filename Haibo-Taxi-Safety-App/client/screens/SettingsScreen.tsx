@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ThemedText } from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
+import { registerForPushNotifications } from "@/lib/notifications";
 import {
   Spacing,
   BrandColors,
@@ -47,7 +48,6 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 // inline 14/700/uppercase soup in favour of Typography.label tokens.
 
 const NOTIFICATIONS_KEY = "@haibo_settings_notifications";
-const LOCATION_KEY = "@haibo_settings_location_sharing";
 
 const PRIVACY_URL = "https://app.haibo.africa/privacy";
 const TERMS_URL = "https://app.haibo.africa/terms";
@@ -62,18 +62,13 @@ export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [notifications, setNotifications] = useState(true);
-  const [locationSharing, setLocationSharing] = useState(true);
 
   // Hydrate persisted toggles
   useEffect(() => {
     (async () => {
       try {
-        const [n, l] = await Promise.all([
-          AsyncStorage.getItem(NOTIFICATIONS_KEY),
-          AsyncStorage.getItem(LOCATION_KEY),
-        ]);
+        const n = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
         if (n !== null) setNotifications(n === "true");
-        if (l !== null) setLocationSharing(l === "true");
       } catch {}
     })();
   }, []);
@@ -93,19 +88,47 @@ export default function SettingsScreen() {
   };
 
   const handleNotificationsToggle = useCallback(async (value: boolean) => {
+    // Optimistic UI — the toggle flips immediately and we persist the
+    // preference locally before the network hop so the screen stays
+    // responsive. Server-side FCM token registration/clear happens in
+    // the background; if it fails we revert the toggle and surface an
+    // alert so the user knows their choice didn't actually take effect.
     setNotifications(value);
     triggerHaptic("selection");
     try {
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, String(value));
     } catch {}
-  }, []);
 
-  const handleLocationToggle = useCallback(async (value: boolean) => {
-    setLocationSharing(value);
-    triggerHaptic("selection");
     try {
-      await AsyncStorage.setItem(LOCATION_KEY, String(value));
-    } catch {}
+      if (value) {
+        // Re-register the push token with the server so future pushes
+        // start flowing again. registerForPushNotifications() handles
+        // the permission request + token fetch + POST /api/notifications
+        // /register-token internally.
+        await registerForPushNotifications();
+      } else {
+        // Clear the server-side FCM token so pushes stop immediately.
+        // The in-app notifications inbox still receives new rows (that
+        // backend path writes to the DB regardless of push delivery),
+        // so the user's notification history is unaffected.
+        await apiRequest("/api/notifications/register-token", {
+          method: "DELETE",
+        });
+      }
+    } catch (err: any) {
+      // Server sync failed — roll back the local toggle so the UI
+      // doesn't lie about the current state. A toast-level error is
+      // fine here since the user can just retry.
+      setNotifications(!value);
+      try {
+        await AsyncStorage.setItem(NOTIFICATIONS_KEY, String(!value));
+      } catch {}
+      Alert.alert(
+        "Couldn't update preference",
+        err?.message ||
+          "Your notification preference couldn't be synced. Please try again.",
+      );
+    }
   }, []);
 
   const openExternalUrl = async (url: string, label: string) => {
@@ -308,11 +331,9 @@ export default function SettingsScreen() {
             <Divider theme={theme} />
             <SettingRow
               icon="map-pin"
-              label="Location sharing"
-              hint="Share live location with emergency contacts"
-              type="toggle"
-              value={locationSharing}
-              onValueChange={handleLocationToggle}
+              label="Location permission"
+              hint="Manage in system settings"
+              onPress={() => Linking.openSettings()}
               theme={theme}
             />
             <Divider theme={theme} />
