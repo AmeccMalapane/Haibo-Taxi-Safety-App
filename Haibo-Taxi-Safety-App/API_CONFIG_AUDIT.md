@@ -25,9 +25,12 @@ The Azure App Service at `haibo-api-prod.azurewebsites.net` is returning the **d
 ### 2. EXPO_PUBLIC_DOMAIN — Now Configured
 Added `EXPO_PUBLIC_DOMAIN=haibo-api-prod.azurewebsites.net` to both `preview` and `production` build profiles in `eas.json`. The app's `query-client.ts` gracefully falls back to offline/demo mode when the API returns errors.
 
-### 3. Paystack — Test Keys Present
-Paystack test public key is configured: `pk_test_1652390c7d5a1cc8d50b67bcc185cc064c00f805`
-**Note:** This is a test key. For production, replace with a live Paystack key.
+### 3. Paystack — Live Mode (2026-04-15)
+Paystack live keys configured on prod (`PAYSTACK_SECRET_KEY=sk_live_*` and
+`PAYSTACK_PUBLIC_KEY=pk_live_*`, both set via Azure App Service config).
+Webhook verification uses the secret key directly as the HMAC-SHA512 key —
+no separate `PAYSTACK_WEBHOOK_SECRET` env var exists. Webhook URL on the
+Paystack dashboard points at `https://haibo-api-prod.azurewebsites.net/api/paystack/webhook`.
 
 ### 4. Google Maps API — Configured
 Google Maps API key is injected at build time via the `GOOGLE_MAPS_API_KEY`

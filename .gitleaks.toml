@@ -1,0 +1,45 @@
+# Gitleaks configuration for the Haibo! Taxi Safety App.
+#
+# Extends the gitleaks default rule set, then adds an allowlist that
+# suppresses known-safe placeholder strings in documentation files so
+# the pre-commit hook doesn't nag on every commit with false positives
+# that were already triaged in the Day 9 audit.
+#
+# To regenerate findings, run from git root:
+#   gitleaks detect --source=. --config=.gitleaks.toml
+#
+# Adding new allowlist entries: prefer a regex over a fingerprint. Fingerprints
+# churn whenever the file or line number changes; regexes tolerate refactors.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder strings in docs that aren't real secrets"
+
+# Example curl snippets in setup/reference docs use literal placeholder
+# strings like `YOUR_TOKEN`, `YOUR_JWT_TOKEN` in the Authorization header.
+# Gitleaks' `curl-auth-header` rule matches these but they're obviously
+# not real credentials.
+regexes = [
+  '''YOUR_(JWT_)?TOKEN''',
+  '''YOUR_API_KEY''',
+  '''YOUR_PAYSTACK_''',
+  '''YOUR_MAPBOX_''',
+  '''YOUR_BULKSMS_''',
+  '''YOUR_KEY''',
+  '''YOUR_PASSWORD''',
+  '''CHANGE_ME''',
+  '''sk_test_1234567890abcdef''',
+]
+
+# Files that are ALL documentation examples and can be skipped wholesale.
+# Keep this list tight — if we start suppressing entire source files we
+# lose coverage. Doc-only paths only.
+paths = [
+  '''Haibo-Taxi-Safety-App/docs/ARCHIVE\.md''',
+  '''Haibo-Taxi-Safety-App/SETUP_GUIDE\.md''',
+  '''Haibo-Taxi-Safety-App/ANDROID_TESTING_CHECKLIST\.md''',
+  '''Haibo-Taxi-Safety-App/IMPLEMENTATION_COMPLETE\.md''',
+  '''Haibo-Taxi-Safety-App/QUICK_REFERENCE_IMPLEMENTATION\.md''',
+]
