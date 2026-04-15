@@ -157,10 +157,38 @@ router.get("/users", authMiddleware, requireRole("admin"), async (req: AuthReque
   }
 });
 
+// Allowlisted complaint statuses — matches the schema comment on
+// complaints.status. Admins mutate via the moderation drawer so these
+// should be the only values the dropdown ever sends.
+const COMPLAINT_ADMIN_STATUSES = new Set([
+  "pending",
+  "under_review",
+  "in_review",
+  "resolved",
+  "dismissed",
+  "escalated",
+  "rejected",
+]);
+
 // PUT /api/admin/complaints/:id - Update complaint status
 router.put("/complaints/:id", authMiddleware, requireRole("admin"), async (req: AuthRequest, res: Response) => {
   try {
     const { status, resolution, internalNotes } = req.body;
+
+    if (status !== undefined && (typeof status !== "string" || !COMPLAINT_ADMIN_STATUSES.has(status))) {
+      res.status(400).json({ error: "Invalid complaint status" });
+      return;
+    }
+    if (resolution !== undefined && resolution !== null &&
+        (typeof resolution !== "string" || resolution.length > 2000)) {
+      res.status(400).json({ error: "resolution must be a string ≤ 2000 characters" });
+      return;
+    }
+    if (internalNotes !== undefined && internalNotes !== null &&
+        (typeof internalNotes !== "string" || internalNotes.length > 5000)) {
+      res.status(400).json({ error: "internalNotes must be a string ≤ 5000 characters" });
+      return;
+    }
 
     const updateData: any = { updatedAt: new Date() };
     if (status) updateData.status = status;
@@ -175,6 +203,11 @@ router.put("/complaints/:id", authMiddleware, requireRole("admin"), async (req: 
       .set(updateData)
       .where(eq(complaints.id, req.params.id))
       .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Complaint not found" });
+      return;
+    }
 
     await recordAdminAction(req, "complaint.update", "complaints", req.params.id, {
       status,
@@ -236,6 +269,13 @@ router.put("/taxis/:id/verify", authMiddleware, requireRole("admin"), async (req
       .where(eq(taxis.id, req.params.id))
       .returning();
 
+    if (!updated) {
+      // Previously returned 200 with `undefined` body when the id was
+      // bogus — the Command Center would show an empty success state.
+      res.status(404).json({ error: "Taxi not found" });
+      return;
+    }
+
     await recordAdminAction(req, "taxi.verify", "taxis", req.params.id);
 
     res.json(updated);
@@ -291,24 +331,15 @@ router.get("/withdrawals", authMiddleware, requireRole("admin"), async (req: Aut
 });
 
 // PUT /api/admin/withdrawals/:id/approve - Mark a withdrawal as approved
+//
+// Race-safe: the previous implementation did SELECT → check status →
+// UPDATE which let two concurrent admin approvals both flip the row
+// (idempotent for approve, but still fires the push notify twice and
+// muddies the audit trail). Now we do a conditional UPDATE on status
+// and check the returning() row count as the atomicity gate.
 router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), async (req: AuthRequest, res: Response) => {
   try {
-    const [existing] = await db
-      .select()
-      .from(withdrawalRequests)
-      .where(eq(withdrawalRequests.id, req.params.id))
-      .limit(1);
-
-    if (!existing) {
-      res.status(404).json({ error: "Withdrawal request not found" });
-      return;
-    }
-    if (existing.status !== "pending") {
-      res.status(400).json({ error: `Cannot approve a ${existing.status} withdrawal` });
-      return;
-    }
-
-    const [updated] = await db
+    const updatedRows = await db
       .update(withdrawalRequests)
       .set({
         status: "approved",
@@ -316,24 +347,48 @@ router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), asy
         approvedBy: req.user!.userId,
         updatedAt: new Date(),
       })
-      .where(eq(withdrawalRequests.id, req.params.id))
+      .where(
+        and(
+          eq(withdrawalRequests.id, req.params.id),
+          eq(withdrawalRequests.status, "pending"),
+        ),
+      )
       .returning();
+
+    if (updatedRows.length === 0) {
+      // Either the row doesn't exist or another admin already acted on it.
+      // Disambiguate with a single follow-up read so the client gets a
+      // clear error instead of an ambiguous "nothing happened".
+      const [existing] = await db
+        .select({ status: withdrawalRequests.status })
+        .from(withdrawalRequests)
+        .where(eq(withdrawalRequests.id, req.params.id))
+        .limit(1);
+      if (!existing) {
+        res.status(404).json({ error: "Withdrawal request not found" });
+      } else {
+        res.status(400).json({ error: `Cannot approve a ${existing.status} withdrawal` });
+      }
+      return;
+    }
+
+    const updated = updatedRows[0];
 
     // Notify the user their withdrawal is cleared for EFT processing
     try {
       await notifyUser({
-        userId: existing.userId,
+        userId: updated.userId,
         type: "payment",
         title: "Withdrawal approved",
-        body: `Your R${existing.amount.toFixed(2)} withdrawal is on its way via EFT.`,
+        body: `Your R${updated.amount.toFixed(2)} withdrawal is on its way via EFT.`,
       });
     } catch (notifyErr) {
       console.log("[Admin] withdrawal approve notify failed:", notifyErr);
     }
 
     await recordAdminAction(req, "withdrawal.approve", "withdrawal_requests", req.params.id, {
-      amount: existing.amount,
-      userId: existing.userId,
+      amount: updated.amount,
+      userId: updated.userId,
     });
 
     res.json(updated);
@@ -344,50 +399,98 @@ router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), asy
 });
 
 // PUT /api/admin/withdrawals/:id/reject - Reject a withdrawal and refund
+//
+// Critical race: the previous implementation did SELECT → check status
+// pending → credit balance → update status → insert wallet_transactions
+// as five separate statements. Two concurrent rejects on the same row
+// would both pass the status check and both credit the user's balance
+// — literal double-refund. Fixed by running the whole thing inside a
+// single db.transaction() where the first operation is a conditional
+// UPDATE that flips status pending→rejected. Only the winner of the
+// race gets a returning() row and proceeds to credit the balance.
 router.put("/withdrawals/:id/reject", authMiddleware, requireRole("admin"), async (req: AuthRequest, res: Response) => {
   try {
     const { reason } = req.body as { reason?: string };
+    if (reason !== undefined && reason !== null &&
+        (typeof reason !== "string" || reason.length > 500)) {
+      res.status(400).json({ error: "reason must be a string ≤ 500 characters" });
+      return;
+    }
 
-    const [existing] = await db
-      .select()
-      .from(withdrawalRequests)
-      .where(eq(withdrawalRequests.id, req.params.id))
-      .limit(1);
+    let updated: typeof withdrawalRequests.$inferSelect | undefined;
+    let outcome: "rejected" | "not_found" | "not_pending" = "not_found";
+    let currentStatus: string | null = null;
 
-    if (!existing) {
+    await db.transaction(async (tx) => {
+      const claimed = await tx
+        .update(withdrawalRequests)
+        .set({
+          status: "rejected",
+          rejectionReason: reason || "Rejected by admin",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(withdrawalRequests.id, req.params.id),
+            eq(withdrawalRequests.status, "pending"),
+          ),
+        )
+        .returning();
+
+      if (claimed.length === 0) {
+        // Did the row exist at all? Determines the error surface we
+        // return to the admin.
+        const [existing] = await tx
+          .select({ status: withdrawalRequests.status })
+          .from(withdrawalRequests)
+          .where(eq(withdrawalRequests.id, req.params.id))
+          .limit(1);
+        if (!existing) {
+          outcome = "not_found";
+        } else {
+          outcome = "not_pending";
+          currentStatus = existing.status;
+        }
+        return;
+      }
+
+      updated = claimed[0];
+      outcome = "rejected";
+
+      // Refund the balance — /api/wallet/withdraw deducted it up front.
+      // Inside the same transaction as the status flip so a later
+      // failure can't leave the user credited twice OR uncredited.
+      await tx
+        .update(users)
+        .set({ walletBalance: sql`${users.walletBalance} + ${updated.amount}` })
+        .where(eq(users.id, updated.userId));
+
+      // Record the refund as its own wallet transaction so history
+      // explains why the balance returned.
+      await tx.insert(walletTransactions).values({
+        userId: updated.userId,
+        type: "transfer_received",
+        amount: updated.amount,
+        description: `Withdrawal rejected — refund (R${updated.amount.toFixed(2)})`,
+        status: "completed",
+      });
+    });
+
+    if (outcome === "not_found") {
       res.status(404).json({ error: "Withdrawal request not found" });
       return;
     }
-    if (existing.status !== "pending") {
-      res.status(400).json({ error: `Cannot reject a ${existing.status} withdrawal` });
+    if (outcome === "not_pending") {
+      res.status(400).json({ error: `Cannot reject a ${currentStatus} withdrawal` });
+      return;
+    }
+    if (!updated) {
+      // Shouldn't happen — outcome === "rejected" means updated is set.
+      res.status(500).json({ error: "Failed to reject withdrawal" });
       return;
     }
 
-    // Refund the balance — /api/wallet/withdraw deducted it up front
-    await db
-      .update(users)
-      .set({ walletBalance: sql`${users.walletBalance} + ${existing.amount}` })
-      .where(eq(users.id, existing.userId));
-
-    const [updated] = await db
-      .update(withdrawalRequests)
-      .set({
-        status: "rejected",
-        rejectionReason: reason || "Rejected by admin",
-        updatedAt: new Date(),
-      })
-      .where(eq(withdrawalRequests.id, req.params.id))
-      .returning();
-
-    // Record the refund as its own wallet transaction so history explains
-    // why the user suddenly saw their balance return
-    await db.insert(walletTransactions).values({
-      userId: existing.userId,
-      type: "transfer_received",
-      amount: existing.amount,
-      description: `Withdrawal rejected — refund (R${existing.amount.toFixed(2)})`,
-      status: "completed",
-    });
+    const existing = updated;
 
     try {
       await notifyUser({
