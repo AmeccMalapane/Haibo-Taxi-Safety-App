@@ -102,6 +102,15 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
       res.status(400).json({ error: "Phone or email is required" });
       return;
     }
+    if (!password || typeof password !== "string") {
+      // /login is the password path — OTP-first commuters must use
+      // /send-otp + /verify-otp instead. Reject unconditionally when no
+      // password is supplied. Without this, the previous `if (password
+      // && user.password)` gate would skip validation entirely and hand
+      // out a token for any phone/email in the system: total auth bypass.
+      res.status(400).json({ error: "Password is required for this login path" });
+      return;
+    }
 
     let user;
     if (phone) {
@@ -112,18 +121,24 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
       user = result[0];
     }
 
-    if (!user) {
+    if (!user || !user.password) {
+      // Use a single "invalid credentials" response for both missing
+      // users and password-less accounts so attackers can't tell which
+      // phones/emails are registered. Password-less users exist (OTP
+      // commuters) — they must route through /verify-otp.
       res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
-    // If password-based login
-    if (password && user.password) {
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) {
-        res.status(401).json({ error: "Invalid credentials" });
-        return;
-      }
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    if (user.isSuspended) {
+      res.status(403).json({ error: "Account suspended" });
+      return;
     }
 
     // Update last active
@@ -269,6 +284,18 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
       user = newUser;
       isNewUser = true;
     } else {
+      if (user.isSuspended) {
+        // Suspended users must not be able to re-auth via OTP — HTTP
+        // authMiddleware would 403 them on every request anyway, but
+        // blocking the token issuance here keeps the log trail clean
+        // and saves the JWT signing work. POPIA-erased users land here
+        // too (isSuspended flipped, phone anonymized) — but their phone
+        // no longer matches the original so this branch is unreachable
+        // for them; they'd hit the "create new user" path instead and
+        // get a fresh clean-slate account, which is the intended flow.
+        res.status(403).json({ error: "Account suspended" });
+        return;
+      }
       await db.update(users).set({ isVerified: true, lastActiveAt: new Date() }).where(eq(users.id, user.id));
     }
 
