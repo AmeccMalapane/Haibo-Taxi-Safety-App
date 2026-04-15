@@ -16,6 +16,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
@@ -23,6 +25,7 @@ import { SkeletonBlock } from "@/components/Skeleton";
 import { useTheme } from "@/hooks/useTheme";
 import { useGroupRides } from "@/hooks/useApiData";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -93,12 +96,69 @@ export default function GroupRidesScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const { data: apiRides = [], isLoading } = useGroupRides();
+  const queryClient = useQueryClient();
 
   const [isPosting, setIsPosting] = useState(false);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [fare, setFare] = useState("");
   const [description, setDescription] = useState("");
+
+  // Real group-ride create mutation (Chunk 44 — was a demo Alert before).
+  // The screen's form only captures origin/destination/fare/description,
+  // so we derive the remaining required fields (title, scheduledDate,
+  // maxPassengers, rideType) with sane defaults: title mirrors the
+  // route, scheduledDate is 30 min from now (informal "heading out
+  // soon" semantics), 4 passengers matches a standard taxi seat count,
+  // and rideType='scheduled' is the generic bucket in the schema
+  // comment. A later version of this screen can add UI for these.
+  const createRideMut = useMutation({
+    mutationFn: async () => {
+      const fareValue = Number(fare);
+      const payload = {
+        title: `${origin.trim()} → ${destination.trim()}`,
+        description: description.trim() || undefined,
+        pickupLocation: origin.trim(),
+        dropoffLocation: destination.trim(),
+        scheduledDate: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        maxPassengers: 4,
+        costPerPerson: Number.isFinite(fareValue) ? fareValue : 0,
+        rideType: "scheduled",
+        paymentMethod: "individual",
+      };
+      return apiRequest("/api/rides/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rides"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        "Trip posted",
+        "Your trip is live for commuters nearby.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setIsPosting(false);
+              setOrigin("");
+              setDestination("");
+              setFare("");
+              setDescription("");
+            },
+          },
+        ],
+      );
+    },
+    onError: (error: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't post trip",
+        error?.message || "Please try again in a moment.",
+      );
+    },
+  });
 
   const rides: GroupRidePost[] =
     apiRides.length > 0
@@ -125,22 +185,23 @@ export default function GroupRidesScreen() {
         }))
       : MOCK_RIDES;
 
+  // Booking a seat on Haibo is Haibo Pay itself — the commuter pays the
+  // driver directly via the PayVendor flow instead of a separate
+  // reservation ledger. This keeps the single-wallet ecosystem honest
+  // and avoids a parallel "participant" table that doesn't enforce
+  // capacity anywhere. Copy nudges the user toward the right rail.
   const handleBookRide = (post: GroupRidePost) => {
     Haptics.selectionAsync();
     Alert.alert(
-      "Confirm booking",
-      `Book a seat with ${post.driverName} from ${post.origin} to ${post.destination} for R${post.fare}?`,
+      `Ride with ${post.driverName}`,
+      `Fare is R${post.fare}. Pay the driver directly with Haibo Pay — scan their QR code on the taxi or ask for their pay reference.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Close", style: "cancel" },
         {
-          text: "Pay with Haibo Pay",
-          onPress: () =>
-            Alert.alert(
-              "Seat reserved",
-              "Your reference code is HB-RIDE-123. (Demo mode — real booking coming soon.)"
-            ),
+          text: "Open Haibo Pay",
+          onPress: () => navigation.navigate("PayVendor"),
         },
-      ]
+      ],
     );
   };
 
@@ -149,23 +210,7 @@ export default function GroupRidesScreen() {
       Alert.alert("Missing info", "Enter origin, destination and fare to post a trip.");
       return;
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      "Trip posted",
-      "Your trip is live. (Demo mode — backend sync coming soon.)",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            setIsPosting(false);
-            setOrigin("");
-            setDestination("");
-            setFare("");
-            setDescription("");
-          },
-        },
-      ]
-    );
+    createRideMut.mutate();
   };
 
   const renderSkeletonCard = () => (
@@ -318,12 +363,13 @@ export default function GroupRidesScreen() {
                 onChangeText={setDescription}
               />
             </View>
-            <GradientButton onPress={handlePostTrip} icon="send">
-              Post trip
+            <GradientButton
+              onPress={handlePostTrip}
+              icon="send"
+              disabled={createRideMut.isPending}
+            >
+              {createRideMut.isPending ? "Posting…" : "Post trip"}
             </GradientButton>
-            <ThemedText style={styles.demoHint}>
-              Demo mode — real trip sync coming soon.
-            </ThemedText>
           </Animated.View>
         ) : null}
 
@@ -617,12 +663,6 @@ const styles = StyleSheet.create({
     borderColor: BrandColors.gray[200],
     backgroundColor: BrandColors.gray[50],
     color: BrandColors.gray[900],
-  },
-  demoHint: {
-    ...Typography.small,
-    color: BrandColors.gray[500],
-    textAlign: "center",
-    marginTop: Spacing.sm,
   },
   card: {
     borderRadius: BorderRadius.md,
