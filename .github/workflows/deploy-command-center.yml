@@ -1,0 +1,94 @@
+name: Deploy Command Center to Azure
+
+# Mirrors deploy-api.yml but for the command-center Vite SPA. Triggers
+# on any push to main that touches the command-center source, its
+# package.json, or this workflow itself. The deploy shape matches what
+# `az webapp deploy` expects: dist/ (Vite build + dist/index.js server),
+# plus package.json / package-lock.json so Oryx can `npm install` on the
+# Azure side. See command-center/server.js for the static server that
+# boots the container.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Haibo-Taxi-Safety-App/command-center/**'
+      - '.github/workflows/deploy-command-center.yml'
+
+  workflow_dispatch: # manual re-deploy via GitHub UI
+
+env:
+  AZURE_WEBAPP_NAME: haibo-command-center
+  NODE_VERSION: '22.x'
+
+jobs:
+  deploy:
+    name: Build & Deploy Command Center
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Haibo-Taxi-Safety-App/command-center
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: Haibo-Taxi-Safety-App/command-center/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Build
+        # vite build + the postbuild `cp server.js dist/index.js` step
+        # baked into the package.json build script. Outputs dist/ which
+        # the Azure start command `node dist/index.js` then boots.
+        run: npm run build
+
+      - name: Build deploy package
+        run: |
+          zip -rq /tmp/haibo-cc.zip dist package.json package-lock.json server.js
+          ls -lh /tmp/haibo-cc.zip
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: /tmp/haibo-cc.zip
+
+      - name: Health check
+        # Wait for Azure to swap the bundle + recycle the container, then
+        # confirm the site's index.html references the newly-built bundle
+        # (fingerprinted filename) rather than the previous one. A 200
+        # status alone isn't enough — a stuck container keeps returning
+        # the old content under 200, which is exactly how today's first
+        # deploy went wrong.
+        run: |
+          echo "Waiting 30s for container recycle..."
+          sleep 30
+          EXPECTED_BUNDLE=$(node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');const m=html.match(/assets\/index-[A-Za-z0-9_-]+\.js/);if(m)console.log(m[0]);")
+          echo "Expecting: $EXPECTED_BUNDLE"
+          for i in 1 2 3 4 5 6; do
+            DEPLOYED=$(curl -sS -H "Cache-Control: no-cache" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/?t=$(date +%s)$i" | grep -oE "assets/index-[A-Za-z0-9_-]+\.js" | head -1)
+            echo "[$i] deployed=$DEPLOYED"
+            if [ "$DEPLOYED" = "$EXPECTED_BUNDLE" ]; then
+              echo "Deploy verified."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Deploy did not swap within 90s — manual investigation needed"
+          exit 1
