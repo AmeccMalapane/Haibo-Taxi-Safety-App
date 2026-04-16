@@ -419,6 +419,7 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
       id: user.id,
       phone: user.phone,
       email: user.email,
+      handle: user.handle,
       displayName: user.displayName,
       role: user.role,
       avatarType: user.avatarType,
@@ -434,6 +435,63 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error("Get user error:", error);
     res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+// Handle = public author label shown on reels/comments/ratings. Must be
+// unique, lowercase, 3–20 chars, alphanumeric + underscore. Collision
+// returns 409 so the client can prompt for a different one.
+const HANDLE_REGEX = /^[a-z0-9_]{3,20}$/;
+
+// POST /api/auth/handle — set or change the current user's public handle.
+router.post("/handle", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const raw = typeof req.body?.handle === "string" ? req.body.handle.trim().toLowerCase() : "";
+    if (!HANDLE_REGEX.test(raw)) {
+      res.status(400).json({
+        error: "Handle must be 3–20 characters, lowercase letters/numbers/underscore only",
+        code: "INVALID_HANDLE",
+      });
+      return;
+    }
+
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.handle, raw))
+      .limit(1);
+    if (existing && existing.id !== req.user!.userId) {
+      res.status(409).json({ error: "Handle already taken", code: "HANDLE_TAKEN" });
+      return;
+    }
+
+    await db.update(users).set({ handle: raw }).where(eq(users.id, req.user!.userId));
+    res.json({ handle: raw });
+  } catch (error: any) {
+    console.error("Set handle error:", error);
+    res.status(500).json({ error: "Failed to set handle" });
+  }
+});
+
+// GET /api/auth/handle/available?h=someone — let the client check
+// availability while the user types, before they tap Save.
+router.get("/handle/available", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const raw = typeof req.query.h === "string" ? req.query.h.trim().toLowerCase() : "";
+    if (!HANDLE_REGEX.test(raw)) {
+      res.json({ available: false, reason: "invalid_format" });
+      return;
+    }
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.handle, raw))
+      .limit(1);
+    const available = !existing || existing.id === req.user!.userId;
+    res.json({ available });
+  } catch (error: any) {
+    console.error("Check handle error:", error);
+    res.status(500).json({ error: "Failed to check handle" });
   }
 });
 

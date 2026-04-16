@@ -12,6 +12,12 @@ export const users = pgTable("users", {
   password: text("password"), // bcrypt hashed
   role: text("role").default("commuter"), // commuter, driver, owner, association, admin
   displayName: text("display_name"),
+  // Public handle — shown as the author label on reels, comments, ratings
+  // etc. Must be unique + lowercase + 3–20 chars, but stored nullable so
+  // existing accounts keep working during the rollout. Fallback chain in
+  // serverUserLabel() is handle → displayName → "user". NEVER expose phone
+  // as a display label; that's a POPIA leak (identified in pre-launch audit).
+  handle: text("handle").unique(),
   avatarType: text("avatar_type").default("commuter"),
   // Profile photo — uploaded via /api/uploads/image?folder=profiles
   // and stored as the returned public URL. Nullable; clients fall

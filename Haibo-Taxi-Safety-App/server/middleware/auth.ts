@@ -22,8 +22,26 @@ export interface AuthPayload {
   role: string;
 }
 
+// Extra fields the middleware attaches AFTER verifying the JWT, pulled fresh
+// from the users row on every request. Not part of the signed JWT so we can
+// roll out new user-profile columns (like `handle`) without invalidating
+// existing tokens. Handlers should prefer `handle` → `displayName` → "user"
+// for any author label they persist — NEVER `phone`.
+export interface AuthContext extends AuthPayload {
+  handle?: string | null;
+  displayName?: string | null;
+}
+
 export interface AuthRequest extends Request {
-  user?: AuthPayload;
+  user?: AuthContext;
+}
+
+/**
+ * Derive the public author label for persisted content (reels, comments,
+ * ratings, etc.). Never returns the user's phone — that's a POPIA leak.
+ */
+export function publicUserLabel(user: AuthContext | undefined): string {
+  return user?.handle || user?.displayName || "user";
 }
 
 export function generateToken(payload: AuthPayload): string {
@@ -69,9 +87,14 @@ export async function authMiddleware(
     return;
   }
 
+  let enriched: AuthContext = decoded;
   try {
     const [row] = await db
-      .select({ isSuspended: users.isSuspended })
+      .select({
+        isSuspended: users.isSuspended,
+        handle: users.handle,
+        displayName: users.displayName,
+      })
       .from(users)
       .where(eq(users.id, decoded.userId))
       .limit(1);
@@ -83,14 +106,21 @@ export async function authMiddleware(
       });
       return;
     }
+
+    enriched = {
+      ...decoded,
+      handle: row?.handle ?? null,
+      displayName: row?.displayName ?? null,
+    };
   } catch (err) {
-    // If the suspension lookup fails (DB hiccup), fail-open rather than
-    // locking everyone out. We still have the valid JWT; a DB outage
-    // shouldn't take down the whole auth layer.
-    console.error("[Auth] suspension check failed:", err);
+    // If the lookup fails (DB hiccup), fail-open with just the JWT
+    // payload — a DB outage shouldn't take down the whole auth layer.
+    // Handlers that persist author labels fall back via publicUserLabel()
+    // so they still get a safe "user" rather than leaking phone.
+    console.error("[Auth] user enrichment failed:", err);
   }
 
-  req.user = decoded;
+  req.user = enriched;
   next();
 }
 

@@ -51,6 +51,15 @@ jobs:
         # vite build + the postbuild `cp server.js dist/index.js` step
         # baked into the package.json build script. Outputs dist/ which
         # the Azure start command `node dist/index.js` then boots.
+        #
+        # VITE_MAPBOX_PUBLIC_TOKEN is a build-time var — Vite reads it
+        # during `vite build` and bakes it into the client bundle. If
+        # it's missing the MapHero returns null silently (see guard at
+        # MapHero.tsx:78) and the marketing home page ships without
+        # its hero map. Runtime Azure env vars won't help — has to be
+        # present at build time.
+        env:
+          VITE_MAPBOX_PUBLIC_TOKEN: ${{ secrets.VITE_MAPBOX_PUBLIC_TOKEN }}
         run: npm run build
 
       - name: Build deploy package

@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { db } from "../db";
 import { reels, reelLikes, reelComments } from "../../shared/schema";
 import { eq, desc, sql, count, and } from "drizzle-orm";
-import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
+import { authMiddleware, optionalAuth, AuthRequest, publicUserLabel } from "../middleware/auth";
 import { parsePagination, paginationResponse } from "../utils/helpers";
 
 const router = Router();
@@ -90,7 +90,7 @@ router.post("/posts", authMiddleware, async (req: AuthRequest, res: Response) =>
 
     const [post] = await db.insert(reels).values({
       userId: req.user!.userId,
-      userName: req.user!.phone, // Will be replaced with display name
+      userName: publicUserLabel(req.user),
       contentType: contentType || "photo",
       mediaUrl: mediaUrl || "",
       thumbnailUrl: thumbnailUrl || null,
@@ -229,7 +229,7 @@ router.post("/posts/:id/comment", authMiddleware, async (req: AuthRequest, res: 
     const [comment] = await db.insert(reelComments).values({
       reelId: req.params.id,
       userId: req.user!.userId,
-      userName: req.user!.phone,
+      userName: publicUserLabel(req.user),
       content: content.trim(),
       parentId: parentId || null,
     }).returning();
