@@ -1382,6 +1382,33 @@ export const adminAuditLog = pgTable("admin_audit_log", {
 export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 
 // ============================================
+// EMERGENCY CONTACTS - National + regional numbers
+// ============================================
+// Mirrors the static reference data in client/data/emergency_contacts.json
+// so admins can edit numbers via the command-center without shipping a new
+// APK. The mobile app keeps the bundled JSON as an offline fallback — a
+// safety app must work without network during an emergency — and refreshes
+// from this table when online. `province` is null for national numbers
+// (112, 10111, 10177) and filled in for regional ones (Western Cape, etc).
+export const emergencyContacts = pgTable("emergency_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  category: text("category").notNull(),
+  description: text("description"),
+  province: text("province"), // null = national; "Gauteng", "Western Cape", etc.
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  categoryIdx: index("idx_emergency_contacts_category").on(table.category),
+  provinceIdx: index("idx_emergency_contacts_province").on(table.province),
+}));
+
+export type EmergencyContact = typeof emergencyContacts.$inferSelect;
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 

@@ -18,7 +18,9 @@
     "db:migrate": "tsx server/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed:admin": "tsx server/seed-admin.ts",
-    "db:seed:public": "tsx server/seed-public-fixtures.ts"
+    "db:seed:public": "tsx server/seed-public-fixtures.ts",
+    "db:seed:content": "tsx server/seed-content.ts",
+    "db:seed:all": "npm run db:seed:content && npm run db:seed:public"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.31.0",
