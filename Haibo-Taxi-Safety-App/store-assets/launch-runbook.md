@@ -10,19 +10,13 @@ From this machine, in the repo root:
 ```bash
 cd Haibo-Taxi-Safety-App
 
-# EAS auth
+# EAS auth (or set EXPO_TOKEN in your shell)
 eas login
 
-# Set the project secrets the build reads (see store-assets/eas-secrets-setup.md)
-eas secret:create --scope project --name EXPO_PUBLIC_MAPBOX_TOKEN \
-  --value "pk.eyJ...$(from .env)" --type string --force
-eas secret:create --scope project --name GOOGLE_SERVICES_JSON \
-  --type file --value ./google-services.json --force
-eas secret:create --scope project --name GOOGLE_SERVICE_INFO_PLIST \
-  --type file --value ./GoogleService-Info.plist --force
-
-# Verify
-eas secret:list --scope project
+# Project env vars (see store-assets/eas-secrets-setup.md for full detail)
+# Most are already set — verify with:
+eas env:list --environment production
+eas env:list --environment preview
 ```
 
 ## 2. Generate a production build

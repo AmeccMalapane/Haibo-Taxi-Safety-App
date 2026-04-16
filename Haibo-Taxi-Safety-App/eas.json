@@ -26,7 +26,7 @@
         "EXPO_PUBLIC_DOMAIN": "haibo-api-prod.azurewebsites.net",
         "EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_test_1652390c7d5a1cc8d50b67bcc185cc064c00f805"
       },
-      "autoIncrement": "version",
+      "autoIncrement": true,
       "developmentClient": false
     }
   },

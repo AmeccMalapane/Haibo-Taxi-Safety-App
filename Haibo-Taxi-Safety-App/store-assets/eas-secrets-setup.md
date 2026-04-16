@@ -1,36 +1,47 @@
-# EAS secrets — required before the first build
+# EAS environment variables — required before builds
 
-Run this once per project. EAS will inject these as environment variables
-into every `eas build` invocation for every profile.
+Uses the current `eas env:*` commands (the older `eas secret:*` commands
+are deprecated in `eas-cli` v16+).
 
-Values to source from `.env` (gitignored):
+## Already set on this project
+
+As of 2026-04-16, `eas env:list --environment production` shows:
+
+- `EXPO_PUBLIC_MAPBOX_TOKEN` (plaintext) — set for production, preview, development
+- `GOOGLE_MAPS_API_KEY` (sensitive)
+- `GOOGLE_MAPS_API_KEY_IOS` (sensitive)
+- `GOOGLE_SERVICES_JSON` (sensitive, file type)
+- `GOOGLE_SERVICE_INFO_PLIST` (sensitive, file type)
+
+## If you need to re-create any of them
 
 ```bash
-eas login   # once per machine
+# Auth (one per machine) — or set EXPO_TOKEN in your shell
+eas login
 
-eas secret:create --scope project \
+# Mapbox publishable token (client-safe, URL-restricted in Mapbox dashboard)
+eas env:create \
+  --scope project \
   --name EXPO_PUBLIC_MAPBOX_TOKEN \
   --value "pk.eyJ1...YOUR_MAPBOX_PUBLISHABLE_TOKEN" \
   --type string \
+  --visibility plaintext \
+  --environment production --environment preview --environment development \
   --force
 
-# Optional (recommended for wallet launch — swap test → live):
-# eas secret:create --scope project \
-#   --name EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY \
-#   --value "pk_live_..." \
-#   --type string \
-#   --force
+# Paystack — swap pk_test → pk_live before wallet launch:
+# eas env:create --scope project --name EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY \
+#   --value "pk_live_..." --type string --visibility plaintext \
+#   --environment production --force
+
+# Firebase files (when rotating):
+# eas env:create --scope project --name GOOGLE_SERVICES_JSON \
+#   --type file --value ./google-services.json --visibility sensitive \
+#   --environment production --force
 #
-# Also needed once Firebase push is wired in:
-# eas secret:create --scope project \
-#   --name GOOGLE_SERVICES_JSON \
-#   --type file \
-#   --value ./google-services.json
-#
-# eas secret:create --scope project \
-#   --name GOOGLE_SERVICE_INFO_PLIST \
-#   --type file \
-#   --value ./GoogleService-Info.plist
+# eas env:create --scope project --name GOOGLE_SERVICE_INFO_PLIST \
+#   --type file --value ./GoogleService-Info.plist --visibility sensitive \
+#   --environment production --force
 ```
 
 ## Why secrets (not hardcoded in eas.json)
@@ -45,8 +56,8 @@ eas secret:create --scope project \
 ## Verify
 
 ```bash
-eas secret:list --scope project
+eas env:list --environment production
+eas env:list --environment preview
 ```
 
-All four (MAPBOX, PAYSTACK, GOOGLE_SERVICES_JSON, GOOGLE_SERVICE_INFO_PLIST)
-should appear before running `eas build --profile production`.
+The five vars above should appear before running `eas build --profile production`.
