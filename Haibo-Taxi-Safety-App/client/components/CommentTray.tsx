@@ -23,17 +23,22 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useTheme } from "@/hooks/useTheme";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
+import { apiRequest } from "@/lib/query-client";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const TRAY_HEIGHT = SCREEN_HEIGHT * 0.5;
 
+// Matches the flat shape returned by GET /api/community/posts/:id/comments.
+// `parentId` is preserved for future threaded-reply rendering; current UI
+// renders flat newest-first.
 interface Comment {
   id: string;
+  userId: string;
   userName: string;
-  userAvatar?: string;
   content: string;
   createdAt: string;
-  likes: number;
+  likeCount?: number;
+  parentId?: string | null;
 }
 
 interface CommentTrayProps {
@@ -41,38 +46,48 @@ interface CommentTrayProps {
   onClose: () => void;
   reelId: string;
   commentCount: number;
+  onCommentPosted?: (newCount: number) => void;
 }
 
-const MOCK_COMMENTS: Comment[] = [
-  {
-    id: "1",
-    userName: "TaxiKing",
-    content: "This is so true! Happens every day on my route.",
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    likes: 24,
-  },
-  {
-    id: "2",
-    userName: "CommuterLife",
-    content: "The hand signal at 0:15 is wrong though. In Soweto we do it differently.",
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    likes: 12,
-  },
-  {
-    id: "3",
-    userName: "SafeRider",
-    content: "Great safety tip! Everyone should know this.",
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    likes: 45,
-  },
-];
-
-export default function CommentTray({ visible, onClose, reelId, commentCount }: CommentTrayProps) {
+export default function CommentTray({
+  visible,
+  onClose,
+  reelId,
+  commentCount,
+  onCommentPosted,
+}: CommentTrayProps) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const [comments, setComments] = useState<Comment[]>(MOCK_COMMENTS);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [newComment, setNewComment] = useState("");
   const translateY = useSharedValue(TRAY_HEIGHT);
+
+  // Fetch comments fresh every time the tray opens for a new reel. Debounce
+  // is unnecessary here — open is a discrete user event — but we guard
+  // against a stale reelId setting data for the wrong reel.
+  useEffect(() => {
+    if (!visible || !reelId) return;
+    let cancelled = false;
+    setLoading(true);
+    apiRequest("GET", `/api/community/posts/${reelId}/comments?limit=50`)
+      .then((res) => {
+        if (cancelled) return;
+        setComments(Array.isArray(res?.data) ? res.data : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("Load comments failed:", err?.message);
+        setComments([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, reelId]);
 
   useEffect(() => {
     if (visible) {
@@ -107,7 +122,8 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
   }));
 
   const handleSubmitComment = async () => {
-    if (!newComment.trim()) return;
+    const content = newComment.trim();
+    if (!content || submitting) return;
 
     if (Platform.OS !== "web") {
       try {
@@ -116,16 +132,23 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
       } catch {}
     }
 
-    const comment: Comment = {
-      id: Date.now().toString(),
-      userName: "You",
-      content: newComment.trim(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-    };
-
-    setComments((prev) => [comment, ...prev]);
-    setNewComment("");
+    setSubmitting(true);
+    try {
+      const posted: Comment = await apiRequest(
+        "POST",
+        `/api/community/posts/${reelId}/comment`,
+        { content },
+      );
+      // Optimistically prepend the server's canonical row (includes userName
+      // resolved via publicUserLabel() so no phone leaks).
+      setComments((prev) => [posted, ...prev]);
+      setNewComment("");
+      onCommentPosted?.(commentCount + 1);
+    } catch (err: any) {
+      console.warn("Post comment failed:", err?.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formatTime = (dateString: string) => {
@@ -166,7 +189,7 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
           >
             <Feather name="heart" size={14} color={theme.textSecondary} />
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              {item.likes}
+              {item.likeCount ?? 0}
             </ThemedText>
           </Pressable>
           <Pressable style={styles.commentAction}>
@@ -231,9 +254,13 @@ export default function CommentTray({ visible, onClose, reelId, commentCount }: 
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <Feather name="message-circle" size={48} color={theme.textSecondary} />
+                  <Feather
+                    name={loading ? "loader" : "message-circle"}
+                    size={48}
+                    color={theme.textSecondary}
+                  />
                   <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                    Be the first to comment!
+                    {loading ? "Loading comments…" : "Be the first to comment!"}
                   </ThemedText>
                 </View>
               }

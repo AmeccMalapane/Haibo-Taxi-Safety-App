@@ -8,7 +8,6 @@ import {
   Platform,
   ViewToken,
   Share,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -38,6 +37,8 @@ import {
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { createReelLink, getAppStoreLink } from "@/lib/deepLinks";
 import phushaContentData from "@/data/phusha_content.json";
+import CommentTray from "@/components/CommentTray";
+import { apiRequest } from "@/lib/query-client";
 
 // typeui-clean polish on top of the existing reels feed:
 //  - Bookmark active state switched from blue tint to rose tint (was
@@ -353,6 +354,12 @@ export default function PushaScreen() {
   const [activeCategory, setActiveCategory] = useState("for_you");
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Comment tray state — which reel's comments are open. `null` = tray
+  // closed. Lifting this up (vs inside the card) so the tray modal renders
+  // once on top of the feed rather than stacking per-card.
+  const [commentReelId, setCommentReelId] = useState<string | null>(null);
+  const [commentSeed, setCommentSeed] = useState<{ id: string; count: number } | null>(null);
+
   const allPosts: PhushaPost[] = phushaContentData as PhushaPost[];
 
   const filteredPosts =
@@ -366,6 +373,11 @@ export default function PushaScreen() {
         .then((Haptics) => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light))
         .catch(() => {});
     }
+    // Fire-and-forget toggle. The card animates local heart state on press;
+    // server persists the toggle. If auth is missing (local JSON-only feed
+    // in dev), apiRequest throws and we swallow — optimistic UI stays
+    // consistent with the local impression of a like.
+    apiRequest("POST", `/api/community/posts/${id}/like`).catch(() => {});
   };
 
   const handleComment = (id: string) => {
@@ -374,7 +386,9 @@ export default function PushaScreen() {
         .then((Haptics) => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light))
         .catch(() => {});
     }
-    Alert.alert("Comments", "Comments feature coming soon! Stay tuned.");
+    const post = allPosts.find((p) => p.id === id);
+    setCommentSeed({ id, count: post?.commentCount ?? 0 });
+    setCommentReelId(id);
   };
 
   const handleShare = async (id: string) => {
@@ -529,6 +543,13 @@ export default function PushaScreen() {
           <Feather name="plus" size={26} color="#FFFFFF" />
         </LinearGradient>
       </Pressable>
+
+      <CommentTray
+        visible={!!commentReelId}
+        reelId={commentReelId ?? ""}
+        commentCount={commentSeed?.count ?? 0}
+        onClose={() => setCommentReelId(null)}
+      />
     </View>
   );
 }
