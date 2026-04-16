@@ -31,6 +31,10 @@ regexes = [
   '''YOUR_PASSWORD''',
   '''CHANGE_ME''',
   '''sk_test_1234567890abcdef''',
+  # Mapbox "pk." tokens are publishable/public by design — restricted to
+  # specific URLs/bundle IDs in the Mapbox dashboard. Safe to commit.
+  # Secret "sk." tokens are still caught by other rules.
+  '''pk\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+''',
 ]
 
 # Files that are ALL documentation examples and can be skipped wholesale.
