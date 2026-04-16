@@ -521,6 +521,56 @@ export const locations = {
   },
 };
 
+// ─── Taxi fares ──────────────────────────────────────────────────────────────
+
+export interface FarePayload {
+  origin: string;
+  destination: string;
+  amount?: number | null;
+  currency?: string | null;
+  distanceKm?: number | null;
+  estimatedTimeMinutes?: number | null;
+  association?: string | null;
+  originRankId?: string | null;
+  destinationRankId?: string | null;
+}
+
+export const fares = {
+  async list(params: { q?: string; limit?: number; offset?: number } = {}) {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set("q", params.q);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/fares${query}`);
+  },
+
+  async adminCreate(data: FarePayload) {
+    return request("/api/admin/fares", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminUpdate(id: string, data: FarePayload) {
+    return request(`/api/admin/fares/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminDelete(id: string) {
+    return request(`/api/admin/fares/${id}`, { method: "DELETE" });
+  },
+
+  async adminImport(rows: any[]) {
+    return request("/api/admin/fares/import", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    });
+  },
+};
+
 // ─── Community ───────────────────────────────────────────────────────────────
 
 export const community = {

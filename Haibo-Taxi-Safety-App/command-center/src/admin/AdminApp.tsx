@@ -43,6 +43,7 @@ import { EventsPage } from "../pages/EventsPage";
 import { AuditLogPage } from "../pages/AuditLogPage";
 import { LocationsPage } from "../pages/LocationsPage";
 import { LocationsModerationPage } from "../pages/LocationsModerationPage";
+import { FaresPage } from "../pages/FaresPage";
 import { colors, spacing } from "../lib/brand";
 
 /**
@@ -98,6 +99,7 @@ export default function AdminApp() {
         <Route path="moderation/jobs" element={<JobsModerationPage />} />
         <Route path="moderation/locations" element={<LocationsModerationPage />} />
         <Route path="locations" element={<LocationsPage />} />
+        <Route path="fares" element={<FaresPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:userId/wallet" element={<UserWalletPage />} />
         <Route path="drivers" element={<DriversPage />} />

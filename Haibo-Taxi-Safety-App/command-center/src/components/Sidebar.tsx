@@ -60,6 +60,7 @@ const navItems: NavItem[] = [
   // Directory — reference
   { to: "/admin/users", label: "Users", Icon: Users, section: "Directory" },
   { to: "/admin/locations", label: "Taxi ranks", Icon: MapPin, section: "Directory" },
+  { to: "/admin/fares", label: "Taxi fares", Icon: Banknote, section: "Directory" },
   { to: "/admin/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
   { to: "/admin/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
   { to: "/admin/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },

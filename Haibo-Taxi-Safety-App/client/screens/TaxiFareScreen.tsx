@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import { useQuery } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -24,6 +25,7 @@ import {
 } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { getTaxiRoutes } from "@/lib/localData";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import type { TaxiRoute } from "@/lib/types";
 
 // typeui-clean Taxi Fare lookup — reads the existing taxi_routes_fares.json
@@ -51,7 +53,28 @@ export default function TaxiFareScreen() {
   const [originFocused, setOriginFocused] = useState(false);
   const [destinationFocused, setDestinationFocused] = useState(false);
 
-  const allRoutes = useMemo(() => getTaxiRoutes(), []);
+  // Prefer canonical fares from the DB (admin-editable via command-center)
+  // and fall back to the bundled JSON when offline, when the API returns
+  // an empty set, or when the request fails. The bundled JSON ships as
+  // TaxiRoute[] with the same public shape /api/fares returns, so the
+  // downstream filter/stats code doesn't care which source wins.
+  const localRoutes = useMemo(() => getTaxiRoutes(), []);
+  const faresQ = useQuery({
+    queryKey: ["/api/fares", "lookup"],
+    queryFn: async () => {
+      if (!getApiUrl()) return localRoutes;
+      try {
+        const res = await apiRequest("/api/fares?limit=500");
+        if (res?.data?.length > 0) return res.data as TaxiRoute[];
+        return localRoutes;
+      } catch {
+        return localRoutes;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    initialData: localRoutes,
+  });
+  const allRoutes: TaxiRoute[] = faresQ.data || localRoutes;
 
   const filteredRoutes = useMemo(() => {
     if (!originQuery && !destinationQuery) return allRoutes.slice(0, 50);

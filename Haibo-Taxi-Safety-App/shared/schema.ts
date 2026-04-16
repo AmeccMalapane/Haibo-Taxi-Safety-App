@@ -1409,6 +1409,39 @@ export const emergencyContacts = pgTable("emergency_contacts", {
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 
 // ============================================
+// TAXI FARES - Canonical origin-destination fares
+// ============================================
+// Mirrors the bundled taxi_routes_fares.json so admin can edit fares
+// from the command-center and the mobile TaxiFareScreen can prefer the
+// API when online (with the bundled JSON as offline fallback). Linked
+// to taxi_locations by optional FK — fares often cover routes whose
+// origin/destination names don't exactly match curated rank names, so
+// the link is opportunistic, not required. Distinct from fare_surveys
+// which captures per-trip user reports rather than canonical listings.
+export const taxiFares = pgTable("taxi_fares", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  origin: text("origin").notNull(),
+  destination: text("destination").notNull(),
+  originRankId: varchar("origin_rank_id"),
+  destinationRankId: varchar("destination_rank_id"),
+  amount: real("amount"), // nullable for "Price TBD" routes in the source data
+  currency: text("currency").default("ZAR"),
+  distanceKm: real("distance_km"),
+  estimatedTimeMinutes: integer("estimated_time_minutes"),
+  association: text("association"),
+  verificationStatus: text("verification_status").default("verified"),
+  addedBy: varchar("added_by"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  originIdx: index("idx_taxi_fares_origin").on(table.origin),
+  destinationIdx: index("idx_taxi_fares_destination").on(table.destination),
+}));
+
+export type TaxiFare = typeof taxiFares.$inferSelect;
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 

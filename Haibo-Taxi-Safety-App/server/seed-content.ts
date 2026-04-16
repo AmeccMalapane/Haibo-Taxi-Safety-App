@@ -28,6 +28,7 @@ import {
   taxiLocations,
   emergencyContacts,
   reels,
+  taxiFares,
 } from "../shared/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -256,6 +257,79 @@ async function seedPhushaReels(seedUserId: string, force: boolean) {
   log(`reels: seeded ${values.length} Haibo-branded phusha posts`);
 }
 
+// ─── Taxi fares (canonical origin-destination fares) ─────────────────────
+
+interface TaxiFareJson {
+  id: number;
+  routeName: string;
+  origin: string;
+  destination: string;
+  fare: number | null;
+  fareDisplay: string;
+  // Some rows carry distance as "169.24 km" string, others as number, others null.
+  distance: number | string | null;
+  estimatedTime: string | null;
+  association: string | null;
+}
+
+async function seedTaxiFares(seedUserId: string, force: boolean) {
+  const [existing] = await db
+    .select({ id: taxiFares.id })
+    .from(taxiFares)
+    .where(eq(taxiFares.addedBy, seedUserId))
+    .limit(1);
+
+  if (existing && !force) {
+    log("taxi_fares: already seeded (use --force to reseed)");
+    return;
+  }
+  if (existing && force) {
+    await db.delete(taxiFares).where(eq(taxiFares.addedBy, seedUserId));
+    log("taxi_fares: wiped seeded rows");
+  }
+
+  const rows = loadJson<TaxiFareJson[]>("client/data/taxi_routes_fares.json");
+
+  const values = rows.map((r) => {
+    // estimatedTime ships as "48 minutes" — pull the leading integer out
+    // so it fits the canonical integer column. Non-numeric strings
+    // leave the column null.
+    const minutes =
+      typeof r.estimatedTime === "string"
+        ? parseInt(r.estimatedTime, 10) || null
+        : null;
+    // Some JSON rows ship distance as "169.24 km" strings; strip the
+    // unit suffix before storing as a real.
+    const distanceKm =
+      typeof r.distance === "number"
+        ? r.distance
+        : typeof r.distance === "string"
+          ? parseFloat(r.distance) || null
+          : null;
+    return {
+      origin: r.origin,
+      destination: r.destination,
+      amount: r.fare ?? null,
+      currency: "ZAR",
+      distanceKm,
+      estimatedTimeMinutes: minutes,
+      association: r.association || null,
+      addedBy: seedUserId,
+      verificationStatus: "verified",
+      isActive: true,
+    };
+  });
+
+  const CHUNK = 100;
+  let inserted = 0;
+  for (let i = 0; i < values.length; i += CHUNK) {
+    const batch = values.slice(i, i + CHUNK);
+    await db.insert(taxiFares).values(batch);
+    inserted += batch.length;
+  }
+  log(`taxi_fares: seeded ${inserted} canonical SA taxi routes`);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -275,6 +349,9 @@ async function main() {
   }
   if (!only || only === "phusha") {
     await seedPhushaReels(seedUserId, force);
+  }
+  if (!only || only === "fares") {
+    await seedTaxiFares(seedUserId, force);
   }
 
   console.log("\nDone.");

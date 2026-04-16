@@ -8,7 +8,7 @@ import {
   sosAlerts, driverRatings, routeContributions, p2pTransfers,
   fareSurveys, stopContributions, photoContributions,
   referralCodes, referralSignups, referralRewards, vendorProfiles,
-  taxiLocations,
+  taxiLocations, taxiFares,
 } from "../../shared/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
@@ -1111,6 +1111,247 @@ router.post(
     } catch (error: any) {
       console.error("Admin location import error:", error);
       res.status(500).json({ error: "Failed to import locations" });
+    }
+  },
+);
+
+// ============ TAXI FARES CRUD (admin direct-entry) ============
+//
+// Canonical fares shown in the mobile TaxiFareScreen. Distinct from
+// fare_surveys which captures user-reported one-off fares with points.
+// Admin-added rows default to verification_status = "verified" so they
+// show immediately; soft delete flips isActive = false so existing
+// references (surveys citing a route, etc.) stay intact.
+
+function validateFarePayload(body: any): { ok: true; values: any } | { ok: false; error: string } {
+  const { origin, destination, amount, currency, distanceKm, estimatedTimeMinutes, association, originRankId, destinationRankId } = body;
+
+  if (!origin || typeof origin !== "string" || origin.trim().length === 0 || origin.length > 200) {
+    return { ok: false, error: "origin must be a non-empty string ≤ 200 characters" };
+  }
+  if (!destination || typeof destination !== "string" || destination.trim().length === 0 || destination.length > 200) {
+    return { ok: false, error: "destination must be a non-empty string ≤ 200 characters" };
+  }
+  if (amount !== undefined && amount !== null) {
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0 || amount > 100000) {
+      return { ok: false, error: "amount must be a number between 0 and 100000 (or null for Price TBD)" };
+    }
+  }
+  if (distanceKm !== undefined && distanceKm !== null && (typeof distanceKm !== "number" || distanceKm < 0 || distanceKm > 10000)) {
+    return { ok: false, error: "distanceKm must be a number between 0 and 10000" };
+  }
+  if (estimatedTimeMinutes !== undefined && estimatedTimeMinutes !== null && (typeof estimatedTimeMinutes !== "number" || estimatedTimeMinutes < 0 || estimatedTimeMinutes > 86400)) {
+    return { ok: false, error: "estimatedTimeMinutes must be a number between 0 and 86400" };
+  }
+  if (association !== undefined && association !== null && (typeof association !== "string" || association.length > 200)) {
+    return { ok: false, error: "association must be a string ≤ 200 characters" };
+  }
+
+  return {
+    ok: true,
+    values: {
+      origin: origin.trim(),
+      destination: destination.trim(),
+      amount: amount ?? null,
+      currency: currency || "ZAR",
+      distanceKm: distanceKm ?? null,
+      estimatedTimeMinutes: estimatedTimeMinutes ?? null,
+      association: association || null,
+      originRankId: originRankId || null,
+      destinationRankId: destinationRankId || null,
+    },
+  };
+}
+
+router.post(
+  "/fares",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = validateFarePayload(req.body);
+      if (parsed.ok === false) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const [created] = await db
+        .insert(taxiFares)
+        .values({
+          ...parsed.values,
+          addedBy: req.user!.userId,
+          verificationStatus: "verified",
+          isActive: true,
+        })
+        .returning();
+
+      await recordAdminAction(req, "fare.create", "fares", created.id, {
+        origin: created.origin,
+        destination: created.destination,
+      });
+
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Admin fare create error:", error);
+      res.status(500).json({ error: "Failed to create fare" });
+    }
+  },
+);
+
+router.put(
+  "/fares/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const parsed = validateFarePayload(req.body);
+      if (parsed.ok === false) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const [updated] = await db
+        .update(taxiFares)
+        .set({ ...parsed.values, updatedAt: new Date() })
+        .where(eq(taxiFares.id, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Fare not found" });
+        return;
+      }
+
+      await recordAdminAction(req, "fare.update", "fares", id, {
+        patch: parsed.values,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Admin fare update error:", error);
+      res.status(500).json({ error: "Failed to update fare" });
+    }
+  },
+);
+
+router.delete(
+  "/fares/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [updated] = await db
+        .update(taxiFares)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(taxiFares.id, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Fare not found" });
+        return;
+      }
+
+      await recordAdminAction(req, "fare.soft_delete", "fares", id, {});
+      res.json({ success: true, id });
+    } catch (error: any) {
+      console.error("Admin fare delete error:", error);
+      res.status(500).json({ error: "Failed to delete fare" });
+    }
+  },
+);
+
+router.post(
+  "/fares/import",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { rows } = req.body as { rows?: any[] };
+      if (!Array.isArray(rows)) {
+        res.status(400).json({ error: "rows must be an array" });
+        return;
+      }
+      if (rows.length === 0 || rows.length > 5000) {
+        res.status(400).json({ error: "rows must have 1-5000 entries per request" });
+        return;
+      }
+
+      const accepted: any[] = [];
+      const rejected: { index: number; reason: string }[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        // Accept the bundled JSON shape (amount in `fare` field) as well
+        // as the canonical shape (`amount`). The mapping mirrors how the
+        // seed script folds the old file's shape into the new table.
+        const amount =
+          typeof r.amount === "number"
+            ? r.amount
+            : typeof r.fare === "number"
+              ? r.fare
+              : null;
+        // estimatedTime can arrive as a string ("48 minutes") or as a
+        // number in minutes. Parse the leading integer out of strings.
+        const estimatedTimeMinutes =
+          typeof r.estimatedTimeMinutes === "number"
+            ? r.estimatedTimeMinutes
+            : typeof r.estimatedTime === "string"
+              ? parseInt(r.estimatedTime, 10) || null
+              : typeof r.estimatedTime === "number"
+                ? r.estimatedTime
+                : null;
+        const distanceKm =
+          typeof r.distanceKm === "number"
+            ? r.distanceKm
+            : typeof r.distance === "number"
+              ? r.distance
+              : null;
+
+        const folded = {
+          origin: r.origin,
+          destination: r.destination,
+          amount,
+          currency: r.currency,
+          distanceKm,
+          estimatedTimeMinutes,
+          association: r.association,
+        };
+        const parsed = validateFarePayload(folded);
+        if (parsed.ok === false) {
+          rejected.push({ index: i, reason: parsed.error });
+          continue;
+        }
+        accepted.push({
+          ...parsed.values,
+          addedBy: req.user!.userId,
+          verificationStatus: "verified",
+          isActive: true,
+        });
+      }
+
+      if (accepted.length === 0) {
+        res.status(400).json({ inserted: 0, rejected, error: "No valid rows in import" });
+        return;
+      }
+
+      const CHUNK = 100;
+      let inserted = 0;
+      for (let i = 0; i < accepted.length; i += CHUNK) {
+        const batch = accepted.slice(i, i + CHUNK);
+        await db.insert(taxiFares).values(batch);
+        inserted += batch.length;
+      }
+
+      await recordAdminAction(req, "fare.import", "fares", "bulk", {
+        inserted,
+        rejectedCount: rejected.length,
+      });
+
+      res.json({ inserted, rejected });
+    } catch (error: any) {
+      console.error("Admin fare import error:", error);
+      res.status(500).json({ error: "Failed to import fares" });
     }
   },
 );
