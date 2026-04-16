@@ -9,7 +9,7 @@ Based on actual code behaviour as of 2026-04-16.
 | --- | --- |
 | Does your app collect or share any user data? | **Yes** |
 | Is all data collected encrypted in transit? | **Yes** (HTTPS/TLS to haibo-api-prod.azurewebsites.net) |
-| Do you provide a way for users to request data deletion? | **Yes** — in-app account deletion in Profile → Settings, plus email support at hello@haibo.africa |
+| Do you provide a way for users to request data deletion? | **Yes** — in-app account deletion in Profile → Settings, plus email to privacy@haibo.africa |
 
 ## Data types collected
 

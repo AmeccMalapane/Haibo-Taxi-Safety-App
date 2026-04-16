@@ -60,7 +60,7 @@ _(76 chars)_
 >
 > Sala kahle. Travel safe.
 >
-> Support: hello@haibo.africa
+> Support: support@haibo.africa
 > Web: https://haibo.africa
 
 ## Graphic assets required
@@ -89,9 +89,9 @@ frames later if there's time.
 
 ## Contact details
 
-- **Email**: hello@haibo.africa _(must be monitored — Google sends critical notices here)_
+- **Email**: support@haibo.africa _(must be monitored — Google sends critical notices here; Information Officer queries go to privacy@haibo.africa)_
 - **Website**: https://haibo.africa
-- **Privacy policy**: https://haibo.africa/privacy _(TODO — see `privacy-policy.md`)_
+- **Privacy policy URL (for Play Console)**: https://haibo-command-center.azurewebsites.net/privacy — LIVE, 2054 words, POPIA-compliant. Post-launch: mirror to https://haibo.africa/privacy via WordPress for a cleaner URL.
 
 ## Pricing & availability
 
