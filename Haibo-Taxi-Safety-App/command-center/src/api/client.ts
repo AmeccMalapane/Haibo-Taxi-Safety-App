@@ -466,6 +466,20 @@ export const drivers = {
 
 // ─── Locations ───────────────────────────────────────────────────────────────
 
+export interface LocationPayload {
+  name: string;
+  type?: "rank" | "formal_stop" | "informal_stop" | "landmark" | "interchange";
+  latitude: number;
+  longitude: number;
+  address?: string | null;
+  description?: string | null;
+  capacity?: number | null;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  operatingDays?: string[] | null;
+  routes?: string[] | null;
+}
+
 export const locations = {
   async list(page = 1, limit = 50) {
     return request(`/api/locations?page=${page}&limit=${limit}`);
@@ -477,6 +491,33 @@ export const locations = {
 
   async create(data: any) {
     return request("/api/locations", { method: "POST", body: JSON.stringify(data) });
+  },
+
+  // ─── Admin-only CRUD (bypasses mobile-contribution moderation queue) ───
+
+  async adminCreate(data: LocationPayload) {
+    return request("/api/admin/locations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminUpdate(id: string, data: LocationPayload) {
+    return request(`/api/admin/locations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async adminDelete(id: string) {
+    return request(`/api/admin/locations/${id}`, { method: "DELETE" });
+  },
+
+  async adminImport(rows: any[]) {
+    return request("/api/admin/locations/import", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    });
   },
 };
 

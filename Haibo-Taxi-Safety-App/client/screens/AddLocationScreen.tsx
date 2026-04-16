@@ -63,13 +63,13 @@ export default function AddLocationScreen() {
 
   const mutation = useMutation({
     mutationFn: async (data: NewLocationData) => {
-      return apiRequest("/api/map/locations", {
+      return apiRequest("/api/locations", {
         method: "POST",
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/map/locations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/locations"] });
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }

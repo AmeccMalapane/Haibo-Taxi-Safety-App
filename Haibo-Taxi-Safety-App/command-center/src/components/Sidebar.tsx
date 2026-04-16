@@ -23,6 +23,7 @@ import {
   Store,
   Compass,
   LogOut,
+  MapPin,
   LucideIcon,
 } from "lucide-react";
 import { colors, radius, spacing, shadows, gradients, transitions } from "../lib/brand";
@@ -54,9 +55,11 @@ const navItems: NavItem[] = [
   { to: "/admin/moderation/reels", label: "Reels", Icon: Video, section: "Moderation" },
   { to: "/admin/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
   { to: "/admin/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
+  { to: "/admin/moderation/locations", label: "Taxi ranks", Icon: MapPin, section: "Moderation" },
 
   // Directory — reference
   { to: "/admin/users", label: "Users", Icon: Users, section: "Directory" },
+  { to: "/admin/locations", label: "Taxi ranks", Icon: MapPin, section: "Directory" },
   { to: "/admin/fleet", label: "Fleet", Icon: Truck, section: "Directory" },
   { to: "/admin/group-rides", label: "Group rides", Icon: Users2, section: "Directory" },
   { to: "/admin/deliveries", label: "Deliveries", Icon: Package, section: "Directory" },

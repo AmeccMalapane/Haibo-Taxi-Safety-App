@@ -8,6 +8,7 @@ import {
   sosAlerts, driverRatings, routeContributions, p2pTransfers,
   fareSurveys, stopContributions, photoContributions,
   referralCodes, referralSignups, referralRewards, vendorProfiles,
+  taxiLocations,
 } from "../../shared/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { eq, desc, sql, count, and, gte, lte, sum, avg, inArray } from "drizzle-orm";
@@ -539,6 +540,13 @@ const MODERATION_RESOURCES: Record<
     listColumns: any;
     allowedFields: Array<"status" | "isVerified" | "isFeatured">;
     statusValues?: Set<string>;
+    // Override for tables that use a non-standard status column name —
+    // e.g. `taxi_locations.verificationStatus` is the column of interest
+    // for that table rather than `.status`. Pass the JS property name
+    // (not the SQL column name) — used both to resolve the Drizzle
+    // column via `table[statusColumn]` for filtering and to route
+    // update patches to the correct column via `set({ [statusColumn]: ... })`.
+    statusColumn?: string;
   }
 > = {
   reels: {
@@ -704,6 +712,33 @@ const MODERATION_RESOURCES: Record<
     allowedFields: ["status"],
     statusValues: new Set(["pending", "approved", "rejected", "hidden"]),
   },
+  // User-submitted taxi ranks (mobile "+ Add Rank" button) land as
+  // verification_status = "pending" and surface here for admin review.
+  // Ranks added directly from the admin page bypass the queue by
+  // submitting with verification_status = "verified".
+  locations: {
+    table: taxiLocations,
+    idColumn: taxiLocations.id,
+    listColumns: {
+      id: taxiLocations.id,
+      createdAt: taxiLocations.addedDate,
+      status: taxiLocations.verificationStatus,
+      name: taxiLocations.name,
+      type: taxiLocations.type,
+      latitude: taxiLocations.latitude,
+      longitude: taxiLocations.longitude,
+      address: taxiLocations.address,
+      description: taxiLocations.description,
+      capacity: taxiLocations.capacity,
+      addedBy: taxiLocations.addedBy,
+      upvotes: taxiLocations.upvotes,
+      downvotes: taxiLocations.downvotes,
+      confidenceScore: taxiLocations.confidenceScore,
+    },
+    allowedFields: ["status"],
+    statusValues: new Set(["pending", "verified", "rejected"]),
+    statusColumn: "verificationStatus",
+  },
 };
 
 // GET /api/admin/moderation/:resource — list items for a moderation queue.
@@ -725,14 +760,24 @@ router.get(
       const { status, limit: rawLimit } = req.query as { status?: string; limit?: string };
       const limit = Math.min(Number(rawLimit) || 100, 200);
 
+      // Resources like taxi_locations track moderation state in a column
+      // named something other than `status` — honour the override.
+      const statusCol = cfg.statusColumn
+        ? (cfg.table as any)[cfg.statusColumn]
+        : (cfg.table as any).status;
+      // Order by createdAt for most tables but fall back to addedDate for
+      // tables that use that convention instead (taxi_locations).
+      const orderCol =
+        (cfg.table as any).createdAt ?? (cfg.table as any).addedDate;
+
       const baseQuery = db
         .select(cfg.listColumns)
         .from(cfg.table)
-        .orderBy(desc((cfg.table as any).createdAt))
+        .orderBy(desc(orderCol))
         .limit(limit);
 
       const results = status
-        ? await baseQuery.where(eq((cfg.table as any).status, status))
+        ? await baseQuery.where(eq(statusCol, status))
         : await baseQuery;
 
       res.json({ data: results });
@@ -759,6 +804,11 @@ router.put(
         return;
       }
 
+      // Resolve the JS property name that backs the "status" API field.
+      // For most tables this is literally "status"; taxi_locations and
+      // friends override to use "verificationStatus" etc.
+      const statusDbKey: string = cfg.statusColumn ?? "status";
+
       const patch: Record<string, any> = {};
       for (const field of cfg.allowedFields) {
         if (!(field in req.body)) continue;
@@ -775,6 +825,11 @@ router.put(
             });
             return;
           }
+          // Route the "status" field to the actual DB column (which may
+          // be `verificationStatus` for taxi_locations, `status` for
+          // everything else).
+          patch[statusDbKey] = value;
+          continue;
         } else if (field === "isVerified" || field === "isFeatured") {
           // Strict boolean — reject "true" strings, 1, 0, null, etc.
           // Previously the ORM would coerce anything and the admin UI
@@ -819,6 +874,245 @@ router.put(
       res.status(500).json({ error: "Failed to update item" });
     }
   }
+);
+
+// ============ LOCATIONS CRUD (admin direct-entry) ============
+//
+// These are distinct from the moderation endpoints above. Moderation
+// reviews rows users submitted via the mobile "+ Add Rank" button.
+// These let an ops admin add/edit/soft-delete ranks directly from the
+// command-center without routing through the mobile contribution flow.
+// All writes go in with verification_status = "verified" so admin-added
+// ranks skip the approval queue.
+
+const LOCATION_TYPES = new Set([
+  "rank", "formal_stop", "informal_stop", "landmark", "interchange",
+]);
+
+function validateLocationPayload(body: any): { ok: true; values: any } | { ok: false; error: string } {
+  const { name, type, latitude, longitude, address, description, capacity, opensAt, closesAt, operatingDays, routes } = body;
+
+  if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 200) {
+    return { ok: false, error: "name must be a non-empty string ≤ 200 characters" };
+  }
+  if (
+    typeof latitude !== "number" || !Number.isFinite(latitude) ||
+    latitude < -90 || latitude > 90 ||
+    typeof longitude !== "number" || !Number.isFinite(longitude) ||
+    longitude < -180 || longitude > 180
+  ) {
+    return { ok: false, error: "latitude (-90..90) and longitude (-180..180) are required" };
+  }
+  if (type !== undefined && type !== null && type !== "" && !LOCATION_TYPES.has(type)) {
+    return { ok: false, error: `type must be one of: ${Array.from(LOCATION_TYPES).join(", ")}` };
+  }
+  if (address !== undefined && address !== null && (typeof address !== "string" || address.length > 300)) {
+    return { ok: false, error: "address must be a string ≤ 300 characters" };
+  }
+  if (description !== undefined && description !== null && (typeof description !== "string" || description.length > 1000)) {
+    return { ok: false, error: "description must be a string ≤ 1000 characters" };
+  }
+  if (capacity !== undefined && capacity !== null && (typeof capacity !== "number" || capacity < 0 || capacity > 10000)) {
+    return { ok: false, error: "capacity must be a number between 0 and 10000" };
+  }
+
+  return {
+    ok: true,
+    values: {
+      name: name.trim(),
+      type: type || "informal_stop",
+      latitude,
+      longitude,
+      address: address || null,
+      description: description || null,
+      capacity: capacity ?? null,
+      opensAt: opensAt || null,
+      closesAt: closesAt || null,
+      operatingDays: Array.isArray(operatingDays) ? operatingDays : null,
+      routes: Array.isArray(routes) ? routes : null,
+    },
+  };
+}
+
+// POST /api/admin/locations — create a rank as verified (skip queue).
+router.post(
+  "/locations",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = validateLocationPayload(req.body);
+      if (parsed.ok === false) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const [created] = await db
+        .insert(taxiLocations)
+        .values({
+          ...parsed.values,
+          addedBy: req.user!.userId,
+          verificationStatus: "verified",
+          confidenceScore: 100,
+          isActive: true,
+        })
+        .returning();
+
+      await recordAdminAction(req, "location.create", "locations", created.id, {
+        name: created.name,
+      });
+
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Admin location create error:", error);
+      res.status(500).json({ error: "Failed to create location" });
+    }
+  },
+);
+
+// PUT /api/admin/locations/:id — edit an existing rank.
+router.put(
+  "/locations/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const parsed = validateLocationPayload(req.body);
+      if (parsed.ok === false) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const [updated] = await db
+        .update(taxiLocations)
+        .set({ ...parsed.values, lastUpdated: new Date() })
+        .where(eq(taxiLocations.id, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Location not found" });
+        return;
+      }
+
+      await recordAdminAction(req, "location.update", "locations", id, {
+        patch: parsed.values,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Admin location update error:", error);
+      res.status(500).json({ error: "Failed to update location" });
+    }
+  },
+);
+
+// DELETE /api/admin/locations/:id — soft delete (isActive=false).
+// Hard delete is intentionally disallowed: referenced by votes/reviews/
+// fare surveys, and "user contributed then ops removed" is useful data
+// to keep for audit purposes.
+router.delete(
+  "/locations/:id",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [updated] = await db
+        .update(taxiLocations)
+        .set({ isActive: false, lastUpdated: new Date() })
+        .where(eq(taxiLocations.id, id))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Location not found" });
+        return;
+      }
+
+      await recordAdminAction(req, "location.soft_delete", "locations", id, {});
+
+      res.json({ success: true, id });
+    } catch (error: any) {
+      console.error("Admin location delete error:", error);
+      res.status(500).json({ error: "Failed to delete location" });
+    }
+  },
+);
+
+// POST /api/admin/locations/import — bulk insert from a CSV/JSON array.
+// Accepts either the existing bundled-JSON shape (name, latitude,
+// longitude, type, city, province, address) or a flattened form. Each
+// row is validated independently; bad rows are skipped and reported.
+router.post(
+  "/locations/import",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { rows } = req.body as { rows?: any[] };
+      if (!Array.isArray(rows)) {
+        res.status(400).json({ error: "rows must be an array" });
+        return;
+      }
+      if (rows.length === 0 || rows.length > 5000) {
+        res.status(400).json({ error: "rows must have 1-5000 entries per request" });
+        return;
+      }
+
+      const accepted: any[] = [];
+      const rejected: { index: number; reason: string }[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        // Fold city + province into address if present (same pattern as
+        // seed-content.ts) so the flat schema captures the info.
+        const folded = {
+          ...r,
+          address: [r.address, r.city, r.province].filter(Boolean).join(" · ") || null,
+        };
+        const parsed = validateLocationPayload(folded);
+        if (parsed.ok === false) {
+          rejected.push({ index: i, reason: parsed.error });
+          continue;
+        }
+        accepted.push({
+          ...parsed.values,
+          addedBy: req.user!.userId,
+          verificationStatus: "verified",
+          confidenceScore: 100,
+          isActive: true,
+        });
+      }
+
+      if (accepted.length === 0) {
+        res.status(400).json({
+          inserted: 0,
+          rejected,
+          error: "No valid rows in import",
+        });
+        return;
+      }
+
+      // Batch inserts in chunks to respect Postgres' parameter limit.
+      const CHUNK = 100;
+      let inserted = 0;
+      for (let i = 0; i < accepted.length; i += CHUNK) {
+        const batch = accepted.slice(i, i + CHUNK);
+        await db.insert(taxiLocations).values(batch);
+        inserted += batch.length;
+      }
+
+      await recordAdminAction(req, "location.import", "locations", "bulk", {
+        inserted,
+        rejectedCount: rejected.length,
+      });
+
+      res.json({ inserted, rejected });
+    } catch (error: any) {
+      console.error("Admin location import error:", error);
+      res.status(500).json({ error: "Failed to import locations" });
+    }
+  },
 );
 
 // ============ AUDIT LOG ============
