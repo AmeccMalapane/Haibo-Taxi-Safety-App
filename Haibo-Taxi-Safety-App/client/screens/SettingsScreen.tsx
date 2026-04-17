@@ -21,6 +21,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedText } from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
 import { registerForPushNotifications } from "@/lib/notifications";
@@ -59,9 +60,11 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { isAuthenticated, logout } = useAuth();
+  const { currentLang, setLanguage, languages } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [notifications, setNotifications] = useState(true);
+  const [showLangPicker, setShowLangPicker] = useState(false);
 
   // Hydrate persisted toggles
   useEffect(() => {
@@ -311,6 +314,62 @@ export default function SettingsScreen() {
             { backgroundColor: theme.backgroundRoot },
           ]}
         >
+          {/* Language */}
+          <SectionHeader theme={theme} label="LANGUAGE" />
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <SettingRow
+              icon="globe"
+              label="App language"
+              hint={languages.find((l) => l.code === currentLang)?.nativeLabel || "English"}
+              onPress={() => setShowLangPicker(!showLangPicker)}
+              theme={theme}
+            />
+            {showLangPicker && (
+              <View style={styles.langPicker}>
+                {languages.map((lang) => {
+                  const isActive = currentLang === lang.code;
+                  return (
+                    <Pressable
+                      key={lang.code}
+                      onPress={() => {
+                        setLanguage(lang.code);
+                        setShowLangPicker(false);
+                      }}
+                      style={[
+                        styles.langOption,
+                        {
+                          backgroundColor: isActive
+                            ? BrandColors.primary.gradientStart + "12"
+                            : "transparent",
+                          borderColor: isActive
+                            ? BrandColors.primary.gradientStart
+                            : theme.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={[styles.langLabel, isActive && { color: BrandColors.primary.gradientStart }]}>
+                          {lang.nativeLabel}
+                        </ThemedText>
+                        <ThemedText style={[styles.langSublabel, { color: theme.textSecondary }]}>
+                          {lang.label}
+                        </ThemedText>
+                      </View>
+                      {isActive && (
+                        <Feather name="check" size={18} color={BrandColors.primary.gradientStart} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
           {/* Privacy & Security */}
           <SectionHeader theme={theme} label="PRIVACY & SECURITY" />
           <View
@@ -771,5 +830,24 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
+  },
+  langPicker: {
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  langOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  langLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  langSublabel: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
