@@ -147,8 +147,6 @@ function AuthGatedApp() {
 
   const handleOnboardingComplete = async () => {
     try {
-      // Onboarding calls this only after the consent checkbox is ticked,
-      // so writing both keys atomically is correct.
       await Promise.all([
         AsyncStorage.setItem(ONBOARDING_KEY, "true"),
         AsyncStorage.setItem(CONSENT_KEY, "true"),
@@ -159,24 +157,11 @@ function AuthGatedApp() {
     setShowOnboarding(false);
   };
 
-  // Still loading auth or onboarding check
-  if (authLoading || !onboardingChecked) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#C81E5E" />
-      </View>
-    );
-  }
-
-  // Show onboarding first if not completed
-  if (showOnboarding) {
-    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
-  }
-
-  // Deep-link linking config — wires haibo-taxi:// and https://haibo.africa
-  // URLs to root-stack screens via the shared map in lib/deepLinks.ts.
-  // Supports inbound sharing from other apps (share sheet → Haibo) and
-  // opening shared links (friend shares a route → opens RouteDetail).
+  // useMemo MUST be called before any early return — React requires hooks
+  // to fire in the same order on every render. The old placement (after the
+  // loading/onboarding guards) caused "Rendered more hooks than during the
+  // previous render" because the first render hit the early return (5 hooks)
+  // and the second render fell through to useMemo (6 hooks).
   const linking = useMemo<LinkingOptions<RootStackParamList>>(
     () => ({
       prefixes: [
@@ -192,7 +177,18 @@ function AuthGatedApp() {
     []
   );
 
-  // Main app — RootStackNavigator handles auth vs main routing
+  if (authLoading || !onboardingChecked) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#C81E5E" />
+      </View>
+    );
+  }
+
+  if (showOnboarding) {
+    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+  }
+
   return (
     <NavigationContainer linking={linking}>
       <RootStackNavigator />
