@@ -4,9 +4,10 @@ import {
   ownerProfiles,
   driverOwnerInvitations,
   driverProfiles,
+  walletTransactions,
   users,
 } from "../../shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql, gte, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -315,6 +316,179 @@ router.get("/drivers", authMiddleware, async (req: AuthRequest, res: Response) =
   } catch (err: any) {
     console.error("List owner drivers error:", err);
     res.status(500).json({ error: "Failed to list drivers" });
+  }
+});
+
+// ─── GET /api/owner/dashboard ───────────────────────────────────────────
+// One-shot snapshot for the OwnerDashboardScreen: aggregate fleet
+// revenue, pending settlements, driver count. Designed to be cheap
+// enough to call on screen focus without pagination.
+router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = req.user!.userId;
+
+    // Owner's own wallet (platform withdrawals go from here).
+    const [owner] = await db
+      .select({
+        walletBalance: users.walletBalance,
+        displayName: users.displayName,
+        phone: users.phone,
+      })
+      .from(users)
+      .where(eq(users.id, ownerId))
+      .limit(1);
+
+    // Linked drivers — for driver count + ids used by downstream aggregates.
+    const linkedDrivers = await db
+      .select({
+        userId: driverProfiles.userId,
+        fareBalance: users.fareBalance,
+        displayName: users.displayName,
+      })
+      .from(driverProfiles)
+      .leftJoin(users, eq(users.id, driverProfiles.userId))
+      .where(
+        and(
+          eq(driverProfiles.ownerId, ownerId),
+          eq(driverProfiles.linkStatus, "active"),
+        ),
+      );
+
+    const driverIds = linkedDrivers.map((d) => d.userId).filter(Boolean);
+
+    // Aggregate pending fare balances across all linked drivers. This is
+    // money the owner hasn't received yet — drivers see it in their
+    // dashboards, owner settles it on withdrawal.
+    const totalPendingFare = linkedDrivers.reduce(
+      (sum, d) => sum + Number(d.fareBalance || 0),
+      0,
+    );
+
+    // Today's gross inflow (fares + hub deliveries) across all linked
+    // drivers. Counts only credits (positive amounts) since debits
+    // represent money movement out.
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+
+    let today = 0;
+    let week = 0;
+    if (driverIds.length > 0) {
+      const [todayAgg] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(
+            inArray(walletTransactions.userId, driverIds),
+            inArray(walletTransactions.type, ["fare_in", "hub_delivery_in"]),
+            gte(walletTransactions.createdAt, dayStart),
+          ),
+        );
+      today = Number(todayAgg?.total || 0);
+
+      const [weekAgg] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(
+            inArray(walletTransactions.userId, driverIds),
+            inArray(walletTransactions.type, ["fare_in", "hub_delivery_in"]),
+            gte(walletTransactions.createdAt, weekStart),
+          ),
+        );
+      week = Number(weekAgg?.total || 0);
+    }
+
+    res.json({
+      owner: {
+        displayName: owner?.displayName || "Owner",
+        walletBalance: Number(owner?.walletBalance || 0),
+      },
+      fleet: {
+        driverCount: linkedDrivers.length,
+        totalPendingFare,
+      },
+      earnings: { today, week },
+      drivers: linkedDrivers.map((d) => ({
+        userId: d.userId,
+        displayName: d.displayName || "Driver",
+        fareBalance: Number(d.fareBalance || 0),
+      })),
+    });
+  } catch (err: any) {
+    console.error("Owner dashboard error:", err);
+    res.status(500).json({ error: "Failed to load dashboard" });
+  }
+});
+
+// ─── GET /api/owner/stats/timeseries ────────────────────────────────────
+// Daily fleet earnings for the last 7 or 30 days, shaped for the
+// StatTrendChart component. Pre-aggregates on the DB side so the
+// client receives ≤30 rows instead of thousands.
+router.get("/stats/timeseries", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = req.user!.userId;
+    const windowDays = Math.min(
+      Math.max(Number(req.query.window) || 7, 1),
+      90,
+    );
+
+    // Resolve linked driver ids up front.
+    const linkedDrivers = await db
+      .select({ userId: driverProfiles.userId })
+      .from(driverProfiles)
+      .where(
+        and(
+          eq(driverProfiles.ownerId, ownerId),
+          eq(driverProfiles.linkStatus, "active"),
+        ),
+      );
+    const driverIds = linkedDrivers.map((d) => d.userId).filter(Boolean);
+
+    if (driverIds.length === 0) {
+      res.json({ windowDays, points: [] });
+      return;
+    }
+
+    const windowStart = new Date();
+    windowStart.setUTCHours(0, 0, 0, 0);
+    windowStart.setUTCDate(windowStart.getUTCDate() - (windowDays - 1));
+
+    const rows = await db
+      .select({
+        day: sql<string>`to_char(date_trunc('day', ${walletTransactions.createdAt}), 'YYYY-MM-DD')`,
+        total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+      })
+      .from(walletTransactions)
+      .where(
+        and(
+          inArray(walletTransactions.userId, driverIds),
+          inArray(walletTransactions.type, ["fare_in", "hub_delivery_in"]),
+          gte(walletTransactions.createdAt, windowStart),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${walletTransactions.createdAt})`)
+      .orderBy(sql`date_trunc('day', ${walletTransactions.createdAt})`);
+
+    // Fill in zero-days so the chart x-axis is continuous.
+    const byDay = new Map(rows.map((r) => [r.day, Number(r.total || 0)]));
+    const points: { day: string; total: number }[] = [];
+    for (let i = 0; i < windowDays; i++) {
+      const d = new Date(windowStart);
+      d.setUTCDate(d.getUTCDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      points.push({ day: key, total: byDay.get(key) ?? 0 });
+    }
+
+    res.json({ windowDays, points });
+  } catch (err: any) {
+    console.error("Owner timeseries error:", err);
+    res.status(500).json({ error: "Failed to load timeseries" });
   }
 });
 

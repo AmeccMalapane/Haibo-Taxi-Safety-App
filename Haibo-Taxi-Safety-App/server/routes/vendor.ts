@@ -1,8 +1,8 @@
 import { Router, Response } from "express";
 import QRCode from "qrcode";
 import { db } from "../db";
-import { vendorProfiles, users, p2pTransfers } from "../../shared/schema";
-import { eq, desc, ilike, and, isNotNull, sql, SQL } from "drizzle-orm";
+import { vendorProfiles, users, p2pTransfers, walletTransactions } from "../../shared/schema";
+import { eq, desc, ilike, and, isNotNull, sql, SQL, gte } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { notifyUser } from "../services/notifications";
 
@@ -497,5 +497,160 @@ router.get(
     }
   }
 );
+
+// ─── GET /api/vendor-profile/dashboard ──────────────────────────────────
+// One-shot snapshot for the VendorDashboardScreen: wallet balance,
+// today / week totals, recent transactions, and the vendorRef for the
+// static QR display.
+router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const [profile] = await db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.userId, userId))
+      .limit(1);
+
+    if (!profile) {
+      res.status(404).json({ error: "Vendor profile not found — complete onboarding first" });
+      return;
+    }
+
+    const [wallet] = await db
+      .select({
+        walletBalance: users.walletBalance,
+        displayName: users.displayName,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+
+    const [todayAgg] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.userId, userId),
+          eq(walletTransactions.type, "vendor_revenue_in"),
+          gte(walletTransactions.createdAt, dayStart),
+        ),
+      );
+
+    const [weekAgg] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.userId, userId),
+          eq(walletTransactions.type, "vendor_revenue_in"),
+          gte(walletTransactions.createdAt, weekStart),
+        ),
+      );
+
+    // Recent sales — last 15 vendor_revenue_in rows with the buyer's
+    // display name joined in for the activity list.
+    const recent = await db
+      .select({
+        id: walletTransactions.id,
+        amount: walletTransactions.amount,
+        description: walletTransactions.description,
+        createdAt: walletTransactions.createdAt,
+        buyerName: users.displayName,
+      })
+      .from(walletTransactions)
+      .leftJoin(users, eq(users.id, walletTransactions.relatedUserId))
+      .where(
+        and(
+          eq(walletTransactions.userId, userId),
+          eq(walletTransactions.type, "vendor_revenue_in"),
+        ),
+      )
+      .orderBy(desc(walletTransactions.createdAt))
+      .limit(15);
+
+    res.json({
+      vendor: {
+        vendorRef: profile.vendorRef,
+        businessName: profile.businessName,
+        vendorType: profile.vendorType,
+        status: profile.status,
+        totalSales: Number(profile.totalSales || 0),
+        salesCount: Number(profile.salesCount || 0),
+        kycVerified: profile.status === "verified",
+        hasPayoutBank: Boolean(profile.bankCode && profile.accountNumber),
+      },
+      wallet: {
+        balance: Number(wallet?.walletBalance || 0),
+        displayName: wallet?.displayName || "Vendor",
+      },
+      earnings: {
+        today: { total: Number(todayAgg?.total || 0), count: Number(todayAgg?.count || 0) },
+        week: { total: Number(weekAgg?.total || 0), count: Number(weekAgg?.count || 0) },
+      },
+      recent,
+    });
+  } catch (err: any) {
+    console.error("Vendor dashboard error:", err);
+    res.status(500).json({ error: "Failed to load dashboard" });
+  }
+});
+
+// ─── GET /api/vendor-profile/stats/timeseries ───────────────────────────
+// Daily revenue for the StatTrendChart. Same shape as owner timeseries.
+router.get("/stats/timeseries", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const windowDays = Math.min(
+      Math.max(Number(req.query.window) || 7, 1),
+      90,
+    );
+
+    const windowStart = new Date();
+    windowStart.setUTCHours(0, 0, 0, 0);
+    windowStart.setUTCDate(windowStart.getUTCDate() - (windowDays - 1));
+
+    const rows = await db
+      .select({
+        day: sql<string>`to_char(date_trunc('day', ${walletTransactions.createdAt}), 'YYYY-MM-DD')`,
+        total: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+      })
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.userId, userId),
+          eq(walletTransactions.type, "vendor_revenue_in"),
+          gte(walletTransactions.createdAt, windowStart),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${walletTransactions.createdAt})`)
+      .orderBy(sql`date_trunc('day', ${walletTransactions.createdAt})`);
+
+    const byDay = new Map(rows.map((r) => [r.day, Number(r.total || 0)]));
+    const points: { day: string; total: number }[] = [];
+    for (let i = 0; i < windowDays; i++) {
+      const d = new Date(windowStart);
+      d.setUTCDate(d.getUTCDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      points.push({ day: key, total: byDay.get(key) ?? 0 });
+    }
+
+    res.json({ windowDays, points });
+  } catch (err: any) {
+    console.error("Vendor timeseries error:", err);
+    res.status(500).json({ error: "Failed to load timeseries" });
+  }
+});
 
 export default router;
