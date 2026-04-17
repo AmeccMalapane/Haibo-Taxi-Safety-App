@@ -41,7 +41,16 @@ import FindRanksIllustration from "@/assets/svg/FINDRNKS.svg";
 // feature that never landed. Profile + role are now captured in
 // ProfileSetupScreen.
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Hero-dominant layout: the illustration stage takes ~60% of the screen,
+// the text + CTA card anchors the bottom 40%. Visual-first for the
+// youthful audience; text card is the "lower card" the user asked for.
+const HERO_HEIGHT = Math.round(SCREEN_HEIGHT * 0.6);
+const ILLUSTRATION_SIZE = Math.min(
+  SCREEN_WIDTH * 0.78,
+  HERO_HEIGHT - 80,
+);
 
 interface OnboardingSlide {
   id: string;
@@ -143,7 +152,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
         <View
           style={[
             styles.illustrationStage,
-            { paddingTop: insets.top + Spacing["3xl"] + Spacing.lg },
+            { paddingTop: insets.top + Spacing.lg },
           ]}
         >
           <Illustration width={ILLUSTRATION_SIZE} height={ILLUSTRATION_SIZE} />
@@ -382,8 +391,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   );
 }
 
-const HERO_HEIGHT = 320;
-const ILLUSTRATION_SIZE = 220;
+// HERO_HEIGHT and ILLUSTRATION_SIZE are declared at module top so slide
+// layouts can reference them during render. Do not duplicate them here.
 
 const styles = StyleSheet.create({
   root: {
@@ -414,14 +423,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
+  // 60% of the screen — illustration floats centered inside, fills the
+  // whole hero area so the app feels visual-first on the youth audience's
+  // device. No bottom padding so the textCard's negative margin overlaps
+  // cleanly.
   illustrationStage: {
+    height: HERO_HEIGHT,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: Spacing.xl,
   },
+  // 40% of the screen — anchored bottom card with the title, description,
+  // and plenty of breathing room above the footer CTA. `minHeight` guarantees
+  // the card reserves its space even on very tall devices.
   textCard: {
     flex: 1,
+    minHeight: Math.round(SCREEN_HEIGHT * 0.4),
     alignSelf: "stretch",
     marginTop: -Spacing["2xl"],
     borderTopLeftRadius: BorderRadius["2xl"],
@@ -437,13 +454,17 @@ const styles = StyleSheet.create({
   },
   slideTitle: {
     ...Typography.h1,
+    fontSize: 32,
+    lineHeight: 38,
     textAlign: "center",
     marginBottom: Spacing.md,
   },
   slideDescription: {
     ...Typography.body,
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: "center",
-    maxWidth: 320,
+    maxWidth: 340,
   },
   footer: {
     paddingHorizontal: Spacing.xl,

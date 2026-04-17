@@ -531,7 +531,12 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <FloatingHeader showLogo />
+      <FloatingHeader
+        onSearchPress={() => {
+          handleSearchFocus();
+          toggleSheet(true);
+        }}
+      />
 
       <View style={styles.mapContainer}>
         <MapViewComponent
@@ -563,7 +568,7 @@ export default function HomeScreen() {
             style={[
               styles.pinBanner,
               {
-                top: insets.top + 64,
+                top: insets.top + 120,
                 backgroundColor: theme.surface,
                 borderColor: BrandColors.primary.gradientStart + "33",
               },
@@ -616,16 +621,19 @@ export default function HomeScreen() {
           onLocateUser={handleLocateUser}
           showTransitRoutes={showTransitRoutes}
           hasSelection={hasSelection}
-          topOffset={insets.top + 56}
+          topOffset={insets.top + 68}
         />
 
-        {/* Map mode pill — flips between Routes / Pasop / All */}
+        {/* Map mode pill — flips between Routes / Pasop / All.
+            Positioned below the FloatingHeader (ends at insets.top + 46)
+            with a 26px breathing gap so the pill doesn't feel jammed
+            against the search bar. */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(400)}
           style={[
             styles.modePill,
             {
-              top: insets.top + 60,
+              top: insets.top + 72,
               backgroundColor: theme.surface,
             },
           ]}

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform, Pressable } from "react-native";
 import Mapbox, {
   MapView,
   Camera,
@@ -11,7 +11,8 @@ import Mapbox, {
   setAccessToken,
 } from "@rnmapbox/maps";
 import { Feather } from "@expo/vector-icons";
-import { BrandColors } from "@/constants/theme";
+import { BrandColors, Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { ThemedText } from "@/components/ThemedText";
 import { MAPBOX_ACCESS_TOKEN, MAPBOX_STYLES, DEFAULT_CAMERA, ZOOM_LEVELS } from "@/constants/mapbox";
 import { RANKS, ROUTES, STATUS_CONFIG, GAUTENG_CENTER } from "@/data/mapbox_transit_data";
 import type { TaxiLocation, LocationType, TrafficIncident, IncidentType } from "@/lib/types";
@@ -431,8 +432,38 @@ export function MapViewComponent({
 
   const mapStyle = isDark ? MAPBOX_STYLES.dark : MAPBOX_STYLES.light;
 
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const handleRetry = useCallback(() => {
+    setMapError(null);
+    setRetryKey((k) => k + 1);
+  }, []);
+
+  if (mapError) {
+    return (
+      <View style={[styles.fallbackContainer, { backgroundColor: isDark ? "#1a1a1a" : "#f5f5f5" }]}>
+        <Feather name="map-pin" size={48} color={BrandColors.primary.gradientStart} />
+        <ThemedText style={styles.fallbackTitle}>Map unavailable</ThemedText>
+        <ThemedText style={styles.fallbackBody}>
+          Check your connection and try again.
+        </ThemedText>
+        <Pressable
+          onPress={handleRetry}
+          style={styles.fallbackButton}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading map"
+        >
+          <Feather name="refresh-cw" size={16} color="#FFFFFF" />
+          <ThemedText style={styles.fallbackButtonText}>Retry</ThemedText>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <MapView
+      key={retryKey}
       ref={mapViewRef}
       style={StyleSheet.absoluteFillObject}
       styleURL={mapStyle}
@@ -442,6 +473,10 @@ export function MapViewComponent({
       compassPosition={{ top: 120, right: 16 }}
       scaleBarEnabled={false}
       onLongPress={handleMapLongPress}
+      onMapLoadingError={() => {
+        console.warn("[Map] Failed to load Mapbox style — showing fallback");
+        setMapError("load_failed");
+      }}
     >
       {/* Camera */}
       <Camera
@@ -730,3 +765,37 @@ export function MapViewComponent({
     </MapView>
   );
 }
+
+const styles = StyleSheet.create({
+  fallbackContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  fallbackTitle: {
+    ...Typography.h3,
+    marginTop: Spacing.sm,
+  },
+  fallbackBody: {
+    ...Typography.body,
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  fallbackButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    backgroundColor: BrandColors.primary.gradientStart,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+    marginTop: Spacing.md,
+  },
+  fallbackButtonText: {
+    ...Typography.body,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+});

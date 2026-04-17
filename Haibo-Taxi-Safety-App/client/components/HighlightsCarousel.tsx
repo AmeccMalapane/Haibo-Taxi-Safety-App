@@ -43,17 +43,28 @@ interface Highlight {
   cta: string;
 }
 
+// Pull from the accent palette so each highlight type feels distinct
+// instead of a wall of rose. Live events keep warm urgency, jobs use
+// teal for trust, achievements use yellow, community updates use fuchsia.
 const TYPE_CONFIG: Record<string, { gradient: [string, string]; iconBg: string }> = {
   event: {
-    gradient: ["#C81E5E", "#D13A52"],
+    gradient: [BrandColors.primary.gradientStart, BrandColors.primary.gradientEnd],
     iconBg: "rgba(255,255,255,0.2)",
   },
   job: {
-    gradient: ["#1976D2", "#42A5F5"],
+    gradient: [BrandColors.accent.teal, BrandColors.accent.tealLight],
     iconBg: "rgba(255,255,255,0.2)",
   },
   live: {
-    gradient: ["#F57C00", "#FF9800"],
+    gradient: [BrandColors.primary.orange, BrandColors.secondary.orangeLight],
+    iconBg: "rgba(255,255,255,0.2)",
+  },
+  achievement: {
+    gradient: [BrandColors.accent.yellow, BrandColors.accent.yellowLight],
+    iconBg: "rgba(0,0,0,0.15)",
+  },
+  community: {
+    gradient: [BrandColors.secondary.purple, BrandColors.accent.fuchsiaLight],
     iconBg: "rgba(255,255,255,0.2)",
   },
 };

@@ -43,6 +43,9 @@ type TileConfig = {
   subtitle: string;
   icon: keyof typeof Feather.glyphMap;
   screen: keyof RootStackParamList;
+  /** Gradient pair used for the tile icon backplate + hover glow. Each
+   *  category gets its own hue so the grid reads as playful, not monotone. */
+  gradient: [string, string];
 };
 
 const communityTiles: TileConfig[] = [
@@ -52,6 +55,7 @@ const communityTiles: TileConfig[] = [
     subtitle: "Live hazard reports near you",
     icon: "alert-triangle",
     screen: "PasopFeed",
+    gradient: [BrandColors.status.emergency, BrandColors.primary.orange],
   },
   {
     id: "community_routes",
@@ -59,6 +63,7 @@ const communityTiles: TileConfig[] = [
     subtitle: "Draw, share & vote on routes",
     icon: "map",
     screen: "CommunityRoutes",
+    gradient: [BrandColors.accent.sky, BrandColors.accent.skyLight],
   },
   {
     id: "lost_found",
@@ -66,6 +71,7 @@ const communityTiles: TileConfig[] = [
     subtitle: "Report or claim items",
     icon: "search",
     screen: "LostFound",
+    gradient: [BrandColors.accent.yellow, BrandColors.accent.yellowLight],
   },
   {
     id: "haibo_fam",
@@ -73,13 +79,15 @@ const communityTiles: TileConfig[] = [
     subtitle: "Connect with commuters",
     icon: "users",
     screen: "HaiboFam",
+    gradient: BrandColors.gradient.primary as [string, string],
   },
   {
     id: "directions",
-    title: "Q&A forum",
-    subtitle: "Ask about routes & fares",
+    title: "Get directions",
+    subtitle: "Ask the crew how to get there",
     icon: "message-circle",
     screen: "QAForum",
+    gradient: [BrandColors.secondary.purple, BrandColors.accent.fuchsiaLight],
   },
   {
     id: "group_rides",
@@ -87,6 +95,7 @@ const communityTiles: TileConfig[] = [
     subtitle: "Organise shared trips",
     icon: "truck",
     screen: "GroupRides",
+    gradient: [BrandColors.accent.teal, BrandColors.accent.tealLight],
   },
   {
     id: "events",
@@ -94,6 +103,7 @@ const communityTiles: TileConfig[] = [
     subtitle: "Industry meetups & launches",
     icon: "calendar",
     screen: "Events",
+    gradient: [BrandColors.accent.lime, BrandColors.accent.limeLight],
   },
 ];
 
@@ -119,6 +129,8 @@ function CommunityTile({
     onPress();
   };
 
+  const [gradStart] = tile.gradient;
+
   return (
     <Animated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(150 + index * 60)}
@@ -130,25 +142,22 @@ function CommunityTile({
           styles.tile,
           {
             backgroundColor: theme.surface,
-            borderColor: theme.border,
+            borderColor: gradStart + "33",
+            shadowColor: gradStart,
           },
           pressed && styles.pressed,
         ]}
         accessibilityRole="button"
         accessibilityLabel={tile.title}
       >
-        <View
-          style={[
-            styles.tileIcon,
-            { backgroundColor: BrandColors.primary.gradientStart + "12" },
-          ]}
+        <LinearGradient
+          colors={tile.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.tileIcon}
         >
-          <Feather
-            name={tile.icon}
-            size={20}
-            color={BrandColors.primary.gradientStart}
-          />
-        </View>
+          <Feather name={tile.icon} size={22} color="#FFFFFF" />
+        </LinearGradient>
         <ThemedText style={styles.tileTitle} numberOfLines={1}>
           {tile.title}
         </ThemedText>
@@ -269,18 +278,14 @@ export default function CommunityScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open community feed"
           >
-            <View
-              style={[
-                styles.feedIcon,
-                { backgroundColor: BrandColors.primary.gradientStart + "12" },
-              ]}
+            <LinearGradient
+              colors={[BrandColors.accent.fuchsia, BrandColors.accent.fuchsiaLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.feedIcon}
             >
-              <Feather
-                name="message-square"
-                size={18}
-                color={BrandColors.primary.gradientStart}
-              />
-            </View>
+              <Feather name="message-square" size={18} color="#FFFFFF" />
+            </LinearGradient>
             <View style={styles.feedContent}>
               <ThemedText style={styles.feedTitle}>Live feed</ThemedText>
               <ThemedText
@@ -305,18 +310,14 @@ export default function CommunityScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open safety directory"
           >
-            <View
-              style={[
-                styles.feedIcon,
-                { backgroundColor: BrandColors.primary.gradientStart + "12" },
-              ]}
+            <LinearGradient
+              colors={[BrandColors.status.emergency, BrandColors.primary.orange]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.feedIcon}
             >
-              <Feather
-                name="phone-call"
-                size={18}
-                color={BrandColors.primary.gradientStart}
-              />
-            </View>
+              <Feather name="phone-call" size={18} color="#FFFFFF" />
+            </LinearGradient>
             <View style={styles.feedContent}>
               <ThemedText style={styles.feedTitle}>Safety directory</ThemedText>
               <ThemedText
@@ -329,22 +330,20 @@ export default function CommunityScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Info card */}
+        {/* Info card — subtle teal accent for a calm, trust-signal tone */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(550)}
           style={[
             styles.infoCard,
             {
-              backgroundColor: BrandColors.primary.gradientStart + "08",
-              borderColor: BrandColors.primary.gradientStart + "20",
+              backgroundColor: BrandColors.accent.teal + "0D",
+              borderColor: BrandColors.accent.teal + "33",
             },
           ]}
         >
-          <Feather
-            name="shield"
-            size={16}
-            color={BrandColors.primary.gradientStart}
-          />
+          <View style={styles.infoCardIcon}>
+            <Feather name="shield" size={16} color="#FFFFFF" />
+          </View>
           <View style={styles.infoCardContent}>
             <ThemedText style={styles.infoCardTitle}>
               Stay safe, stay connected
@@ -432,16 +431,24 @@ const styles = StyleSheet.create({
   tile: {
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     minHeight: 130,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
   tileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.md,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   tileTitle: {
     ...Typography.body,
@@ -453,9 +460,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // Feed section
+  // Feed section — `xl` separator keeps a clear rhythm between the tile
+  // grid, the jump-in cards, and the info card below.
   feedSection: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.xl,
   },
   sectionLabel: {
     ...Typography.label,
@@ -474,11 +482,15 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   feedIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
   },
   feedContent: {
     flex: 1,
@@ -497,11 +509,19 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: Spacing.sm,
-    padding: Spacing.md,
+    gap: Spacing.md,
+    padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    marginTop: Spacing.lg,
+    marginTop: Spacing.xl,
+  },
+  infoCardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: BrandColors.accent.teal,
+    alignItems: "center",
+    justifyContent: "center",
   },
   infoCardContent: {
     flex: 1,

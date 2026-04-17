@@ -112,6 +112,21 @@ export const BrandColors = {
     green: "#4CAF50",
     greenLight: "#66BB6A",
   },
+  // Youthful accent palette — use sparingly for category badges, highlights,
+  // streaks, achievements. Keep rose as the dominant brand; accents are
+  // condiments. Tested for WCAG AA on white backgrounds with dark text.
+  accent: {
+    teal: "#0D9488",       // trust + calm — info tiles, live feeds
+    tealLight: "#14B8A6",
+    lime: "#84CC16",       // energy, Q&A/forum tiles
+    limeLight: "#A3E635",
+    fuchsia: "#C026D3",    // playful pop — events, highlights
+    fuchsiaLight: "#D946EF",
+    yellow: "#EAB308",     // optimism, achievements
+    yellowLight: "#FACC15",
+    sky: "#0284C7",        // community routes / directions
+    skyLight: "#0EA5E9",
+  },
   status: {
     emergency: "#C62828",
     warning: "#FFA000",

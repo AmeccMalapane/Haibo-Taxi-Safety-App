@@ -8,6 +8,7 @@ import {
   Platform,
   ViewToken,
   Share,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -506,9 +507,14 @@ export default function PushaScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: "#000000" }]}>
-      {/* Category Header */}
+      {/* Category Header — horizontal scroll so tabs never clip on narrow screens */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <View style={styles.categoryTabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryTabs}
+          style={styles.categoryTabsScroll}
+        >
           {categories.map((cat) => (
             <Pressable
               key={cat.id}
@@ -538,7 +544,7 @@ export default function PushaScreen() {
               </ThemedText>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Content Feed */}
@@ -614,11 +620,12 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: Spacing.md,
     zIndex: 100,
+  },
+  categoryTabsScroll: {
+    flexGrow: 0,
   },
   categoryTabs: {
     flexDirection: "row",
@@ -629,6 +636,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
   },
   categoryTab: {
     flexDirection: "row",
