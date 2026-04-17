@@ -72,6 +72,16 @@ function getUserTypeIcon(userType: CommunityPost["userType"]): keyof typeof Feat
   return "user";
 }
 
+// Per-role accent so the feed reads as mixed-role at a glance. Driver
+// (teal — trust/service), operator (sky — authority), commuter
+// (rose — default audience, brand moment). Avatar chip + role badge
+// both adopt this tint.
+function getUserTypeAccent(userType: CommunityPost["userType"]): string {
+  if (userType === "driver") return BrandColors.accent.teal;
+  if (userType === "operator") return BrandColors.accent.sky;
+  return BrandColors.primary.gradientStart;
+}
+
 const POST_MAX = 500;
 
 export default function HaiboFamScreen() {
@@ -190,12 +200,18 @@ export default function HaiboFamScreen() {
 
   const renderPost = ({ item: post, index }: { item: CommunityPost; index: number }) => {
     const isLiked = likedPosts.includes(post.id);
+    const roleAccent = getUserTypeAccent(post.userType);
     return (
       <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 40).duration(400)}>
         <View style={styles.postCard}>
           <View style={styles.postHeader}>
-            <View style={styles.avatar}>
-              <ThemedText style={styles.avatarInitials}>
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: roleAccent + "18" },
+              ]}
+            >
+              <ThemedText style={[styles.avatarInitials, { color: roleAccent }]}>
                 {getInitials(post.userName)}
               </ThemedText>
             </View>
@@ -203,13 +219,18 @@ export default function HaiboFamScreen() {
               <View style={styles.userNameRow}>
                 <ThemedText style={styles.userName}>{post.userName}</ThemedText>
                 {post.userType !== "commuter" ? (
-                  <View style={styles.userBadge}>
+                  <View
+                    style={[
+                      styles.userBadge,
+                      { backgroundColor: roleAccent + "18" },
+                    ]}
+                  >
                     <Feather
                       name={getUserTypeIcon(post.userType)}
                       size={10}
-                      color={BrandColors.primary.gradientStart}
+                      color={roleAccent}
                     />
-                    <ThemedText style={styles.userBadgeText}>
+                    <ThemedText style={[styles.userBadgeText, { color: roleAccent }]}>
                       {getUserTypeLabel(post.userType)}
                     </ThemedText>
                   </View>

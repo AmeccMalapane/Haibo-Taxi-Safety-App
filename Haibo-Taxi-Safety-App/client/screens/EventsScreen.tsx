@@ -681,10 +681,15 @@ export default function EventsScreen() {
                       style={styles.imageOverlay}
                     />
 
-                    {/* Price tag (rose gradient) */}
+                    {/* Price tag — green for FREE (encouraging signal),
+                        rose brand gradient for paid events */}
                     <View style={styles.priceTagWrap}>
                       <LinearGradient
-                        colors={BrandColors.gradient.primary}
+                        colors={
+                          event.price > 0
+                            ? (BrandColors.gradient.primary as [string, string])
+                            : [BrandColors.status.success, BrandColors.primary.green]
+                        }
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.priceTag}
