@@ -14,6 +14,9 @@ export interface AuthUser {
   avatarUrl?: string | null;
   referralCode?: string | null;
   walletBalance?: number | null;
+  // Driver-only sub-balance — money earned that routes to the linked
+  // owner's bank on settlement. Always 0 for non-drivers. Phase C.
+  fareBalance?: number | null;
   isVerified?: boolean;
 }
 

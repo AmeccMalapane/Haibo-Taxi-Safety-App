@@ -1,13 +1,34 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, MapPin, Shield, Camera } from "lucide-react";
+import { Package, MapPin, Shield, Camera, TrendingUp, DollarSign, Clock, CheckCircle2 } from "lucide-react";
 import { admin } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Table, TH, TD } from "../components/Table";
 import { Badge, BadgeTone, statusTone } from "../components/Badge";
 import { LoadingState, ErrorState, EmptyState } from "../components/States";
 import { StatusTabs, StatusTab } from "../components/StatusTabs";
-import { colors, spacing, fonts } from "../lib/brand";
+import { colors, spacing, fonts, radius } from "../lib/brand";
+
+interface HubSummary {
+  today: {
+    deliveries: number;
+    paid: number;
+    pending: number;
+    completed: number;
+    platformFee: number;
+  };
+  last7d: {
+    deliveries: number;
+    paid: number;
+    pending: number;
+    completed: number;
+    platformFee: number;
+  };
+  allTime: {
+    platformFee: number;
+    txns: number;
+  };
+}
 
 interface Delivery {
   id: string;
@@ -70,6 +91,16 @@ export function DeliveriesPage() {
         : false,
   });
 
+  // Hub financial summary — drives the platform-fee strip at the top of
+  // the page. Separate query from deliveries so it refreshes on its own
+  // cadence (60s — fee totals don't need to be real-time) and doesn't
+  // reload when the status tab changes.
+  const summaryQ = useQuery<HubSummary>({
+    queryKey: ["admin", "hub", "summary"],
+    queryFn: () => admin.getHubSummary() as Promise<HubSummary>,
+    refetchInterval: 60_000,
+  });
+
   const rows: Delivery[] = deliveriesQ.data?.data || [];
   const counts: Record<string, number> = deliveriesQ.data?.counts || {};
 
@@ -97,6 +128,12 @@ export function DeliveriesPage() {
             : "Package tracking via taxi ranks"
         }
       />
+
+      {/* Hub financial strip — platform fee take + volume per window.
+          15% of each delivery fee flows here when paid; drivers get 85%.
+          Not shown until the summary query resolves so the strip doesn't
+          flash zeros on first paint. */}
+      {summaryQ.data ? <HubSummaryStrip summary={summaryQ.data} /> : null}
 
       <StatusTabs tabs={tabs} active={status} onChange={setStatus} />
 
@@ -280,4 +317,126 @@ export function DeliveriesPage() {
       )}
     </div>
   );
+}
+
+// ─── Hub Summary Strip ─────────────────────────────────────────────────
+//
+// Four KPI tiles summarising today's Hub activity + platform-fee take.
+// Designed to fit above StatusTabs without pushing the table below the
+// fold on a 1024×768 viewport.
+function HubSummaryStrip({ summary }: { summary: HubSummary }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: spacing.md,
+        marginBottom: spacing.xl,
+      }}
+    >
+      <SummaryTile
+        icon={<Package size={16} />}
+        label="Today"
+        value={`${summary.today.deliveries}`}
+        sub={`${summary.today.paid} paid · ${summary.today.pending} pending`}
+        tint={colors.haiboPink}
+      />
+      <SummaryTile
+        icon={<CheckCircle2 size={16} />}
+        label="Delivered today"
+        value={`${summary.today.completed}`}
+        sub={
+          summary.today.deliveries > 0
+            ? `${Math.round((summary.today.completed / summary.today.deliveries) * 100)}% of today's volume`
+            : "No activity yet"
+        }
+        tint={colors.accentTeal}
+      />
+      <SummaryTile
+        icon={<DollarSign size={16} />}
+        label="Platform fee · 7d"
+        value={formatRands(summary.last7d.platformFee)}
+        sub={`${summary.last7d.deliveries} deliveries`}
+        tint={colors.accentFuchsia}
+      />
+      <SummaryTile
+        icon={<TrendingUp size={16} />}
+        label="Platform fee · all-time"
+        value={formatRands(summary.allTime.platformFee)}
+        sub={`${summary.allTime.txns} total fee entries`}
+        tint={colors.accentSky}
+      />
+    </div>
+  );
+}
+
+function SummaryTile({
+  icon,
+  label,
+  value,
+  sub,
+  tint,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+  tint: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: spacing.lg,
+        borderRadius: radius.lg,
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: tint,
+          marginBottom: 6,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          fontFamily: fonts.sans,
+        }}
+      >
+        {icon}
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: fonts.heading,
+          fontSize: 24,
+          fontWeight: 800,
+          letterSpacing: -0.4,
+          color: colors.foreground,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          fontSize: 12,
+          color: colors.mutedForeground,
+        }}
+      >
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+function formatRands(n: number): string {
+  return `R${n.toLocaleString("en-ZA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 }

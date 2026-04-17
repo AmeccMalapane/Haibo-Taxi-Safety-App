@@ -426,6 +426,9 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
       avatarUrl: user.avatarUrl,
       referralCode: user.referralCode,
       walletBalance: user.walletBalance,
+      // Driver-only sub-balance. Non-drivers always see 0 here. Exposed
+      // on /auth/me so the dashboard can render without a second call.
+      fareBalance: user.fareBalance,
       isVerified: user.isVerified,
       emergencyContactName: user.emergencyContactName,
       emergencyContactPhone: user.emergencyContactPhone,

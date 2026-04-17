@@ -385,6 +385,14 @@ export const admin = {
   },
 
   /**
+   * Hub financial summary — today / 7d / all-time platform fee totals
+   * from delivery payments. Powers the stats strip on DeliveriesPage.
+   */
+  async getHubSummary() {
+    return request(`/api/admin/hub/summary`);
+  },
+
+  /**
    * Audit log — append-only record of admin writes. Supports optional
    * action/resource filters and cursor-style limit/offset pagination.
    */

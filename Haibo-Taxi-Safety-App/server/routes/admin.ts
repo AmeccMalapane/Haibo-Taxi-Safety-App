@@ -3075,4 +3075,105 @@ router.get(
   },
 );
 
+// ─── GET /api/admin/hub/summary ──────────────────────────────────────────
+// Aggregate view over Hub deliveries + the platform-fee treasury
+// entries those deliveries generated. Designed for the admin
+// DeliveriesPage top strip so the ops team can see fee take-rate
+// without drilling into individual rows.
+//
+// Returns:
+//   - today:   { deliveries, paid, pending, completedCount, platformFee }
+//   - last7d:  same shape
+//   - allTime: same shape but only platformFee + completedCount
+router.get(
+  "/hub/summary",
+  authMiddleware,
+  requireRole("admin"),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const dayStart = new Date();
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const weekStart = new Date(dayStart);
+      weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+
+      // Platform fee lives in wallet_transactions.type='platform_fee_out'
+      // tagged with metadata.parentType='hub_delivery' via the payments
+      // service. The jsonb key lookup is an index-miss today (no GIN on
+      // metadata) so this is a sequential scan — fine at launch volume,
+      // worth revisiting if hub becomes high-frequency.
+      const hubFeeFilter = sql`${walletTransactions.type} = 'platform_fee_out' AND ${walletTransactions.metadata} ->> 'parentType' = 'hub_delivery'`;
+
+      const [todayCounts] = await db
+        .select({
+          total: count(),
+          paid: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.paymentStatus} = 'completed')::int`,
+          pending: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.paymentStatus} = 'pending')::int`,
+          completed: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.status} = 'delivered')::int`,
+        })
+        .from(deliveries)
+        .where(gte(deliveries.createdAt, dayStart));
+
+      const [weekCounts] = await db
+        .select({
+          total: count(),
+          paid: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.paymentStatus} = 'completed')::int`,
+          pending: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.paymentStatus} = 'pending')::int`,
+          completed: sql<number>`COUNT(*) FILTER (WHERE ${deliveries.status} = 'delivered')::int`,
+        })
+        .from(deliveries)
+        .where(gte(deliveries.createdAt, weekStart));
+
+      const [todayFee] = await db
+        .select({
+          fee: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(hubFeeFilter, gte(walletTransactions.createdAt, dayStart)),
+        );
+
+      const [weekFee] = await db
+        .select({
+          fee: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(hubFeeFilter, gte(walletTransactions.createdAt, weekStart)),
+        );
+
+      const [allTimeFee] = await db
+        .select({
+          fee: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)::float`,
+          txns: count(),
+        })
+        .from(walletTransactions)
+        .where(hubFeeFilter);
+
+      res.json({
+        today: {
+          deliveries: todayCounts?.total ?? 0,
+          paid: todayCounts?.paid ?? 0,
+          pending: todayCounts?.pending ?? 0,
+          completed: todayCounts?.completed ?? 0,
+          platformFee: Number(todayFee?.fee ?? 0),
+        },
+        last7d: {
+          deliveries: weekCounts?.total ?? 0,
+          paid: weekCounts?.paid ?? 0,
+          pending: weekCounts?.pending ?? 0,
+          completed: weekCounts?.completed ?? 0,
+          platformFee: Number(weekFee?.fee ?? 0),
+        },
+        allTime: {
+          platformFee: Number(allTimeFee?.fee ?? 0),
+          txns: Number(allTimeFee?.txns ?? 0),
+        },
+      });
+    } catch (err: any) {
+      console.error("Hub summary error:", err);
+      res.status(500).json({ error: "Failed to load hub summary" });
+    }
+  },
+);
+
 export default router;

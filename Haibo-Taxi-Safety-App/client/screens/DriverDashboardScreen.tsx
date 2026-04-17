@@ -28,6 +28,7 @@ import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { BalanceCard } from "@/components/dashboards/BalanceCard";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,6 +51,9 @@ interface DriverProfileRow {
   safetyRating: number | null;
   totalRatings: number | null;
   totalRides: number | null;
+  // Phase A+B additions — the driver ↔ owner linkage state.
+  ownerId?: string | null;
+  linkStatus?: "pending" | "active" | "suspended" | null;
 }
 
 interface EarningsBucket {
@@ -314,6 +318,43 @@ export default function DriverDashboardScreen() {
             </ThemedText>
           ) : null}
         </LinearGradient>
+
+        {/* Fare balance card — the driver's big number. Money earned but
+            not yet settled to the owner. Tapping "Settle to owner" routes
+            to the wallet withdrawal flow with balanceType='fare' so the
+            server routes the payout to the linked owner's bank. Hidden
+            entirely when the driver isn't linked to an owner yet — in
+            that case the old earnings cards below are the primary
+            surface. */}
+        {profile?.linkStatus === "active" && profile.ownerId ? (
+          <View style={{ marginTop: Spacing.md, marginBottom: Spacing.sm }}>
+            <BalanceCard
+              eyebrow="FARE BALANCE"
+              label={
+                profile.ownerId === user?.id
+                  ? "Ready to withdraw"
+                  : "Pending settlement to owner"
+              }
+              amount={Number(user?.fareBalance ?? 0)}
+              subtitle={
+                profile.ownerId === user?.id
+                  ? "Solo operator — goes to your own bank"
+                  : "Haibo routes this to your owner's bank when you settle"
+              }
+              gradient={[BrandColors.accent.teal, BrandColors.accent.tealLight]}
+              actions={[
+                {
+                  label:
+                    profile.ownerId === user?.id ? "Withdraw" : "Settle to owner",
+                  icon: "arrow-up-right",
+                  onPress: () => navigation.navigate("Wallet"),
+                  variant: "primary",
+                },
+              ]}
+              delay={40}
+            />
+          </View>
+        ) : null}
 
         <View style={styles.content}>
           <Animated.View
