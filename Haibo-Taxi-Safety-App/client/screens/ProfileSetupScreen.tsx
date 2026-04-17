@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   TextInput,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,6 +25,7 @@ import { AuthUser } from "@/contexts/AuthContext";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
+import { HaiboLogo } from "@/components/HaiboLogo";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { uploadFromUri } from "@/lib/uploads";
 import { apiRequest } from "@/lib/query-client";
@@ -88,7 +89,7 @@ export default function ProfileSetupScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { t } = useLanguage();
-  const { updateProfile } = useAuth();
+  const { updateProfile, refreshUser } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [displayName, setDisplayName] = useState("");
@@ -102,7 +103,23 @@ export default function ProfileSetupScreen() {
   const [referralCode, setReferralCode] = useState("");
   // Owner invitation code — only used when avatarType === 'driver'. Empty
   // string = skipped (driver can redeem later from the Driver Dashboard).
-  const [ownerInviteCode, setOwnerInviteCode] = useState("");
+  // Pre-filled from a QR scan or deep link via route.params.inviteCode —
+  // the parent component normalises to uppercase on submit so we accept
+  // whatever case the link carried.
+  const route = useRoute<RouteProp<RootStackParamList, "ProfileSetup">>();
+  const prefillInvite = route.params?.inviteCode || "";
+  const [ownerInviteCode, setOwnerInviteCode] = useState(prefillInvite);
+  // Drivers arriving via a scanned invite skip the role picker friction
+  // — landing them directly on the driver flow matches user intent.
+  useEffect(() => {
+    if (prefillInvite && avatarType !== "driver") {
+      setAvatarType("driver");
+    }
+    // Only react to prefillInvite changes (once on mount for a fresh
+    // link); avatarType intentionally omitted to avoid bouncing a user
+    // who manually switched back to commuter after landing on /driver.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillInvite]);
   // Driver's plate — required when redeeming an invitation code, since
   // the server creates a minimal driver_profiles row on first redemption
   // and the plate column is UNIQUE NOT NULL.
@@ -268,6 +285,8 @@ export default function ProfileSetupScreen() {
               taxiPlateNumber: taxiPlate.trim(),
             }),
           });
+          // Sync availableRoles — driver link just became live.
+          await refreshUser();
         } catch (err: any) {
           setIsSaving(false);
           Alert.alert(
@@ -304,12 +323,7 @@ export default function ProfileSetupScreen() {
       >
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.logoWrap}>
           <View style={styles.logoShadow}>
-            <Image
-              source={require("../../assets/images/icon.png")}
-              style={styles.logo}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
+            <HaiboLogo size={LOGO_SIZE} />
           </View>
         </Animated.View>
 

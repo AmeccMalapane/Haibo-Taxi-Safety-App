@@ -1,5 +1,5 @@
 import React, { useEffect, memo } from "react";
-import { StyleSheet, Pressable, View, Platform, Image } from "react-native";
+import { StyleSheet, Pressable, View, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, {
@@ -13,6 +13,7 @@ import Animated, {
 
 import { BrandColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { HaiboLogo } from "@/components/HaiboLogo";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -89,11 +90,10 @@ export const SOSButton = memo(({ inline = false }: SOSButtonProps) => {
         accessibilityLabel="SOS Emergency"
         accessibilityRole="button"
       >
-        <Image
-          source={require("../../assets/images/icon.png")}
-          style={styles.icon}
-          resizeMode="contain"
-        />
+        {/* Vector logo — renders crisply at any DPI and follows the
+            new brand SVG automatically once the source asset is
+            updated. No more PNG regen needed for this button. */}
+        <HaiboLogo size={42} />
       </AnimatedPressable>
     </View>
   );
@@ -139,9 +139,5 @@ const styles = StyleSheet.create({
     elevation: 12,
     borderWidth: 3,
     borderColor: "#FFFFFF",
-  },
-  icon: {
-    width: 36,
-    height: 36,
   },
 });

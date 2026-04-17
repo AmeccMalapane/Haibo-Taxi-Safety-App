@@ -1,6 +1,6 @@
 import "@/i18n";
 import React, { useState, useEffect, Component, PropsWithChildren, useMemo } from "react";
-import { StyleSheet, View, ActivityIndicator, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { NavigationContainer, LinkingOptions } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
 
 import RootStackNavigator, { RootStackParamList } from "@/navigation/RootStackNavigator";
 import OnboardingScreen from "@/screens/OnboardingScreen";
+import { LogoSplash } from "@/components/LogoSplash";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -181,11 +182,7 @@ function AuthGatedApp() {
   );
 
   if (authLoading || !onboardingChecked) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#C81E5E" />
-      </View>
-    );
+    return <LogoSplash />;
   }
 
   if (showOnboarding) {
@@ -237,11 +234,7 @@ function AppWithFonts() {
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#C81E5E" />
-      </View>
-    );
+    return <LogoSplash />;
   }
 
   return <AuthGatedApp />;
@@ -266,10 +259,3 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});
