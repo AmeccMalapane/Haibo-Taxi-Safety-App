@@ -26,6 +26,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { uploadFromUri } from "@/lib/uploads";
+import { apiRequest } from "@/lib/query-client";
 
 // typeui-clean rework of the profile-setup hero.
 //
@@ -80,6 +81,8 @@ export default function ProfileSetupScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [displayName, setDisplayName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleError, setHandleError] = useState("");
   const [avatarType, setAvatarType] = useState<AvatarType>("commuter");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -87,10 +90,32 @@ export default function ProfileSetupScreen() {
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [nameFocused, setNameFocused] = useState(false);
+  const [handleFocused, setHandleFocused] = useState(false);
   const [emergencyNameFocused, setEmergencyNameFocused] = useState(false);
   const [emergencyPhoneFocused, setEmergencyPhoneFocused] = useState(false);
   const [referralFocused, setReferralFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+  const normalizeHandle = (raw: string) =>
+    raw.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
+
+  const onHandleChange = (raw: string) => {
+    const clean = normalizeHandle(raw);
+    setHandle(clean);
+    if (!clean) { setHandleError(""); return; }
+    if (clean.length < 3) { setHandleError("At least 3 characters"); return; }
+    if (!HANDLE_RE.test(clean)) { setHandleError("Letters, numbers, underscores only"); return; }
+    setHandleError("");
+    // Check availability (debounced inline — fire and forget, last write wins)
+    apiRequest("GET", `/api/auth/handle/available?h=${encodeURIComponent(clean)}`)
+      .then((res: any) => {
+        if (res?.available === false && clean === handle) {
+          setHandleError("Already taken — try another");
+        }
+      })
+      .catch(() => {});
+  };
 
   // Same pick flow as ProfileScreen — library only, 1:1 crop, 0.85
   // quality. Uploads immediately so the preview shows the server URL
@@ -145,9 +170,25 @@ export default function ProfileSetupScreen() {
     if (isSaving) return;
     setIsSaving(true);
 
-    // AuthUser doesn't model emergency contact fields, but the server's
-    // PUT /api/auth/profile handler accepts them — so pass them through
-    // as a widened shape.
+    // Set the handle first (separate endpoint) — if the user typed one.
+    // Failures here are non-blocking: the profile still saves, the user
+    // just gets prompted to set a handle later from Profile → Settings.
+    if (handle && HANDLE_RE.test(handle)) {
+      try {
+        await apiRequest("/api/auth/handle", {
+          method: "POST",
+          body: JSON.stringify({ handle }),
+        });
+      } catch (err: any) {
+        if (err?.message?.includes("409") || err?.message?.includes("taken")) {
+          setHandleError("Already taken — try another");
+          setIsSaving(false);
+          return;
+        }
+        console.warn("Handle save failed (non-blocking):", err?.message);
+      }
+    }
+
     const payload: Partial<AuthUser> & {
       emergencyContactName?: string;
       emergencyContactPhone?: string;
@@ -358,6 +399,52 @@ export default function ProfileSetupScreen() {
               maxLength={30}
               accessibilityLabel="Display name"
             />
+          </View>
+
+          {/* Handle / username */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
+              @HANDLE
+            </ThemedText>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ThemedText style={[styles.handlePrefix, { color: theme.textSecondary }]}>
+                @
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    flex: 1,
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: handleError
+                      ? BrandColors.secondary.orange
+                      : handleFocused
+                        ? BrandColors.primary.gradientStart
+                        : theme.border,
+                  },
+                ]}
+                placeholder="e.g., sipho_m"
+                placeholderTextColor={theme.textSecondary}
+                value={handle}
+                onChangeText={onHandleChange}
+                onFocus={() => setHandleFocused(true)}
+                onBlur={() => setHandleFocused(false)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={20}
+                accessibilityLabel="Handle"
+              />
+            </View>
+            {handleError ? (
+              <ThemedText style={styles.handleErrorText}>{handleError}</ThemedText>
+            ) : handle.length >= 3 ? (
+              <ThemedText style={styles.handleOkText}>Looks good</ThemedText>
+            ) : (
+              <ThemedText style={[styles.handleHint, { color: theme.textSecondary }]}>
+                Shown on your posts and comments instead of your phone number
+              </ThemedText>
+            )}
           </View>
 
           {/* Emergency contact */}
@@ -663,5 +750,30 @@ const styles = StyleSheet.create({
   skipText: {
     ...Typography.small,
     fontWeight: "600",
+  },
+  handlePrefix: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginRight: 4,
+    marginBottom: 2,
+  },
+  handleErrorText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: BrandColors.secondary.orange,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  handleOkText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: BrandColors.primary.green,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  handleHint: {
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
 });
