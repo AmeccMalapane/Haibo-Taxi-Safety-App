@@ -188,7 +188,7 @@ export default function ProfileSetupScreen() {
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.logoWrap}>
           <View style={styles.logoShadow}>
             <Image
-              source={require("@/assets/images/icon.png")}
+              source={require("../../assets/images/icon.png")}
               style={styles.logo}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
