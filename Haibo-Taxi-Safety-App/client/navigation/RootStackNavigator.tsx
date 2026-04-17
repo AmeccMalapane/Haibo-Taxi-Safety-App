@@ -47,6 +47,8 @@ import DriverOnboardingScreen from "@/screens/DriverOnboardingScreen";
 import NotificationsScreen from "@/screens/NotificationsScreen";
 import VendorOnboardingScreen from "@/screens/VendorOnboardingScreen";
 import VendorDirectoryScreen from "@/screens/VendorDirectoryScreen";
+import OwnerOnboardingScreen from "@/screens/OwnerOnboardingScreen";
+import OwnerInvitationsScreen from "@/screens/OwnerInvitationsScreen";
 import PayVendorScreen from "@/screens/PayVendorScreen";
 import PasopFeedScreen from "@/screens/PasopFeedScreen";
 import PasopReportScreen from "@/screens/PasopReportScreen";
@@ -102,6 +104,8 @@ export type RootStackParamList = {
   DriverOnboarding: undefined;
   Notifications: undefined;
   VendorOnboarding: undefined;
+  OwnerOnboarding: undefined;
+  OwnerInvitations: undefined;
   VendorDirectory: undefined;
   PayVendor: { vendorRef?: string } | undefined;
   PasopFeed: undefined;
@@ -464,6 +468,22 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="VendorOnboarding"
         component={VendorOnboardingScreen}
+        options={{
+          presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="OwnerOnboarding"
+        component={OwnerOnboardingScreen}
+        options={{
+          presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="OwnerInvitations"
+        component={OwnerInvitationsScreen}
         options={{
           presentation: "card",
           headerShown: false,

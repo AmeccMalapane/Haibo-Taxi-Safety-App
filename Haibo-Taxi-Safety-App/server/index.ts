@@ -30,6 +30,7 @@ import notificationRoutes from "./routes/notifications";
 import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
 import vendorRoutes from "./routes/vendor";
+import ownerRoutes from "./routes/owner";
 import uploadRoutes from "./routes/uploads";
 import userRoutes from "./routes/user";
 import { getLocalUploadDir, getLocalUrlPrefix, isAzureConfigured } from "./services/storage";
@@ -177,6 +178,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/paystack", paystackRoutes);
 app.use("/api/pasop", pasopRoutes);
 app.use("/api/vendor-profile", vendorRoutes);
+app.use("/api/owner", ownerRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/user", userRoutes);
 

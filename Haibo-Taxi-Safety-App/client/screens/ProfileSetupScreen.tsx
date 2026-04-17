@@ -63,16 +63,24 @@ import { getDeviceId } from "@/lib/deviceId";
 //    user-code claim on signup. Removed the mutation; the input still
 //    captures the code for a future server-side implementation.
 
-type AvatarType = "commuter" | "driver" | "operator";
+// Role set matches server enum: commuter | driver | owner | vendor.
+// "operator" has been retired in favour of the more explicit "owner"
+// (taxi fleet owner) + "vendor" (merchant) split. "admin" is not
+// self-selectable — admins are promoted by existing admins out-of-band.
+type AvatarType = "commuter" | "driver" | "owner" | "vendor";
 
 const AVATAR_OPTIONS: {
   type: AvatarType;
   icon: keyof typeof Feather.glyphMap;
   labelKey: string;
+  /** Accent color for the role tile — same palette as CommunityScreen so
+   *  the app feels cohesive the first time a user picks their role. */
+  accent: string;
 }[] = [
-  { type: "commuter", icon: "user", labelKey: "profile.commuter" },
-  { type: "driver", icon: "truck", labelKey: "profile.driver" },
-  { type: "operator", icon: "briefcase", labelKey: "profile.operator" },
+  { type: "commuter", icon: "user", labelKey: "profile.commuter", accent: BrandColors.primary.gradientStart },
+  { type: "driver", icon: "truck", labelKey: "profile.driver", accent: BrandColors.primary.blue },
+  { type: "owner", icon: "briefcase", labelKey: "profile.owner", accent: BrandColors.accent.teal },
+  { type: "vendor", icon: "shopping-bag", labelKey: "profile.vendor", accent: BrandColors.accent.fuchsia },
 ];
 
 export default function ProfileSetupScreen() {
@@ -92,11 +100,20 @@ export default function ProfileSetupScreen() {
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
+  // Owner invitation code — only used when avatarType === 'driver'. Empty
+  // string = skipped (driver can redeem later from the Driver Dashboard).
+  const [ownerInviteCode, setOwnerInviteCode] = useState("");
+  // Driver's plate — required when redeeming an invitation code, since
+  // the server creates a minimal driver_profiles row on first redemption
+  // and the plate column is UNIQUE NOT NULL.
+  const [taxiPlate, setTaxiPlate] = useState("");
   const [nameFocused, setNameFocused] = useState(false);
   const [handleFocused, setHandleFocused] = useState(false);
   const [emergencyNameFocused, setEmergencyNameFocused] = useState(false);
   const [emergencyPhoneFocused, setEmergencyPhoneFocused] = useState(false);
   const [referralFocused, setReferralFocused] = useState(false);
+  const [inviteFocused, setInviteFocused] = useState(false);
+  const [plateFocused, setPlateFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
@@ -154,14 +171,22 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const finishSetup = () => {
+  // Post-save routing depends on the chosen role:
+  //   commuter → MainTabs (current commuter UX)
+  //   driver   → MainTabs (phase E will swap in driver tabs; the server
+  //              already set role='driver' via accept-invitation)
+  //   owner    → OwnerOnboarding (collects bank + company details)
+  //   vendor   → VendorOnboarding (existing flow, collects business info)
+  // Role-specific onboarding screens handle their own "continue to
+  // dashboard" navigation, so this router only sets the first destination.
+  const finishSetup = (dest: "MainTabs" | "OwnerOnboarding" | "VendorOnboarding" = "MainTabs") => {
     if (Platform.OS !== "web") {
       const Haptics = require("expo-haptics");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     navigation.reset({
       index: 0,
-      routes: [{ name: "MainTabs" }],
+      routes: [{ name: dest as any }],
     });
   };
 
@@ -222,7 +247,45 @@ export default function ProfileSetupScreen() {
           ),
         );
       }
-      finishSetup();
+
+      // Driver + invitation code — redeem it now so the driver lands in
+      // 'active' link state. Failures here ARE blocking (unlike referral)
+      // because without a linked owner the driver can't withdraw later.
+      if (avatarType === "driver" && ownerInviteCode.trim()) {
+        if (!taxiPlate.trim()) {
+          setIsSaving(false);
+          Alert.alert(
+            t("profile.plateRequiredTitle"),
+            t("profile.plateRequiredDesc"),
+          );
+          return;
+        }
+        try {
+          await apiRequest("/api/drivers/accept-invitation", {
+            method: "POST",
+            body: JSON.stringify({
+              code: ownerInviteCode.trim().toUpperCase(),
+              taxiPlateNumber: taxiPlate.trim(),
+            }),
+          });
+        } catch (err: any) {
+          setIsSaving(false);
+          Alert.alert(
+            t("profile.inviteFailedTitle"),
+            err?.message || t("profile.inviteFailedDesc"),
+          );
+          return;
+        }
+      }
+
+      // Route to the appropriate next screen based on role.
+      if (avatarType === "owner") {
+        finishSetup("OwnerOnboarding");
+      } else if (avatarType === "vendor") {
+        finishSetup("VendorOnboarding");
+      } else {
+        finishSetup("MainTabs");
+      }
     } else {
       setIsSaving(false);
       Alert.alert(t("profile.couldntSave"), result.error || t("common.retry"));
@@ -386,6 +449,84 @@ export default function ProfileSetupScreen() {
               );
             })}
           </View>
+
+          {/* Driver-only: taxi plate + owner invitation code. Shown inline
+              so a new driver can link to their owner and finish setup in
+              a single screen. Both fields are optional at this step —
+              drivers can skip and redeem a code later from the Driver
+              Dashboard if their owner hasn't generated one yet. */}
+          {avatarType === "driver" ? (
+            <View style={styles.driverFieldsCard}>
+              <View style={styles.emergencyHeader}>
+                <Feather
+                  name="truck"
+                  size={16}
+                  color={BrandColors.primary.blue}
+                />
+                <ThemedText style={[styles.emergencyTitle, { color: BrandColors.primary.blue }]}>
+                  {t("profile.driverDetails")}
+                </ThemedText>
+              </View>
+              <ThemedText style={[styles.emergencyHelp, { color: theme.textSecondary }]}>
+                {t("profile.driverDetailsHint")}
+              </ThemedText>
+
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: plateFocused
+                      ? BrandColors.primary.blue
+                      : theme.border,
+                    marginTop: Spacing.md,
+                  },
+                ]}
+                placeholder={t("profile.platePlaceholder")}
+                placeholderTextColor={theme.textSecondary}
+                value={taxiPlate}
+                onChangeText={(text) => setTaxiPlate(text.toUpperCase())}
+                onFocus={() => setPlateFocused(true)}
+                onBlur={() => setPlateFocused(false)}
+                autoCapitalize="characters"
+                maxLength={20}
+                accessibilityLabel={t("profile.plateLabel")}
+              />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: inviteFocused
+                      ? BrandColors.primary.blue
+                      : theme.border,
+                    marginTop: Spacing.sm,
+                    fontFamily: Platform.select({
+                      ios: "Menlo",
+                      android: "monospace",
+                      default: "monospace",
+                    }),
+                  },
+                ]}
+                placeholder="HBO-XXXXXX"
+                placeholderTextColor={theme.textSecondary}
+                value={ownerInviteCode}
+                onChangeText={(text) => setOwnerInviteCode(text.toUpperCase())}
+                onFocus={() => setInviteFocused(true)}
+                onBlur={() => setInviteFocused(false)}
+                autoCapitalize="characters"
+                maxLength={10}
+                accessibilityLabel={t("profile.inviteCodeLabel")}
+              />
+              <ThemedText
+                style={[styles.driverSkipHint, { color: theme.textSecondary }]}
+              >
+                {t("profile.inviteCodeHint")}
+              </ThemedText>
+            </View>
+          ) : null}
 
           {/* Display name */}
           <View style={styles.fieldGroup}>
@@ -568,7 +709,7 @@ export default function ProfileSetupScreen() {
           </View>
 
           <Pressable
-            onPress={finishSetup}
+            onPress={() => finishSetup()}
             disabled={isSaving}
             style={styles.skipWrap}
             accessibilityRole="button"
@@ -729,6 +870,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     fontSize: 16,
     borderWidth: 1,
+  },
+  driverFieldsCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: BrandColors.primary.blue + "25",
+    backgroundColor: BrandColors.primary.blue + "08",
+    marginBottom: Spacing.xl,
+  },
+  driverSkipHint: {
+    fontSize: 12,
+    marginTop: Spacing.sm,
+    lineHeight: 17,
   },
   emergencyCard: {
     padding: Spacing.lg,

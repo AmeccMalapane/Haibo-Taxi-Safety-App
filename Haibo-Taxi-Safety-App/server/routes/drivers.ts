@@ -3,6 +3,7 @@ import { db } from "../db";
 import {
   driverProfiles,
   driverRatings,
+  driverOwnerInvitations,
   users,
   locationUpdates,
   p2pTransfers,
@@ -434,5 +435,144 @@ router.post("/rate", authMiddleware, async (req: AuthRequest, res: Response) => 
     res.status(500).json({ error: "Failed to submit rating" });
   }
 });
+
+// ─── POST /api/drivers/accept-invitation ────────────────────────────────
+// Driver redeems an owner-issued invitation code. Atomic: flips the
+// invitation to 'used' and writes ownerId+linkStatus='active' on the
+// driver's profile in the same transaction. If the driver doesn't have
+// a driver_profiles row yet (signed up but didn't complete driver
+// onboarding), we create a minimal row with just userId + plate.
+//
+// Validation:
+//   - code exists + status='pending' + not expired
+//   - driver hasn't already been linked (linkStatus='active' blocks re-link)
+//   - prevent self-linking (owner shouldn't redeem their own code)
+router.post(
+  "/accept-invitation",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { code, taxiPlateNumber } = req.body as {
+        code?: string;
+        taxiPlateNumber?: string;
+      };
+
+      if (!code || typeof code !== "string") {
+        res.status(400).json({ error: "Invitation code is required" });
+        return;
+      }
+
+      const normalizedCode = code.trim().toUpperCase();
+
+      // Look up invitation.
+      const [invitation] = await db
+        .select()
+        .from(driverOwnerInvitations)
+        .where(eq(driverOwnerInvitations.code, normalizedCode))
+        .limit(1);
+
+      if (!invitation) {
+        res.status(404).json({ error: "Invalid invitation code" });
+        return;
+      }
+      if (invitation.status !== "pending") {
+        res.status(410).json({
+          error:
+            invitation.status === "used"
+              ? "This code has already been used"
+              : invitation.status === "revoked"
+                ? "This code was revoked by the owner"
+                : "This code is no longer valid",
+        });
+        return;
+      }
+      if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+        // Soft-expire on read so stale rows get cleaned up as they're seen.
+        await db
+          .update(driverOwnerInvitations)
+          .set({ status: "expired" })
+          .where(eq(driverOwnerInvitations.id, invitation.id));
+        res.status(410).json({ error: "This code has expired" });
+        return;
+      }
+      if (invitation.ownerId === req.user!.userId) {
+        res.status(400).json({ error: "You cannot redeem your own code" });
+        return;
+      }
+
+      // Check driver profile state. A freshly-signed-up driver who hasn't
+      // done driver onboarding won't have a profile row yet.
+      const [profile] = await db
+        .select()
+        .from(driverProfiles)
+        .where(eq(driverProfiles.userId, req.user!.userId))
+        .limit(1);
+
+      if (profile?.linkStatus === "active") {
+        res.status(409).json({
+          error: "You're already linked to an owner. Ask them to remove you first.",
+        });
+        return;
+      }
+
+      const now = new Date();
+
+      if (profile) {
+        // Existing driver profile — link it.
+        await db
+          .update(driverProfiles)
+          .set({
+            ownerId: invitation.ownerId,
+            linkStatus: "active",
+            linkedAt: now,
+          })
+          .where(eq(driverProfiles.userId, req.user!.userId));
+      } else {
+        // New driver — create a minimal profile. Full KYC details get
+        // captured later via the driver onboarding screen. `taxiPlateNumber`
+        // is required by the schema's UNIQUE constraint, so ask for it
+        // alongside the code.
+        if (!taxiPlateNumber) {
+          res.status(400).json({
+            error: "Taxi plate number is required to finish driver setup",
+          });
+          return;
+        }
+        await db.insert(driverProfiles).values({
+          userId: req.user!.userId,
+          taxiPlateNumber: normalizePlate(taxiPlateNumber),
+          ownerId: invitation.ownerId,
+          linkStatus: "active",
+          linkedAt: now,
+        });
+      }
+
+      // Flip the invitation to 'used' so it can't be reused. Also sets
+      // users.role='driver' so subsequent auth/me calls reflect the role.
+      await db
+        .update(driverOwnerInvitations)
+        .set({
+          status: "used",
+          usedByUserId: req.user!.userId,
+          usedAt: now,
+        })
+        .where(eq(driverOwnerInvitations.id, invitation.id));
+
+      await db
+        .update(users)
+        .set({ role: "driver" })
+        .where(eq(users.id, req.user!.userId));
+
+      res.json({
+        linked: true,
+        ownerId: invitation.ownerId,
+        linkedAt: now.toISOString(),
+      });
+    } catch (err: any) {
+      console.error("Accept invitation error:", err);
+      res.status(500).json({ error: "Failed to redeem invitation" });
+    }
+  },
+);
 
 export default router;
