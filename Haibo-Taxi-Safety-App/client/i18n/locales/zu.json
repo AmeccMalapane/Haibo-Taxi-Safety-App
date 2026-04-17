@@ -1,0 +1,137 @@
+{
+  "common": {
+    "appName": "Haibo!",
+    "tagline": "Ukuphepha kwamatekisi aseMzansi",
+    "loading": "Iyalayisha...",
+    "error": "Kukhona okungalungile",
+    "retry": "Zama futhi",
+    "cancel": "Khansela",
+    "save": "Gcina",
+    "done": "Kwenziwe",
+    "next": "Okulandelayo",
+    "skip": "Yeqa",
+    "back": "Emuva",
+    "search": "Sesha",
+    "share": "Yabelana",
+    "delete": "Susa",
+    "edit": "Hlela",
+    "close": "Vala",
+    "yes": "Yebo",
+    "no": "Cha",
+    "ok": "Kulungile"
+  },
+  "auth": {
+    "welcome": "Siyakwamukela ku-Haibo!",
+    "subtitle": "Umngane wakho wokuphepha ohambweni lwamatekisi eNingizimu Afrika",
+    "phoneLabel": "INOMBOLO YOCINGO",
+    "phonePlaceholder": "82 123 4567",
+    "sendOtp": "Thumela ikhodi yokuqinisekisa",
+    "continueGuest": "Qhubeka njengesivakashi",
+    "orContinueWith": "noma uqhubeke nge",
+    "comingSoon": "MADUZE",
+    "agreeTerms": "Ngokuqhubeka, uyavuma Imigomo Yethu Yesevisi neNqubomgomo Yobumfihlo"
+  },
+  "profile": {
+    "setupTitle": "Hlela iphrofayili yakho",
+    "setupSubtitle": "Imininingwane embalwa ukuze sikwenzele isipiliyoni se-Haibo sakho",
+    "displayNameLabel": "IGAMA",
+    "displayNamePlaceholder": "isib., Sipho M",
+    "handleLabel": "@ISIBIZO",
+    "handlePlaceholder": "isib., sipho_m",
+    "handleHint": "Kuboniswa okuthunyelwayo kwakho nokuphawula esikhundleni senombolo yakho yocingo",
+    "handleTaken": "Sesithathiwe — zama elinye",
+    "handleOk": "Kubukeka kahle",
+    "handleMin": "Okungenani abalingiswa abangu-3",
+    "whoAreYou": "UNGUBANI?",
+    "commuter": "Umgibeli",
+    "driver": "Umshayeli",
+    "operator": "Umphathi",
+    "profilePhoto": "ISITHOMBE SEPHROFAYILI (AYIPHOQELEKILE)",
+    "editProfile": "HLELA"
+  },
+  "emergency": {
+    "title": "Isimo esiphuthumayo",
+    "sosHold": "Bamba ukuthumela i-SOS",
+    "locationLocked": "Indawo itholakele",
+    "contacts": "{{count}} abaxhumana nabo",
+    "contactTitle": "Umxhumano wesimo esiphuthumayo",
+    "contactHint": "Baziswa uma uvusa i-SOS. Ungangeza abanye kamuva."
+  },
+  "reels": {
+    "title": "Phusha",
+    "forYou": "Okwakho",
+    "safetyTips": "Ukuphepha",
+    "taxiHacks": "Amasu",
+    "driverStories": "Izindaba",
+    "routeReviews": "Imizila",
+    "community": "Umphakathi",
+    "commentsTitle": "{{count}} Amazwana",
+    "addComment": "Engeza amazwana...",
+    "beFirst": "Yiba owokuqala ukuphawula!",
+    "loadingComments": "Ilayisha amazwana…"
+  },
+  "fares": {
+    "title": "Izindleko Zamatekisi",
+    "searchPlaceholder": "Sesha lapho uvela noma uya khona",
+    "priceTbd": "Intengo izomiswa",
+    "estimatedTime": "{{minutes}} imiz."
+  },
+  "ranks": {
+    "aboutTitle": "Mayelana naleli Renki",
+    "photosTitle": "Izithombe",
+    "addPhoto": "Faka isithombe",
+    "noPhotos": "Azikho izithombe okwamanje — yiba owokuqala ukusiza abagibeli bathole le renki.",
+    "connectedRoutes": "Imizila Ehlanganisiwe",
+    "communityRating": "Isilinganiso Somphakathi",
+    "confidence": "Ukwethemba",
+    "upvotes": "Amavoti aphezulu",
+    "downvotes": "Amavoti aphansi",
+    "rateService": "Linganisa Umshayeli Noma Isevisi Yerenki"
+  },
+  "rating": {
+    "title": "Linganisa Uhambo Lwakho",
+    "subtitle": "Siza ukuthuthukisa ukuphepha kwawo wonke umuntu",
+    "rateDriver": "Linganisa Umshayeli",
+    "rateRank": "Linganisa Irenki Yamatekisi",
+    "plateLabel": "Inombolo Yepuleti",
+    "platePlaceholder": "isib. GP 123 456",
+    "driverName": "Igama Lomshayeli (Ayiphoqelekile)",
+    "locationLabel": "Irenki / Indawo",
+    "visualProof": "Ubufakazi Obubonayo",
+    "takePhoto": "Thatha Isithombe",
+    "upload": "Layisha",
+    "submit": "Thumela Impendulo",
+    "submitWithPhoto": "Thumela Impendulo + Isithombe",
+    "thankYou": "Siyabonga!",
+    "linked": "Impendulo yakho ithunyelwe futhi ixhunywe kurekhodi yomshayeli.",
+    "unlinked": "Impendulo yakho ithunyelwe Enhlanganweni Yamatekisi."
+  },
+  "share": {
+    "title": "Yabelana",
+    "watermarkNote": "Kwabelwana ngebhrendu ye-Haibo! nelinki yokulayisha i-app",
+    "shareFooter": "Yabelana ngale reel nabangane nomndeni wakho",
+    "copied": "Ilinki ikopishiwe ku-clipboard",
+    "appNotInstalled": "{{name}} ayifakelwe kudivayisi yakho."
+  },
+  "hashtag": {
+    "posts": "{{count}} okuthunyelwayo",
+    "empty": "Azikho izithungo ezinophawu #{{tag}} okwamanje"
+  },
+  "settings": {
+    "title": "Izilungiselelo",
+    "emergencyContacts": "Abaxhumana nabo bezimo eziphuthumayo",
+    "haiboPay": "Haibo Pay",
+    "tripHistory": "Umlando wohambo",
+    "language": "Ulimi",
+    "signOut": "Phuma",
+    "deleteAccount": "Susa i-akhawunti"
+  },
+  "onboarding": {
+    "safetyFirst": "Ukuphepha kuqala",
+    "safetyDesc": "I-SOS ecindezela kanye nokwabelana ngendawo okubukhoma kukugcina uvikelekile ohambweni ngalunye.",
+    "privacyTitle": "Ubumfihlo bakho, isinqumo sakho",
+    "privacyDesc": "I-Haibo! iyi-app yokuphepha, ngakho sidlala ngemininingwane yakho ngokucophelela. Ngaphambi kokuba uqale, sicela ufunde ukuthi siluqoqa kanjani ulwazi lwakho futhi silukhusele ngaphansi kwe-POPIA yaseNingizimu Afrika.",
+    "acceptTerms": "Ngifundile futhi ngiyamukela iNqubomgomo Yobumfihlo neMigomo Yesevisi, futhi ngiyaqonda ukuthi isici se-SOS se-Haibo! akuyona eyokuthatha indawo yamasevisi aphuthumayo.",
+    "getStarted": "Qala"
+  }
+}

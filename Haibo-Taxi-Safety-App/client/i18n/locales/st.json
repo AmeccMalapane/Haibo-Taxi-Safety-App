@@ -1,0 +1,137 @@
+{
+  "common": {
+    "appName": "Haibo!",
+    "tagline": "Polokeho ya ditekesi tsa Mzansi",
+    "loading": "E a laeha...",
+    "error": "Ho na le se sa lokang",
+    "retry": "Leka hape",
+    "cancel": "Hlakola",
+    "save": "Boloka",
+    "done": "Ho phethilwe",
+    "next": "E latelang",
+    "skip": "Tlola",
+    "back": "Morao",
+    "search": "Batla",
+    "share": "Arolelana",
+    "delete": "Hlakola",
+    "edit": "Fetola",
+    "close": "Kwala",
+    "yes": "Ee",
+    "no": "Tjhe",
+    "ok": "Ho lokile"
+  },
+  "auth": {
+    "welcome": "Re a o amohela ho Haibo!",
+    "subtitle": "Motswalle wa hao wa polokeho leetong la ditekesi Afrika Borwa",
+    "phoneLabel": "NOMORO YA MOHALA",
+    "phonePlaceholder": "82 123 4567",
+    "sendOtp": "Romela khoutu ya netefatso",
+    "continueGuest": "Tswela pele e le moeti",
+    "orContinueWith": "kapa o tswele pele ka",
+    "comingSoon": "HAUFI",
+    "agreeTerms": "Ka ho tswela pele, o dumela Melao ya Rona ya Tshebeletso le Molao wa Lekunutu"
+  },
+  "profile": {
+    "setupTitle": "Lokisa profaele ya hao",
+    "setupSubtitle": "Dintlha tse mmalwa hore re kgone ho o etsetsa boiphihlelo ba Haibo",
+    "displayNameLabel": "LEBITSO",
+    "displayNamePlaceholder": "mohlala, Thabo M",
+    "handleLabel": "@LEBITSO LA BATHO",
+    "handlePlaceholder": "mohlala, thabo_m",
+    "handleHint": "E bontshwa diphatlalatso le ditlhaloso tsa hao ho e-na le nomoro ya hao ya mohala",
+    "handleTaken": "E se e nkilwe — leka e nngwe",
+    "handleOk": "E bonahala hantle",
+    "handleMin": "Bonyane ditlhaku tse 3",
+    "whoAreYou": "O MANG?",
+    "commuter": "Mopalami",
+    "driver": "Mokganni",
+    "operator": "Motsamaisi",
+    "profilePhoto": "SENEPE SA PROFAELE (HA HO QOBELLWE)",
+    "editProfile": "FETOLA"
+  },
+  "emergency": {
+    "title": "Tshohanyetso",
+    "sosHold": "Tshwara ho romela SOS",
+    "locationLocked": "Sebaka se fumanehile",
+    "contacts": "{{count}} ba ikopanyang le bona",
+    "contactTitle": "Motho wa tshohanyetso",
+    "contactHint": "Ba tsebiswa ha o qala SOS. O ka eketsa ba bang hamorao."
+  },
+  "reels": {
+    "title": "Phusha",
+    "forYou": "Bakeng Sa Hao",
+    "safetyTips": "Polokeho",
+    "taxiHacks": "Maano",
+    "driverStories": "Dipale",
+    "routeReviews": "Ditsela",
+    "community": "Setjhaba",
+    "commentsTitle": "{{count}} Ditlhaloso",
+    "addComment": "Eketsa tlhaloso...",
+    "beFirst": "Eba wa pele ho hlalosa!",
+    "loadingComments": "E laeha ditlhaloso…"
+  },
+  "fares": {
+    "title": "Ditjhelete Tsa Ditekesi",
+    "searchPlaceholder": "Batla moo o tswang kapa o yang teng",
+    "priceTbd": "Theko e tla tsebiswa",
+    "estimatedTime": "{{minutes}} men."
+  },
+  "ranks": {
+    "aboutTitle": "Ka Renke Ena",
+    "photosTitle": "Dinepe",
+    "addPhoto": "Kenya senepe",
+    "noPhotos": "Ha ho dinepe hajoale — eba wa pele ho thusa bapalami ho fumana renke ena.",
+    "connectedRoutes": "Ditsela Tse Hokahantsweng",
+    "communityRating": "Tekanyetso Ya Setjhaba",
+    "confidence": "Tshepo",
+    "upvotes": "Divoutu tse hodimo",
+    "downvotes": "Divoutu tse tlase",
+    "rateService": "Tekanya Mokganni Kapa Tshebeletso Ya Renke"
+  },
+  "rating": {
+    "title": "Tekanya Leeto La Hao",
+    "subtitle": "Thusa ho ntlafatsa polokeho bakeng sa bohle",
+    "rateDriver": "Tekanya Mokganni",
+    "rateRank": "Tekanya Renke Ya Ditekesi",
+    "plateLabel": "Nomoro Ya Peleiti",
+    "platePlaceholder": "mohlala GP 123 456",
+    "driverName": "Lebitso La Mokganni (Ha Ho Qobellwe)",
+    "locationLabel": "Renke / Sebaka",
+    "visualProof": "Bopaki Bo Bonahalang",
+    "takePhoto": "Nka Senepe",
+    "upload": "Laeha",
+    "submit": "Romela Maikutlo",
+    "submitWithPhoto": "Romela Maikutlo + Senepe",
+    "thankYou": "Re A Leboha!",
+    "linked": "Maikutlo a hao a rometswe mme a hokahantse le rekoto ya mokganni.",
+    "unlinked": "Maikutlo a hao a rometswe Mokgatlong Wa Ditekesi."
+  },
+  "share": {
+    "title": "Arolelana",
+    "watermarkNote": "Ho arolelwanwa ka brende ya Haibo! le linki ya ho laeha app",
+    "shareFooter": "Arolelana ka reel ena le metswalle le ba lelapa la hao",
+    "copied": "Linki e kopitswe ho clipboard",
+    "appNotInstalled": "{{name}} ha e a kengwa setsheng sa hao."
+  },
+  "hashtag": {
+    "posts": "{{count}} diphatlalatso",
+    "empty": "Ha ho na diphatlalatso tse nang le #{{tag}} hajoale"
+  },
+  "settings": {
+    "title": "Ditlhophiso",
+    "emergencyContacts": "Ba ikopanyang le bona ba tshohanyetso",
+    "haiboPay": "Haibo Pay",
+    "tripHistory": "Nalane ya maeto",
+    "language": "Puo",
+    "signOut": "Tswa",
+    "deleteAccount": "Hlakola akhaonto"
+  },
+  "onboarding": {
+    "safetyFirst": "Polokeho pele",
+    "safetyDesc": "SOS ya ho tobetsa ha nngwe le ho arolelana ka sebaka se phetseng e o boloka o sireletsehile leetong le leng le le leng.",
+    "privacyTitle": "Lekunutu la hao, qeto ya hao",
+    "privacyDesc": "Haibo! ke app ya polokeho, kahoo re nka tlhahisoleseding ya hao ka bohlokwa. Pele o qala, bala hore na re bokella le ho sireletsa tlhahisoleseding ya hao jwang tlas'a POPIA ya Afrika Borwa.",
+    "acceptTerms": "Ke badile mme ke amohela Molao wa Lekunutu le Melao ya Tshebeletso, mme ke utlwisisa hore setshwantsho sa SOS sa Haibo! ha se nke sebaka sa ditshebeletso tsa tshohanyetso.",
+    "getStarted": "Qala"
+  }
+}

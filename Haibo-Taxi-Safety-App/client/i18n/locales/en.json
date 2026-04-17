@@ -1,0 +1,137 @@
+{
+  "common": {
+    "appName": "Haibo!",
+    "tagline": "Safety for Mzansi's taxis",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "done": "Done",
+    "next": "Next",
+    "skip": "Skip",
+    "back": "Back",
+    "search": "Search",
+    "share": "Share",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK"
+  },
+  "auth": {
+    "welcome": "Welcome to Haibo!",
+    "subtitle": "Your safety companion for minibus taxi travel in South Africa",
+    "phoneLabel": "PHONE NUMBER",
+    "phonePlaceholder": "82 123 4567",
+    "sendOtp": "Send verification code",
+    "continueGuest": "Continue as guest",
+    "orContinueWith": "or continue with",
+    "comingSoon": "SOON",
+    "agreeTerms": "By continuing, you agree to our Terms of Service and Privacy Policy"
+  },
+  "profile": {
+    "setupTitle": "Set up your profile",
+    "setupSubtitle": "A few quick details so we can personalize your Haibo experience",
+    "displayNameLabel": "DISPLAY NAME",
+    "displayNamePlaceholder": "e.g., Sipho M",
+    "handleLabel": "@HANDLE",
+    "handlePlaceholder": "e.g., sipho_m",
+    "handleHint": "Shown on your posts and comments instead of your phone number",
+    "handleTaken": "Already taken — try another",
+    "handleOk": "Looks good",
+    "handleMin": "At least 3 characters",
+    "whoAreYou": "WHO ARE YOU?",
+    "commuter": "Commuter",
+    "driver": "Driver",
+    "operator": "Operator",
+    "profilePhoto": "PROFILE PHOTO (OPTIONAL)",
+    "editProfile": "EDIT"
+  },
+  "emergency": {
+    "title": "Emergency",
+    "sosHold": "Hold to send SOS",
+    "locationLocked": "Location locked",
+    "contacts": "{{count}} contacts",
+    "contactTitle": "Emergency contact",
+    "contactHint": "Notified when you trigger SOS. You can add more contacts later."
+  },
+  "reels": {
+    "title": "Phusha",
+    "forYou": "For You",
+    "safetyTips": "Safety",
+    "taxiHacks": "Hacks",
+    "driverStories": "Stories",
+    "routeReviews": "Routes",
+    "community": "Community",
+    "commentsTitle": "{{count}} Comments",
+    "addComment": "Add a comment...",
+    "beFirst": "Be the first to comment!",
+    "loadingComments": "Loading comments…"
+  },
+  "fares": {
+    "title": "Taxi Fares",
+    "searchPlaceholder": "Search origin or destination",
+    "priceTbd": "Price TBD",
+    "estimatedTime": "{{minutes}} min"
+  },
+  "ranks": {
+    "aboutTitle": "About this Rank",
+    "photosTitle": "Photos",
+    "addPhoto": "Add photo",
+    "noPhotos": "No photos yet — be the first to help commuters find this rank.",
+    "connectedRoutes": "Connected Routes",
+    "communityRating": "Community Rating",
+    "confidence": "Confidence",
+    "upvotes": "Upvotes",
+    "downvotes": "Downvotes",
+    "rateService": "Rate Driver or Rank Service"
+  },
+  "rating": {
+    "title": "Rate Your Trip",
+    "subtitle": "Help improve safety for everyone",
+    "rateDriver": "Rate Driver",
+    "rateRank": "Rate Taxi Rank",
+    "plateLabel": "Number Plate",
+    "platePlaceholder": "e.g. GP 123 456",
+    "driverName": "Driver Name (Optional)",
+    "locationLabel": "Rank / Location",
+    "visualProof": "Visual Proof",
+    "takePhoto": "Take Photo",
+    "upload": "Upload",
+    "submit": "Submit Feedback",
+    "submitWithPhoto": "Submit Feedback + Photo",
+    "thankYou": "Thank You!",
+    "linked": "Your feedback has been submitted and linked to the driver's record.",
+    "unlinked": "Your feedback has been submitted to the Taxi Association."
+  },
+  "share": {
+    "title": "Share",
+    "watermarkNote": "Shared with Haibo! branding + app download link",
+    "shareFooter": "Share this reel with your friends and family",
+    "copied": "Link copied to clipboard",
+    "appNotInstalled": "{{name}} is not installed on your device."
+  },
+  "hashtag": {
+    "posts": "{{count}} posts",
+    "empty": "No posts with #{{tag}} yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "emergencyContacts": "Emergency contacts",
+    "haiboPay": "Haibo Pay",
+    "tripHistory": "Trip history",
+    "language": "Language",
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account"
+  },
+  "onboarding": {
+    "safetyFirst": "Safety first",
+    "safetyDesc": "One-tap SOS and live location sharing keep you covered on every ride.",
+    "privacyTitle": "Your privacy, your call",
+    "privacyDesc": "Haibo! is a safety app, so we take data seriously. Before you get started, please read how we collect and protect your information under South Africa's POPIA, and what you can expect from us.",
+    "acceptTerms": "I've read and accept the Privacy Policy and Terms of Service, and I understand Haibo!'s SOS feature is not a substitute for emergency services.",
+    "getStarted": "Get started"
+  }
+}

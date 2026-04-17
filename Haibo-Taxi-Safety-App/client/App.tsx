@@ -1,3 +1,4 @@
+import "@/i18n";
 import React, { useState, useEffect, Component, PropsWithChildren, useMemo } from "react";
 import { StyleSheet, View, ActivityIndicator, Text, ScrollView, Pressable } from "react-native";
 import { NavigationContainer, LinkingOptions } from "@react-navigation/native";
@@ -34,6 +35,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { getLinkingConfig } from "@/lib/deepLinks";
 import { registerForPushNotifications, onNotificationReceived, onNotificationTapped } from "@/lib/notifications";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { restoreSavedLanguage } from "@/hooks/useLanguage";
+import i18n from "@/i18n";
 
 const ONBOARDING_KEY = "@haibo_onboarding_complete";
 // Versioned POPIA consent key. Bump the suffix (e.g. _v2) when the privacy
@@ -217,6 +220,7 @@ function AppWithFonts() {
           Inter_600SemiBold,
           Inter_700Bold,
         });
+      await restoreSavedLanguage(i18n);
       } catch (e) {
         console.warn("Error loading fonts:", e);
       } finally {
