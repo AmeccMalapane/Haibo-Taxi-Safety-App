@@ -25,6 +25,7 @@ import deliveryRoutes from "./routes/deliveries";
 import rideRoutes from "./routes/rides";
 import miscRoutes from "./routes/misc";
 import adminRoutes from "./routes/admin";
+import adminFareSyncRoutes from "./routes/admin-fare-sync";
 import notificationRoutes from "./routes/notifications";
 import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
@@ -167,6 +168,11 @@ app.use("/api/deliveries", deliveryRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api", miscRoutes);
 app.use("/api/admin", adminRoutes);
+// Fare-sync admin endpoints live in their own router to keep admin.ts
+// from growing past its already-outsized 3k-line footprint. Mounted at
+// the same prefix so /api/admin/fare-imports and /api/admin/demand-signals
+// are routed here while everything else falls through to adminRoutes.
+app.use("/api/admin", adminFareSyncRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/paystack", paystackRoutes);
 app.use("/api/pasop", pasopRoutes);

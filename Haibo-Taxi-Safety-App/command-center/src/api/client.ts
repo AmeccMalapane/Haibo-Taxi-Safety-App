@@ -403,6 +403,99 @@ export const admin = {
     return request(`/api/admin/explorer/contributions?${qs.toString()}`);
   },
 
+  /**
+   * Facebook-harvested fare imports awaiting admin review.
+   *
+   * Status values on the server:
+   *   - pending_extraction: harvested raw post, Claude extraction hasn't run
+   *   - pending_canonicalization: LLM extracted, rank-matcher hasn't run
+   *   - pending_review: matched to origin + destination ranks, awaiting admin approve/reject
+   *   - orphan: destination never matched a known rank (admin decides: override or reject)
+   *   - approved / rejected / duplicate / superseded (terminal)
+   */
+  async getFareImports(params: {
+    status?:
+      | "pending_review"
+      | "orphan"
+      | "pending_extraction"
+      | "pending_canonicalization"
+      | "approved"
+      | "rejected"
+      | "duplicate"
+      | "superseded"
+      | "all";
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const qs = new URLSearchParams();
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/fare-imports${q}`);
+  },
+
+  /**
+   * Approve a fare_import — writes a row into taxi_fares and back-references
+   * the import with the new fareId + approved status. Admin can override
+   * amount / distance / rank matches in the payload.
+   */
+  async approveFareImport(
+    id: string,
+    payload: {
+      amount?: number | null;
+      distanceKm?: number | null;
+      estimatedTimeMinutes?: number | null;
+      association?: string | null;
+      notes?: string | null;
+      originRankIdOverride?: string | null;
+      destinationRankIdOverride?: string | null;
+    } = {}
+  ) {
+    return request(`/api/admin/fare-imports/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Reject a fare_import. Reason must be ≥3 characters; stored on the row. */
+  async rejectFareImport(id: string, reason: string, notes?: string) {
+    return request(`/api/admin/fare-imports/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason, notes }),
+    });
+  },
+
+  /** Mark a fare_import as a duplicate of an existing taxi_fares row. */
+  async markFareImportDuplicate(
+    id: string,
+    duplicateOfFareId?: string | null,
+    notes?: string | null
+  ) {
+    return request(`/api/admin/fare-imports/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify({ duplicateOfFareId, notes }),
+    });
+  },
+
+  /**
+   * Rolling-window demand aggregation over route_demand_signals grouped by
+   * (origin, destination, metro). Used by the city-explorer UI to surface
+   * "hottest routes right now" for each metro.
+   */
+  async getDemandSignals(params: {
+    metro?: string;
+    windowDays?: number;
+    limit?: number;
+  } = {}) {
+    const qs = new URLSearchParams();
+    if (params.metro) qs.set("metro", params.metro);
+    if (params.windowDays != null) qs.set("windowDays", String(params.windowDays));
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/demand-signals${q}`);
+  },
+
   async getAuditLog(params: {
     action?: string;
     resource?: string;

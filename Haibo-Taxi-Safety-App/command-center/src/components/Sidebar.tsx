@@ -22,6 +22,7 @@ import {
   Gift,
   Store,
   Compass,
+  Inbox,
   LogOut,
   MapPin,
   LucideIcon,
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { to: "/admin/moderation/lost-found", label: "Lost & found", Icon: Search, section: "Moderation" },
   { to: "/admin/moderation/jobs", label: "Jobs", Icon: Briefcase, section: "Moderation" },
   { to: "/admin/moderation/locations", label: "Taxi ranks", Icon: MapPin, section: "Moderation" },
+  { to: "/admin/moderation/fare-imports", label: "Fare imports", Icon: Inbox, section: "Moderation" },
 
   // Directory — reference
   { to: "/admin/users", label: "Users", Icon: Users, section: "Directory" },
