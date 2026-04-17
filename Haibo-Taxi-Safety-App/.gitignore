@@ -22,4 +22,15 @@ GoogleService-Info.plist
 *.pem
 firebase-adminsdk*.json
 service-account*.json
+# Play Console service account used by `eas submit`. The prefixed name
+# slips past the `service-account*.json` glob above, so it needs its
+# own entry. Uploading this to git would grant anyone with a clone the
+# ability to push new builds to the live Play Store listing.
+play-service-account.json
 AZURE_CREDENTIALS.json
+
+# Trial/dev datasets — raw community post text (POPIA-sensitive).
+# The fare_imports pipeline stores hashed + PII-redacted versions in the
+# DB; raw JSON exports from Apify runs stay local only.
+scripts/fb-sync/scraped_posts.json
+scripts/fare-sync/trial-data/
