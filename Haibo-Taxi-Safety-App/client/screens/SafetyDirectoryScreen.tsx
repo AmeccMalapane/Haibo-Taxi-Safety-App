@@ -62,8 +62,36 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   "Other Essential Contacts": "info",
 };
 
+// Per-category accent tints. Chosen so each category has a hue that fits
+// its semantic weight: reds for emergency and crime, blue for medical /
+// authority, purple for GBV (human rights / dignity), etc. Uses darker
+// accent-palette entries (all pass WCAG 3:1 for graphical against white).
+const CATEGORY_COLORS: Record<string, string> = {
+  "National Emergency Services": BrandColors.status.emergency,
+  "General Emergency Services": BrandColors.status.emergency,
+  "Medical Emergency Services": BrandColors.primary.blue,
+  "Crime Reporting Safety": BrandColors.primary.red,
+  "Road Traffic Assistance": BrandColors.primary.orange,
+  "Gender Based Violence Support": BrandColors.secondary.purple,
+  "Mental Health Support": BrandColors.accent.teal,
+  "Substance Abuse Support": BrandColors.accent.fuchsia,
+  "Family Child Support": BrandColors.primary.green,
+  "Disaster Relief": BrandColors.secondary.orange,
+  "Utility Services Emergencies": BrandColors.accent.yellow,
+  "Animal Emergencies Welfare": BrandColors.accent.lime,
+  "Departmental Contacts": BrandColors.accent.sky,
+  "Gauteng Local Services": BrandColors.accent.sky,
+  "South Coast Services": BrandColors.accent.teal,
+  "Western Cape": BrandColors.accent.teal,
+  "Other Essential Contacts": BrandColors.primary.gradientStart,
+};
+
 function categoryIconFor(category: string): keyof typeof Feather.glyphMap {
   return CATEGORY_ICONS[category] || "info";
+}
+
+function categoryColorFor(category: string): string {
+  return CATEGORY_COLORS[category] || BrandColors.primary.gradientStart;
 }
 
 export default function SafetyDirectoryScreen() {
@@ -325,7 +353,9 @@ export default function SafetyDirectoryScreen() {
             </Animated.View>
           ) : (
             <View style={styles.groupsContainer}>
-              {groupedData.map((group, groupIndex) => (
+              {groupedData.map((group, groupIndex) => {
+                const groupTint = categoryColorFor(group.title);
+                return (
                 <Animated.View
                   key={group.title}
                   entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(
@@ -337,16 +367,13 @@ export default function SafetyDirectoryScreen() {
                     <View
                       style={[
                         styles.groupIcon,
-                        {
-                          backgroundColor:
-                            BrandColors.primary.gradientStart + "12",
-                        },
+                        { backgroundColor: groupTint + "18" },
                       ]}
                     >
                       <Feather
                         name={categoryIconFor(group.title)}
                         size={14}
-                        color={BrandColors.primary.gradientStart}
+                        color={groupTint}
                       />
                     </View>
                     <ThemedText style={styles.groupTitle}>
@@ -355,10 +382,7 @@ export default function SafetyDirectoryScreen() {
                     <View
                       style={[
                         styles.groupCount,
-                        {
-                          backgroundColor:
-                            BrandColors.primary.gradientStart + "12",
-                        },
+                        { backgroundColor: groupTint + "18" },
                       ]}
                     >
                       <ThemedText style={styles.groupCountText}>
@@ -418,7 +442,8 @@ export default function SafetyDirectoryScreen() {
                     </Pressable>
                   ))}
                 </Animated.View>
-              ))}
+                );
+              })}
             </View>
           )}
         </Animated.View>

@@ -48,10 +48,15 @@ interface MenuItemProps {
   label: string;
   hint?: string;
   onPress: () => void;
+  /** Icon chip accent color. Defaults to the brand rose. Pass one of the
+   *  BrandColors.accent.* or status palette entries so each service gets
+   *  its own visual anchor (faster scanning, less visual monotony). */
+  accent?: string;
 }
 
-function MenuItem({ icon, label, hint, onPress }: MenuItemProps) {
+function MenuItem({ icon, label, hint, onPress, accent }: MenuItemProps) {
   const { theme } = useTheme();
+  const tint = accent || BrandColors.primary.gradientStart;
 
   return (
     <Pressable
@@ -68,14 +73,10 @@ function MenuItem({ icon, label, hint, onPress }: MenuItemProps) {
       <View
         style={[
           styles.menuIconContainer,
-          { backgroundColor: BrandColors.primary.gradientStart + "12" },
+          { backgroundColor: tint + "16" },
         ]}
       >
-        <Feather
-          name={icon}
-          size={18}
-          color={BrandColors.primary.gradientStart}
-        />
+        <Feather name={icon} size={18} color={tint} />
       </View>
       <View style={styles.menuLabelWrap}>
         <ThemedText style={styles.menuLabel}>{label}</ThemedText>
@@ -369,6 +370,7 @@ export default function MenuScreen() {
               label={t("menu.emergencyServices")}
               hint={t("menu.emergencyServicesHint")}
               onPress={handleEmergencyServices}
+              accent={BrandColors.status.emergency}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
@@ -376,6 +378,7 @@ export default function MenuScreen() {
               label={t("menu.safetyDirectory")}
               hint={t("menu.safetyDirectoryHint")}
               onPress={handleSafetyDirectory}
+              accent={BrandColors.accent.sky}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
@@ -383,6 +386,7 @@ export default function MenuScreen() {
               label={t("menu.lostFound")}
               hint={t("menu.lostFoundHint")}
               onPress={handleLostFound}
+              accent={BrandColors.accent.yellow}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
@@ -390,6 +394,7 @@ export default function MenuScreen() {
               label={t("menu.haiboHub")}
               hint={t("menu.haiboHubHint")}
               onPress={handleHub}
+              accent={BrandColors.accent.teal}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
@@ -397,6 +402,7 @@ export default function MenuScreen() {
               label={t("menu.referFriends")}
               hint={t("menu.referFriendsHint")}
               onPress={handleReferral}
+              accent={BrandColors.accent.fuchsia}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
@@ -404,6 +410,7 @@ export default function MenuScreen() {
               label={t("menu.jobs")}
               hint={t("menu.jobsHint")}
               onPress={handleJobs}
+              accent={BrandColors.accent.lime}
             />
             {isDriver ? (
               <>
@@ -413,6 +420,7 @@ export default function MenuScreen() {
                   label={t("menu.driverDashboard")}
                   hint={t("menu.driverDashboardHint")}
                   onPress={handleDriverDashboard}
+                  accent={BrandColors.primary.blue}
                 />
               </>
             ) : (
@@ -423,6 +431,7 @@ export default function MenuScreen() {
                   label={t("menu.becomeDriver")}
                   hint={t("menu.becomeDriverHint")}
                   onPress={handleDriverOnboarding}
+                  accent={BrandColors.primary.blue}
                 />
               </>
             )}
@@ -432,6 +441,7 @@ export default function MenuScreen() {
               label={t("menu.notifications")}
               hint={t("menu.notificationsHint")}
               onPress={handleNotifications}
+              accent={BrandColors.primary.green}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem

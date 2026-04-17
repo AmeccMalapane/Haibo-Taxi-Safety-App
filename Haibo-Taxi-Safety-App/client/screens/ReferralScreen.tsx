@@ -429,7 +429,18 @@ export default function ReferralScreen() {
               ]}
             >
               {(stats?.allTiers && stats.allTiers.length > 0) ? (
-                stats.allTiers.map((tier, index) => (
+                stats.allTiers.map((tier, index) => {
+                  // Progression colors for tier badges — each tier gets a
+                  // hotter hue to signal rarity/prestige. Teal → sky →
+                  // fuchsia → rose (brand moment for the top tier).
+                  const tierAccents = [
+                    BrandColors.accent.teal,
+                    BrandColors.accent.sky,
+                    BrandColors.accent.fuchsia,
+                    BrandColors.primary.gradientStart,
+                  ];
+                  const tierTint = tierAccents[Math.min(index, tierAccents.length - 1)];
+                  return (
                   <View
                     key={`${tier.signups}-${tier.type}`}
                     style={[
@@ -445,7 +456,7 @@ export default function ReferralScreen() {
                         styles.rewardIcon,
                         {
                           backgroundColor: tier.unlocked
-                            ? BrandColors.primary.gradientStart + "12"
+                            ? tierTint + "18"
                             : theme.backgroundDefault,
                         },
                       ]}
@@ -455,7 +466,7 @@ export default function ReferralScreen() {
                         size={18}
                         color={
                           tier.unlocked
-                            ? BrandColors.primary.gradientStart
+                            ? tierTint
                             : theme.textSecondary
                         }
                       />
@@ -476,7 +487,7 @@ export default function ReferralScreen() {
                       <View
                         style={[
                           styles.unlockedBadge,
-                          { backgroundColor: BrandColors.primary.gradientStart },
+                          { backgroundColor: tierTint },
                         ]}
                       >
                         <Feather name="check" size={12} color="#FFFFFF" />
@@ -496,7 +507,8 @@ export default function ReferralScreen() {
                       </View>
                     )}
                   </View>
-                ))
+                  );
+                })
               ) : (
                 <View style={styles.tiersSkeleton}>
                   <SkeletonBlock style={styles.tierSkeletonRow} />
