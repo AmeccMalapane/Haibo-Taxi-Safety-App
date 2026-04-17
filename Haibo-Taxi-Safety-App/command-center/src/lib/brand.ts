@@ -59,6 +59,21 @@ export const colors = {
   haiboInfo: "#0079B3",
   haiboDark: "#0C121A",
 
+  // Youthful accent palette — mirrors mobile BrandColors.accent so
+  // category badges, highlight cards, and marketing surfaces stay
+  // visually aligned across the app and the website. Use sparingly;
+  // rose stays the dominant brand.
+  accentTeal: "#0D9488",
+  accentTealLight: "#14B8A6",
+  accentLime: "#84CC16",
+  accentLimeLight: "#A3E635",
+  accentFuchsia: "#C026D3",
+  accentFuchsiaLight: "#D946EF",
+  accentYellow: "#EAB308",
+  accentYellowLight: "#FACC15",
+  accentSky: "#0284C7",
+  accentSkyLight: "#0EA5E9",
+
   // Haibo gray scale — used for non-semantic accents (e.g. divider tints).
   haiboGray100: "#F0F2F4",
   haiboGray200: "#E7E8EA",
@@ -207,6 +222,23 @@ export const fonts = {
  * tokens but scaled up slightly for desktop reading.
  */
 export const typography = {
+  // Marketing-hero title — used on HomePage and big public landing pages.
+  // Big, tight, impactful. `display` is the biggest (hero), `heroTitle`
+  // is one step down (page heroes on About/Community/etc).
+  display: {
+    fontFamily: fonts.heading,
+    fontSize: 56,
+    fontWeight: 800,
+    letterSpacing: -1.2,
+    lineHeight: 1.04,
+  },
+  heroTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 40,
+    fontWeight: 800,
+    letterSpacing: -0.8,
+    lineHeight: 1.08,
+  },
   pageTitle: {
     fontFamily: fonts.heading,
     fontSize: 28,

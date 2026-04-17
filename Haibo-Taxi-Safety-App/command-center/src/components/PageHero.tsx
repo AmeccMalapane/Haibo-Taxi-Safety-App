@@ -1,5 +1,6 @@
 import React from "react";
 import { colors, fonts, gradients, radius, spacing, shadows } from "../lib/brand";
+import { FadeInUp } from "../lib/motion";
 
 interface PageHeroProps {
   eyebrow?: React.ReactNode;
@@ -81,68 +82,74 @@ export function PageHero({
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 720 }}>
         {eyebrow && (
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              background: imageUrl ? "rgba(255,255,255,0.18)" : colors.roseFaint,
-              padding: "6px 14px",
-              borderRadius: radius.full,
-              marginBottom: spacing.lg,
-              fontSize: 12,
-              fontWeight: 800,
-              fontFamily: fonts.sans,
-              letterSpacing: 0.8,
-              color: imageUrl ? "#FFFFFF" : colors.haiboPink,
-              textTransform: "uppercase",
-            }}
-          >
-            {eyebrow}
-          </div>
+          <FadeInUp delay={0}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: imageUrl ? "rgba(255,255,255,0.18)" : colors.roseFaint,
+                padding: "6px 14px",
+                borderRadius: radius.full,
+                marginBottom: spacing.lg,
+                fontSize: 12,
+                fontWeight: 800,
+                fontFamily: fonts.sans,
+                letterSpacing: 0.8,
+                color: imageUrl ? "#FFFFFF" : colors.haiboPink,
+                textTransform: "uppercase",
+              }}
+            >
+              {eyebrow}
+            </div>
+          </FadeInUp>
         )}
-        <h1
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: 42,
-            fontWeight: 800,
-            lineHeight: 1.15,
-            letterSpacing: -0.6,
-            color: imageUrl ? "#FFFFFF" : colors.foreground,
-            margin: 0,
-          }}
-        >
-          {title}
-          {titleAccent && (
-            <>
-              {" "}
-              <span
-                style={{
-                  background: imageUrl
-                    ? "none"
-                    : gradients.primary,
-                  WebkitBackgroundClip: imageUrl ? undefined : "text",
-                  WebkitTextFillColor: imageUrl ? "#FFFFFF" : "transparent",
-                }}
-              >
-                {titleAccent}
-              </span>
-            </>
-          )}
-        </h1>
-        {subtitle && (
-          <p
+        <FadeInUp delay={0.1}>
+          <h1
             style={{
-              fontFamily: fonts.sans,
-              fontSize: 17,
-              lineHeight: 1.6,
-              color: imageUrl ? "rgba(255,255,255,0.85)" : colors.mutedForeground,
-              marginTop: spacing.lg,
-              maxWidth: 560,
+              fontFamily: fonts.heading,
+              fontSize: "clamp(36px, 5vw, 56px)",
+              fontWeight: 800,
+              lineHeight: 1.08,
+              letterSpacing: -1.0,
+              color: imageUrl ? "#FFFFFF" : colors.foreground,
+              margin: 0,
             }}
           >
-            {subtitle}
-          </p>
+            {title}
+            {titleAccent && (
+              <>
+                {" "}
+                <span
+                  style={{
+                    background: imageUrl
+                      ? "none"
+                      : gradients.primary,
+                    WebkitBackgroundClip: imageUrl ? undefined : "text",
+                    WebkitTextFillColor: imageUrl ? "#FFFFFF" : "transparent",
+                  }}
+                >
+                  {titleAccent}
+                </span>
+              </>
+            )}
+          </h1>
+        </FadeInUp>
+        {subtitle && (
+          <FadeInUp delay={0.22}>
+            <p
+              style={{
+                fontFamily: fonts.sans,
+                fontSize: 17,
+                lineHeight: 1.6,
+                color: imageUrl ? "rgba(255,255,255,0.85)" : colors.mutedForeground,
+                marginTop: spacing.lg,
+                maxWidth: 560,
+              }}
+            >
+              {subtitle}
+            </p>
+          </FadeInUp>
         )}
       </div>
     </section>

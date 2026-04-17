@@ -25,6 +25,7 @@ import {
 } from "../../lib/brand";
 import { events as eventsApi, jobs as jobsApi } from "../../api/client";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { FadeInUp, StaggerIn, RevealOnScroll } from "../../lib/motion";
 
 // Lazy-load the Mapbox hero so the ~250kb mapbox-gl bundle doesn't block
 // first paint for users who bounce at the fold. Falls through gracefully
@@ -178,108 +179,116 @@ function Hero() {
         }}
       >
         <div style={{ maxWidth: 620 }} className="hb-hero-copy">
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: spacing.xs,
-            padding: `${spacing.xs}px ${spacing.md}px`,
-            borderRadius: radius.full,
-            background: colors.roseFaint,
-            color: colors.rose,
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-            marginBottom: spacing.xl,
-          }}
-        >
-          <Zap size={13} /> Safety is the new flex
-        </div>
-        <h1
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: "clamp(40px, 6vw, 72px)",
-            fontWeight: 700,
-            lineHeight: 1.05,
-            letterSpacing: -1.2,
-            color: colors.text,
-            maxWidth: 820,
-            margin: 0,
-          }}
-        >
-          The safety layer for{" "}
-          <span
-            style={{
-              background: gradients.primary,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
-            Mzansi's taxis
-          </span>
-          .
-        </h1>
-        <p
-          style={{
-            fontFamily: fonts.sans,
-            fontSize: 18,
-            lineHeight: 1.6,
-            color: colors.textSecondary,
-            marginTop: spacing.xl,
-            maxWidth: 620,
-          }}
-        >
-          SOS, rank finder, cashless fares, group rides and community alerts — built
-          with and for the 15 million commuters who rely on minibus taxis every day.
-        </p>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: spacing.md,
-            marginTop: spacing["2xl"],
-          }}
-        >
-          <a
-            href="#download"
+        <FadeInUp delay={0}>
+          <div
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: spacing.xs,
-              padding: `${spacing.lg}px ${spacing["2xl"]}px`,
-              borderRadius: radius.md,
-              background: gradients.primary,
-              color: "#FFFFFF",
-              fontSize: 15,
+              padding: `${spacing.xs}px ${spacing.md}px`,
+              borderRadius: radius.full,
+              background: colors.roseFaint,
+              color: colors.rose,
+              fontSize: 12,
               fontWeight: 600,
-              textDecoration: "none",
-              boxShadow: shadows.brandSm,
-              transition: transitions.medium,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+              marginBottom: spacing.xl,
             }}
           >
-            Get the app <ArrowRight size={16} />
-          </a>
-          <Link
-            to="/about"
+            <Zap size={13} /> Safety is the new flex
+          </div>
+        </FadeInUp>
+        <FadeInUp delay={0.1}>
+          <h1
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: `${spacing.lg}px ${spacing["2xl"]}px`,
-              borderRadius: radius.md,
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
+              fontFamily: fonts.heading,
+              fontSize: "clamp(44px, 7vw, 80px)",
+              fontWeight: 800,
+              lineHeight: 1.02,
+              letterSpacing: -1.6,
               color: colors.text,
-              fontSize: 15,
-              fontWeight: 600,
-              textDecoration: "none",
-              transition: transitions.medium,
+              maxWidth: 820,
+              margin: 0,
             }}
           >
-            Our story
-          </Link>
-        </div>
+            The safety layer for{" "}
+            <span
+              style={{
+                background: gradients.primary,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Mzansi's taxis
+            </span>
+            .
+          </h1>
+        </FadeInUp>
+        <FadeInUp delay={0.25}>
+          <p
+            style={{
+              fontFamily: fonts.sans,
+              fontSize: 18,
+              lineHeight: 1.6,
+              color: colors.textSecondary,
+              marginTop: spacing.xl,
+              maxWidth: 620,
+            }}
+          >
+            SOS, rank finder, cashless fares, group rides and community alerts — built
+            with and for the 15 million commuters who rely on minibus taxis every day.
+          </p>
+        </FadeInUp>
+        <FadeInUp delay={0.4}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: spacing.md,
+              marginTop: spacing["2xl"],
+            }}
+          >
+            <a
+              href="#download"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: spacing.xs,
+                padding: `${spacing.lg}px ${spacing["2xl"]}px`,
+                borderRadius: radius.md,
+                background: gradients.primary,
+                color: "#FFFFFF",
+                fontSize: 15,
+                fontWeight: 600,
+                textDecoration: "none",
+                boxShadow: shadows.brandSm,
+                transition: transitions.medium,
+              }}
+            >
+              Get the app <ArrowRight size={16} />
+            </a>
+            <Link
+              to="/about"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: `${spacing.lg}px ${spacing["2xl"]}px`,
+                borderRadius: radius.md,
+                background: colors.surface,
+                border: `1px solid ${colors.border}`,
+                color: colors.text,
+                fontSize: 15,
+                fontWeight: 600,
+                textDecoration: "none",
+                transition: transitions.medium,
+              }}
+            >
+              Our story
+            </Link>
+          </div>
+        </FadeInUp>
         </div>
       </div>
       <style>{`
@@ -299,7 +308,8 @@ function Hero() {
 
 function Stats() {
   return (
-    <section
+    <RevealOnScroll
+      startPosition={90}
       style={{
         maxWidth: 1200,
         margin: "0 auto",
@@ -309,7 +319,11 @@ function Stats() {
         zIndex: 2,
       }}
     >
-      <div
+      <StaggerIn
+        stagger={0.1}
+        duration={0.5}
+        distance={12}
+        onScroll
         style={{
           background: colors.surface,
           borderRadius: radius.xl,
@@ -353,7 +367,7 @@ function Stats() {
             </div>
           </div>
         ))}
-      </div>
+      </StaggerIn>
       <style>{`
         @media (max-width: 720px) {
           .hb-stats-grid {
@@ -361,7 +375,7 @@ function Stats() {
           }
         }
       `}</style>
-    </section>
+    </RevealOnScroll>
   );
 }
 
@@ -374,7 +388,7 @@ function Features() {
         padding: `${spacing["5xl"] * 2}px ${spacing["2xl"]}px ${spacing["5xl"]}px`,
       }}
     >
-      <div style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
+      <RevealOnScroll style={{ textAlign: "center", maxWidth: 680, margin: "0 auto" }}>
         <div
           style={{
             fontSize: 12,
@@ -389,9 +403,9 @@ function Features() {
         <h2
           style={{
             fontFamily: fonts.heading,
-            fontSize: "clamp(28px, 4vw, 44px)",
-            fontWeight: 700,
-            letterSpacing: -0.8,
+            fontSize: "clamp(32px, 4.5vw, 52px)",
+            fontWeight: 800,
+            letterSpacing: -1.0,
             marginTop: spacing.sm,
             color: colors.text,
           }}
@@ -409,9 +423,13 @@ function Features() {
           Six tools built for South African taxi life — from emergency response
           to cashless fares — all in one app.
         </p>
-      </div>
+      </RevealOnScroll>
 
-      <div
+      <StaggerIn
+        stagger={0.1}
+        duration={0.6}
+        distance={24}
+        onScroll
         style={{
           marginTop: spacing["3xl"],
           display: "grid",
@@ -429,7 +447,7 @@ function Features() {
             tint={tint}
           />
         ))}
-      </div>
+      </StaggerIn>
       <style>{`
         @media (max-width: 960px) {
           .hb-feat-grid {
@@ -464,7 +482,10 @@ function FeatureCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         background: colors.surface,
-        border: `1px solid ${colors.border}`,
+        // 2px border (up from 1px) — the typeui-energetic pass wants thicker
+        // borders on cards for a more confident, youth-first feel. Tint
+        // toward the accent color on hover so the card "lights up".
+        border: `2px solid ${hovered ? `${tint}55` : colors.border}`,
         borderRadius: radius.xl,
         padding: spacing["2xl"],
         boxShadow: hovered ? shadows.lg : shadows.sm,
