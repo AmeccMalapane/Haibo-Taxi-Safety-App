@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
@@ -108,6 +109,7 @@ export default function VendorOnboardingScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { refreshUser } = useAuth();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
 
@@ -164,6 +166,9 @@ export default function VendorOnboardingScreen() {
     onSuccess: () => {
       triggerHaptic("success");
       queryClient.invalidateQueries({ queryKey: ["/api/vendor-profile/me"] });
+      // Pick up the newly linked vendor profile in availableRoles so
+      // the Settings role switcher lights up without a relog.
+      refreshUser();
     },
     onError: (error: Error) => {
       triggerHaptic("error");

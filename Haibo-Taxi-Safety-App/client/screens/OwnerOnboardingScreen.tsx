@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
@@ -53,6 +54,7 @@ export default function OwnerOnboardingScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { refreshUser } = useAuth();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -93,6 +95,11 @@ export default function OwnerOnboardingScreen() {
         method: "POST",
         body: JSON.stringify(payload),
       });
+
+      // Re-fetch /me so availableRoles picks up the newly linked owner
+      // profile — without this, the role switcher won't offer "owner"
+      // until the user logs out and back in.
+      await refreshUser();
 
       if (Platform.OS !== "web") {
         const Haptics = require("expo-haptics");

@@ -10,6 +10,11 @@ export interface AuthUser {
   handle?: string | null;
   displayName?: string | null;
   role: string;
+  // Every persona this user can step into (commuter baseline + any
+  // linked driver/owner/vendor profiles). Drives the role switcher.
+  // Fetched from /api/auth/me; cached user rows from older sessions
+  // may omit it, hence optional.
+  availableRoles?: string[];
   avatarType?: string | null;
   avatarUrl?: string | null;
   referralCode?: string | null;
@@ -27,6 +32,9 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isGuest: boolean;
+  // Currently selected persona. Falls back to user.role on first login
+  // or whenever the persisted value is no longer in availableRoles.
+  activeRole: string | null;
 }
 
 interface AuthContextType extends AuthState {
@@ -38,6 +46,8 @@ interface AuthContextType extends AuthState {
   skipAuth: () => Promise<void>;
   updateProfile: (data: Partial<AuthUser>) => Promise<{ success: boolean; error?: string }>;
   getToken: () => string | null;
+  setActiveRole: (role: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -52,6 +62,7 @@ const TOKEN_KEY = "@haibo_auth_token";
 const REFRESH_TOKEN_KEY = "@haibo_auth_refresh_token";
 const USER_KEY = "@haibo_auth_user";
 const GUEST_KEY = "@haibo_auth_guest";
+const ACTIVE_ROLE_KEY = "@haibo_active_role";
 
 // --- Singletons so query-client (outside the React tree) can read tokens
 //     and trigger auth side effects without prop drilling. ---
@@ -77,6 +88,18 @@ export async function saveRefreshedTokens(token: string, refreshToken: string): 
   await _onTokensRefreshed?.(token, refreshToken);
 }
 
+// Clamp a persisted role to what the current user is still eligible
+// for. Guards against the case where a user lost a linked profile
+// (e.g. driver unlinked by owner) between sessions.
+function resolveActiveRole(stored: string | null | undefined, user: AuthUser | null): string | null {
+  if (!user) return null;
+  const available = user.availableRoles && user.availableRoles.length > 0
+    ? user.availableRoles
+    : [user.role];
+  if (stored && available.includes(stored)) return stored;
+  return user.role || null;
+}
+
 // --- Context ---
 export const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
@@ -89,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
     isLoading: true,
     isGuest: false,
+    activeRole: null,
   });
 
   // Load persisted auth on mount
@@ -107,7 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // provider on every request.
   useEffect(() => {
     _onAuthExpired = () => {
-      AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY]).catch(() => {});
+      AsyncStorage.multiRemove([
+        TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY, ACTIVE_ROLE_KEY,
+      ]).catch(() => {});
       setState({
         user: null,
         token: null,
@@ -115,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: false,
         isLoading: false,
         isGuest: false,
+        activeRole: null,
       });
     };
     _onTokensRefreshed = async (token: string, refreshToken: string) => {
@@ -132,12 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadStoredAuth = async () => {
     try {
-      const [token, refreshToken, userJson, isGuest] = await AsyncStorage.multiGet([
-        TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY,
+      const [token, refreshToken, userJson, isGuest, storedRole] = await AsyncStorage.multiGet([
+        TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY, ACTIVE_ROLE_KEY,
       ]);
 
       if (token[1] && userJson[1]) {
-        const user = JSON.parse(userJson[1]);
+        const user = JSON.parse(userJson[1]) as AuthUser;
         setState({
           user,
           token: token[1],
@@ -145,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
           isLoading: false,
           isGuest: false,
+          activeRole: resolveActiveRole(storedRole[1], user),
         });
       } else if (isGuest[1] === "true") {
         setState(prev => ({ ...prev, isLoading: false, isGuest: true }));
@@ -167,7 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearAuth = async () => {
-    await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY]);
+    await AsyncStorage.multiRemove([
+      TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, GUEST_KEY, ACTIVE_ROLE_KEY,
+    ]);
   };
 
   // --- Auth actions ---
@@ -192,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
         isGuest: false,
+        activeRole: data.user?.role || null,
       });
 
       return { success: true };
@@ -218,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
         isGuest: false,
+        activeRole: data.user?.role || null,
       });
 
       return { success: true };
@@ -278,6 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
         isGuest: false,
+        activeRole: data.user?.role || null,
       });
 
       return { success: true };
@@ -296,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: false,
       isLoading: false,
       isGuest: false,
+      activeRole: null,
     });
   }, []);
 
@@ -326,6 +360,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getToken = useCallback(() => state.token, [state.token]);
 
+  const refreshUser = useCallback(async () => {
+    // Re-fetch the full user from /me so availableRoles, walletBalance,
+    // fareBalance etc. stay fresh after the user completes an action
+    // that promotes their role (owner onboarding, driver invitation
+    // redemption, vendor KYC etc.). Silently bails if not authed.
+    if (!state.token) return;
+    try {
+      const fresh = (await apiRequest("/api/auth/me", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${state.token}` },
+      })) as AuthUser;
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(fresh));
+      setState(prev => ({
+        ...prev,
+        user: fresh,
+        activeRole: resolveActiveRole(prev.activeRole, fresh),
+      }));
+    } catch {
+      // Non-fatal — the stale user data is already in state.
+    }
+  }, [state.token]);
+
+  const setActiveRole = useCallback(async (role: string) => {
+    // Reject roles the user isn't eligible for so a stale cached value
+    // can't escalate them into a persona they've lost access to.
+    const available = state.user?.availableRoles && state.user.availableRoles.length > 0
+      ? state.user.availableRoles
+      : state.user?.role
+        ? [state.user.role]
+        : [];
+    if (!available.includes(role)) return;
+    await AsyncStorage.setItem(ACTIVE_ROLE_KEY, role);
+    setState(prev => ({ ...prev, activeRole: role }));
+  }, [state.user?.availableRoles, state.user?.role]);
+
   return (
     <AuthContext.Provider value={{
       ...state,
@@ -337,6 +406,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       skipAuth,
       updateProfile,
       getToken,
+      setActiveRole,
+      refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

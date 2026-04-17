@@ -185,9 +185,11 @@ export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user } = useAuth();
+  const { user, activeRole } = useAuth();
 
-  const config = getRoleTabConfig(user?.role);
+  // activeRole is the user-selected persona (falls back to user.role for
+  // legacy sessions before role switching existed).
+  const config = getRoleTabConfig(activeRole || user?.role);
 
   // Render helper so the 4 outer tabs and the SOS slot share one code
   // path. Each TabDef gets turned into a <Tab.Screen> with the standard
@@ -204,9 +206,15 @@ export default function MainTabNavigator() {
     />
   );
 
+  // Force a fresh tab stack whenever the active persona changes so a
+  // role swap (e.g. driver → owner) actually swaps the DashboardTab
+  // component instead of showing a cached version of the previous role.
+  const navigatorKey = `tabs-${activeRole || user?.role || "commuter"}`;
+
   return (
     <View style={styles.container}>
       <Tab.Navigator
+        key={navigatorKey}
         initialRouteName={config.initialRoute}
         screenOptions={{
           tabBarActiveTintColor: BrandColors.primary.gradientStart,

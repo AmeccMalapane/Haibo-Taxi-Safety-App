@@ -32,6 +32,7 @@ import {
   Typography,
 } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { ROLE_META } from "@/constants/roles";
 
 // typeui-clean rework — Settings as a calm preferences hub:
 //   1. Rose gradient hero with back button + sliders badge
@@ -59,12 +60,17 @@ export default function SettingsScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user, activeRole, setActiveRole } = useAuth();
   const { currentLang, setLanguage, languages, t } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [notifications, setNotifications] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showRolePicker, setShowRolePicker] = useState(false);
+
+  const availableRoles = user?.availableRoles ?? (user?.role ? [user.role] : []);
+  const currentRole = activeRole || user?.role || "commuter";
+  const canSwitchRoles = availableRoles.length > 1;
 
   // Hydrate persisted toggles
   useEffect(() => {
@@ -89,6 +95,19 @@ export default function SettingsScreen() {
       }
     } catch {}
   };
+
+  const handleRoleSwitch = useCallback(
+    async (role: string) => {
+      if (role === currentRole) {
+        setShowRolePicker(false);
+        return;
+      }
+      triggerHaptic("medium");
+      await setActiveRole(role);
+      setShowRolePicker(false);
+    },
+    [currentRole, setActiveRole],
+  );
 
   const handleNotificationsToggle = useCallback(async (value: boolean) => {
     // Optimistic UI — the toggle flips immediately and we persist the
@@ -314,6 +333,103 @@ export default function SettingsScreen() {
             { backgroundColor: theme.backgroundRoot },
           ]}
         >
+          {/* Role switcher — only rendered for users who actually have
+              more than one persona to switch between. Solo commuters
+              don't see this section at all. */}
+          {canSwitchRoles ? (
+            <>
+              <SectionHeader theme={theme} label="YOUR ROLE" />
+              <View
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <SettingRow
+                  icon="shuffle"
+                  label="Active role"
+                  hint={`Currently ${ROLE_META[currentRole]?.label || currentRole}`}
+                  onPress={() => setShowRolePicker(!showRolePicker)}
+                  theme={theme}
+                />
+                {showRolePicker && (
+                  <View style={styles.langPicker}>
+                    {availableRoles
+                      .filter((r) => ROLE_META[r])
+                      .map((role) => {
+                        const meta = ROLE_META[role];
+                        const isActive = currentRole === role;
+                        return (
+                          <Pressable
+                            key={role}
+                            onPress={() => handleRoleSwitch(role)}
+                            style={[
+                              styles.langOption,
+                              {
+                                backgroundColor: isActive
+                                  ? BrandColors.primary.gradientStart + "12"
+                                  : "transparent",
+                                borderColor: isActive
+                                  ? BrandColors.primary.gradientStart
+                                  : theme.border,
+                              },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Switch to ${meta.label}`}
+                            accessibilityState={{ selected: isActive }}
+                          >
+                            <View
+                              style={[
+                                styles.settingIconContainer,
+                                {
+                                  backgroundColor:
+                                    BrandColors.primary.gradientStart + "12",
+                                  marginRight: Spacing.md,
+                                },
+                              ]}
+                            >
+                              <Feather
+                                name={meta.icon}
+                                size={18}
+                                color={BrandColors.primary.gradientStart}
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <ThemedText
+                                style={[
+                                  styles.langLabel,
+                                  isActive && {
+                                    color: BrandColors.primary.gradientStart,
+                                  },
+                                ]}
+                              >
+                                {meta.label}
+                              </ThemedText>
+                              <ThemedText
+                                style={[
+                                  styles.langSublabel,
+                                  { color: theme.textSecondary },
+                                ]}
+                              >
+                                {meta.hint}
+                              </ThemedText>
+                            </View>
+                            {isActive && (
+                              <Feather
+                                name="check"
+                                size={18}
+                                color={BrandColors.primary.gradientStart}
+                              />
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                  </View>
+                )}
+              </View>
+            </>
+          ) : null}
+
           {/* Language */}
           <SectionHeader theme={theme} label={t("settings.languageSection")} />
           <View

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db";
-import { users, otpCodes } from "../../shared/schema";
+import { users, otpCodes, driverProfiles, ownerProfiles, vendorProfiles } from "../../shared/schema";
 import { eq, and, gt, sql } from "drizzle-orm";
 import { generateToken, generateRefreshToken, verifyRefreshToken, authMiddleware, AuthRequest } from "../middleware/auth";
 import { authRateLimit, sensitiveRateLimit, otpSendPhoneRateLimit } from "../middleware/rateLimit";
@@ -11,6 +11,28 @@ import { generateOTP, generateReferralCode } from "../utils/helpers";
 
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_TTL_MS = 10 * 60 * 1000;
+
+// Compute which personas a user can switch into given their linked
+// profile rows. Always includes "commuter" (baseline) plus the stored
+// users.role. Extra entries come from linked driver/owner/vendor
+// profiles. Shared by /me, /login and /verify-otp so every auth entry
+// point returns a consistent shape to the client.
+async function computeAvailableRoles(
+  userId: string,
+  role: string | null | undefined,
+): Promise<string[]> {
+  const [driverRow, ownerRow, vendorRow] = await Promise.all([
+    db.select({ id: driverProfiles.id }).from(driverProfiles).where(eq(driverProfiles.userId, userId)).limit(1).then(r => r[0]),
+    db.select({ id: ownerProfiles.id }).from(ownerProfiles).where(eq(ownerProfiles.userId, userId)).limit(1).then(r => r[0]),
+    db.select({ id: vendorProfiles.id }).from(vendorProfiles).where(eq(vendorProfiles.userId, userId)).limit(1).then(r => r[0]),
+  ]);
+  const set = new Set<string>(["commuter"]);
+  if (role) set.add(role);
+  if (driverRow) set.add("driver");
+  if (ownerRow) set.add("owner");
+  if (vendorRow) set.add("vendor");
+  return Array.from(set);
+}
 
 const router = Router();
 
@@ -82,6 +104,8 @@ router.post("/register", authRateLimit, async (req: Request, res: Response) => {
         email: newUser.email,
         displayName: newUser.displayName,
         role: newUser.role,
+        // Brand-new user — no linked driver/owner/vendor profiles yet.
+        availableRoles: ["commuter"],
         avatarType: newUser.avatarType,
         referralCode: newUser.referralCode,
         walletBalance: newUser.walletBalance,
@@ -156,6 +180,8 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
       role: user.role || "commuter",
     });
 
+    const availableRoles = await computeAvailableRoles(user.id, user.role);
+
     res.json({
       token,
       refreshToken,
@@ -165,6 +191,7 @@ router.post("/login", authRateLimit, async (req: Request, res: Response) => {
         email: user.email,
         displayName: user.displayName,
         role: user.role,
+        availableRoles,
         avatarType: user.avatarType,
         avatarUrl: user.avatarUrl,
         referralCode: user.referralCode,
@@ -328,6 +355,12 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
       role: user.role || "commuter",
     });
 
+    // Newly inserted users can only be commuters — skip the profile
+    // lookup in that case since no linked profiles can possibly exist.
+    const availableRoles = isNewUser
+      ? ["commuter"]
+      : await computeAvailableRoles(user.id, user.role);
+
     res.json({
       token,
       refreshToken,
@@ -337,6 +370,7 @@ router.post("/verify-otp", authRateLimit, async (req: Request, res: Response) =>
         email: user.email,
         displayName: user.displayName,
         role: user.role,
+        availableRoles,
         avatarType: user.avatarType,
         avatarUrl: user.avatarUrl,
         referralCode: user.referralCode,
@@ -407,12 +441,23 @@ router.post("/refresh", authRateLimit, async (req: Request, res: Response) => {
 // GET /api/auth/me
 router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await db.select().from(users).where(eq(users.id, req.user!.userId)).limit(1);
+    const userId = req.user!.userId;
+    const [result, availableRoles] = await Promise.all([
+      db.select().from(users).where(eq(users.id, userId)).limit(1),
+      computeAvailableRoles(userId, null),
+    ]);
     const user = result[0];
 
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
+    }
+
+    // Patch the returned role into availableRoles after the fact —
+    // computeAvailableRoles couldn't include it earlier because the
+    // user row hadn't been fetched yet. Keeps the helper itself pure.
+    if (user.role && !availableRoles.includes(user.role)) {
+      availableRoles.push(user.role);
     }
 
     res.json({
@@ -422,12 +467,11 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
       handle: user.handle,
       displayName: user.displayName,
       role: user.role,
+      availableRoles,
       avatarType: user.avatarType,
       avatarUrl: user.avatarUrl,
       referralCode: user.referralCode,
       walletBalance: user.walletBalance,
-      // Driver-only sub-balance. Non-drivers always see 0 here. Exposed
-      // on /auth/me so the dashboard can render without a second call.
       fareBalance: user.fareBalance,
       isVerified: user.isVerified,
       emergencyContactName: user.emergencyContactName,
