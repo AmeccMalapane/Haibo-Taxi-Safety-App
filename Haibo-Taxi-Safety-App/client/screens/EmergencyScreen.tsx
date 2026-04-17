@@ -22,6 +22,7 @@ import Animated, {
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { SkeletonBlock } from "@/components/Skeleton";
@@ -42,6 +43,7 @@ import { getDeviceId } from "@/lib/deviceId";
 export default function EmergencyScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   useTheme();
   const { isAuthenticated } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -220,7 +222,7 @@ export default function EmergencyScreen() {
       <View style={[styles.hero, { paddingTop: insets.top + Spacing["3xl"] }]}>
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.heroLabelWrap}>
           <View style={styles.statusDot} />
-          <ThemedText style={styles.heroLabel}>SOS ACTIVE</ThemedText>
+          <ThemedText style={styles.heroLabel}>{t("emergency.sosActive")}</ThemedText>
         </Animated.View>
 
         <Animated.View
@@ -234,9 +236,9 @@ export default function EmergencyScreen() {
         </Animated.View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500).delay(250)}>
-          <ThemedText style={styles.heroTitle}>Help is on the way</ThemedText>
+          <ThemedText style={styles.heroTitle}>{t("emergency.helpOnWay")}</ThemedText>
           <ThemedText style={styles.heroSubtitle}>
-            Your location has been shared with emergency responders
+            {t("emergency.locationShared")}
           </ThemedText>
         </Animated.View>
       </View>
@@ -272,7 +274,7 @@ export default function EmergencyScreen() {
             >
               <Feather name="alert-circle" size={16} color="#FFFFFF" />
               <ThemedText style={styles.locationText}>
-                Location off — tap to enable in settings
+                {t("emergency.locationOff")}
               </ThemedText>
               <Feather name="chevron-right" size={16} color="#FFFFFF" />
             </Pressable>
@@ -294,7 +296,7 @@ export default function EmergencyScreen() {
             accessibilityLabel="Call emergency services, 10111"
           >
             <Feather name="phone" size={22} color={BrandColors.primary.gradientStart} />
-            <ThemedText style={styles.primaryCtaText}>Call 10111 Now</ThemedText>
+            <ThemedText style={styles.primaryCtaText}>{t("emergency.call10111")}</ThemedText>
           </Pressable>
         </Animated.View>
 
@@ -341,7 +343,7 @@ export default function EmergencyScreen() {
                 ]}
               />
               <ThemedText style={styles.cancelButtonText}>
-                Hold to Cancel ({Math.ceil((100 - cancelHoldProgress) / 33.3)}s)
+                {t("emergency.holdToCancel", { seconds: Math.ceil((100 - cancelHoldProgress) / 33.3) })}
               </ThemedText>
             </View>
           </Pressable>

@@ -1192,6 +1192,66 @@ router.get("/referral/signups/:deviceId", async (req, res: Response) => {
   }
 });
 
+// POST /api/referral/apply — New user applies a referral code they received
+// from a friend. Links the new device as a signup under the referrer's code.
+router.post("/referral/apply", async (req, res: Response) => {
+  try {
+    const { referralCode, referredDeviceId } = req.body as {
+      referralCode?: string;
+      referredDeviceId?: string;
+    };
+
+    if (!referralCode || !referredDeviceId) {
+      res.status(400).json({ error: "referralCode and referredDeviceId are required" });
+      return;
+    }
+
+    // Look up the referral code to find the referrer's device.
+    const [codeRow] = await db
+      .select()
+      .from(referralCodes)
+      .where(eq(referralCodes.code, referralCode.toUpperCase()))
+      .limit(1);
+
+    if (!codeRow) {
+      res.status(404).json({ error: "Invalid referral code" });
+      return;
+    }
+
+    // Prevent self-referral.
+    if (codeRow.deviceId === referredDeviceId) {
+      res.status(400).json({ error: "Cannot use your own referral code" });
+      return;
+    }
+
+    // Check duplicate — each device can only be referred once.
+    const [existing] = await db
+      .select()
+      .from(referralSignups)
+      .where(eq(referralSignups.referredDeviceId, referredDeviceId))
+      .limit(1);
+
+    if (existing) {
+      // Already referred — silently succeed so the client doesn't show an error
+      // on re-submit (e.g. app killed mid-setup and user retries).
+      res.json({ applied: true, alreadyReferred: true });
+      return;
+    }
+
+    await db.insert(referralSignups).values({
+      referrerDeviceId: codeRow.deviceId,
+      referredDeviceId,
+      referralCode: codeRow.code,
+      status: "signed_up",
+    });
+
+    res.status(201).json({ applied: true, alreadyReferred: false });
+  } catch (error: any) {
+    console.error("Apply referral error:", error);
+    res.status(500).json({ error: "Failed to apply referral code" });
+  }
+});
+
 // POST /api/referral/claim-reward — Claim an unlocked reward tier
 router.post("/referral/claim-reward", async (req, res: Response) => {
   try {

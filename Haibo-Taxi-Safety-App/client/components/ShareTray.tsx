@@ -22,6 +22,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Linking from "expo-linking";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 
@@ -56,6 +57,7 @@ const sharePlatforms: SharePlatform[] = [
 export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl }: ShareTrayProps) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { t } = useLanguage();
   const [isSharing, setIsSharing] = useState(false);
   const translateY = useSharedValue(TRAY_HEIGHT);
 
@@ -121,7 +123,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
         if (Platform.OS !== "web") {
           const Clipboard = await import("expo-clipboard");
           await Clipboard.setStringAsync(content.url);
-          Alert.alert("Copied!", "Link copied to clipboard");
+          Alert.alert(t("share.copied"), t("share.copied"));
         }
       } else if (platform.id === "more" || platform.id === "whatsapp" || platform.id === "facebook" || platform.id === "twitter") {
         const result = await Share.share({
@@ -149,7 +151,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
             });
           }
         } else {
-          Alert.alert("App Not Installed", `${platform.name} is not installed on your device.`);
+          Alert.alert(t("share.appNotInstalled", { name: platform.name }), t("share.appNotInstalled", { name: platform.name }));
         }
       }
     } catch (error) {
@@ -188,7 +190,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
             <View style={styles.handle} />
             
             <View style={styles.header}>
-              <ThemedText style={styles.title}>Share</ThemedText>
+              <ThemedText style={styles.title}>{t("share.title")}</ThemedText>
               <Pressable
                 onPress={handleClose}
                 style={styles.closeButton}
@@ -202,7 +204,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
             <View style={styles.watermarkNote}>
               <Feather name="check-circle" size={16} color={BrandColors.primary.green} />
               <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                Shared with Haibo! branding + app download link
+                {t("share.watermarkNote")}
               </ThemedText>
             </View>
 
@@ -236,7 +238,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
 
             <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
               <ThemedText type="small" style={[styles.footerText, { color: theme.textSecondary }]}>
-                Share this reel with your friends and family
+                {t("share.shareFooter")}
               </ThemedText>
             </View>
           </Animated.View>

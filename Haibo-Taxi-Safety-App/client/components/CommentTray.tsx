@@ -21,6 +21,7 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
@@ -58,6 +59,7 @@ export default function CommentTray({
 }: CommentTrayProps) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { t } = useLanguage();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -260,7 +262,7 @@ export default function CommentTray({
                     color={theme.textSecondary}
                   />
                   <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                    {loading ? "Loading comments…" : "Be the first to comment!"}
+                    {loading ? t("reels.loadingComments") : t("reels.beFirst")}
                   </ThemedText>
                 </View>
               }
@@ -278,7 +280,7 @@ export default function CommentTray({
               <View style={[styles.inputRow, { backgroundColor: theme.backgroundTertiary }]}>
                 <TextInput
                   style={[styles.input, { color: theme.text }]}
-                  placeholder="Add a comment..."
+                  placeholder={t("reels.addComment")}
                   placeholderTextColor={theme.textSecondary}
                   value={newComment}
                   onChangeText={setNewComment}

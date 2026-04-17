@@ -18,6 +18,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
@@ -44,6 +45,7 @@ export default function OTPVerificationScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const { verifyOTP, sendOTP, user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "OTPVerification">>();
@@ -91,7 +93,7 @@ export default function OTPVerificationScreen() {
         const Haptics = require("expo-haptics");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      Alert.alert("Verification failed", result.error || "Invalid or expired code. Please try again.");
+      Alert.alert(t("otp.failed"), result.error || t("otp.failedDesc"));
       setOtp(Array(OTP_LENGTH).fill(""));
       inputRefs.current[0]?.focus();
       setIsVerifying(false);
@@ -122,7 +124,7 @@ export default function OTPVerificationScreen() {
   const handleVerify = () => {
     const code = otp.join("");
     if (code.length !== OTP_LENGTH) {
-      Alert.alert("Incomplete code", "Please enter the complete 6-digit code.");
+      Alert.alert(t("otp.incomplete"), t("otp.incompleteDesc"));
       return;
     }
     runVerify(code);
@@ -140,9 +142,9 @@ export default function OTPVerificationScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       setResendTimer(RESEND_COOLDOWN);
-      Alert.alert("Code sent", "A new verification code is on its way.");
+      Alert.alert(t("otp.codeSent"), t("otp.codeSentDesc"));
     } else {
-      Alert.alert("Couldn't send", result.error || "Failed to resend code. Please try again.");
+      Alert.alert(t("otp.couldntSend"), result.error || t("otp.failedDesc"));
     }
 
     setIsResending(false);
@@ -180,9 +182,9 @@ export default function OTPVerificationScreen() {
         </Animated.View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)} style={styles.heroText}>
-          <ThemedText style={styles.title}>Verify your number</ThemedText>
+          <ThemedText style={styles.title}>{t("otp.title")}</ThemedText>
           <ThemedText style={styles.subtitle}>
-            Enter the 6-digit code we sent to
+            {t("otp.subtitle")}
           </ThemedText>
           <ThemedText style={styles.phoneText}>{maskedPhone}</ThemedText>
         </Animated.View>
@@ -241,13 +243,13 @@ export default function OTPVerificationScreen() {
               icon={isVerifying ? undefined : "arrow-right"}
               iconPosition="right"
             >
-              {isVerifying ? "Verifying..." : "Verify & continue"}
+              {isVerifying ? t("otp.verifying") : t("otp.verify")}
             </GradientButton>
           </View>
 
           <View style={styles.resendRow}>
             <ThemedText style={[styles.resendPrompt, { color: theme.textSecondary }]}>
-              Didn't receive the code?
+              {t("otp.didntReceive")}
             </ThemedText>
             <Pressable
               onPress={handleResend}
@@ -272,10 +274,10 @@ export default function OTPVerificationScreen() {
                 ]}
               >
                 {isResending
-                  ? "Sending..."
+                  ? t("otp.sending")
                   : resendTimer > 0
-                  ? `Resend in ${resendTimer}s`
-                  : "Resend code"}
+                  ? t("otp.resendIn", { seconds: resendTimer })
+                  : t("otp.resend")}
               </ThemedText>
             </Pressable>
           </View>

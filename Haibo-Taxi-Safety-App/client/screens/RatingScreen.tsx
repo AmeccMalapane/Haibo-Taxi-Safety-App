@@ -15,6 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
@@ -65,6 +66,7 @@ function StarRating({ rating, onRatingChange, label }: StarRatingProps) {
 
 export default function RatingScreen() {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -88,17 +90,17 @@ export default function RatingScreen() {
       }),
     onSuccess: (data) => {
       Alert.alert(
-        "Thank You!",
+        t("rating.thankYou"),
         data.linkedToDriver
-          ? "Your feedback has been submitted and linked to the driver's record."
-          : "Your feedback has been submitted to the Taxi Association.",
+          ? t("rating.linked")
+          : t("rating.unlinked"),
         [{ text: "OK", onPress: () => navigation.goBack() }],
       );
     },
     onError: (error) => {
       Alert.alert(
-        "Submission failed",
-        error.message || "We couldn't send your rating. Please try again.",
+        t("rating.submissionFailed"),
+        error.message || t("common.retry"),
       );
     },
   });
@@ -119,7 +121,7 @@ export default function RatingScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Camera access is required to take photos.');
+      Alert.alert(t("rating.permissionNeeded"), t("rating.permissionNeededDesc"));
       return;
     }
 
@@ -137,8 +139,8 @@ export default function RatingScreen() {
   const handleSubmit = async () => {
     if (driverRating === 0 || rankRating === 0 || !plateNumber.trim()) {
       Alert.alert(
-        "Incomplete",
-        "Please rate the driver, rate the rank, and enter the taxi plate number.",
+        t("rating.incomplete"),
+        t("rating.incompleteDesc"),
       );
       return;
     }
@@ -155,8 +157,8 @@ export default function RatingScreen() {
         setImage(uploaded.url);
       } catch (err: any) {
         Alert.alert(
-          "Photo upload failed",
-          "We'll submit your rating without the photo. You can add media later.",
+          t("rating.photoUploadFailed"),
+          t("rating.photoUploadFailedDesc"),
         );
       } finally {
         setUploading(false);
@@ -183,30 +185,30 @@ export default function RatingScreen() {
           { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }
         ]}
       >
-        <ThemedText type="h2" style={styles.title}>Rate Your Trip</ThemedText>
-        <ThemedText style={styles.subtitle}>Help improve safety for everyone</ThemedText>
+        <ThemedText type="h2" style={styles.title}>{t("rating.title")}</ThemedText>
+        <ThemedText style={styles.subtitle}>{t("rating.subtitle")}</ThemedText>
 
         <View style={[styles.card, { backgroundColor: theme.backgroundSecondary }]}>
-          <StarRating 
-            label="Rate Driver" 
-            rating={driverRating} 
-            onRatingChange={setDriverRating} 
+          <StarRating
+            label={t("rating.rateDriver")}
+            rating={driverRating}
+            onRatingChange={setDriverRating}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          <StarRating 
-            label="Rate Taxi Rank" 
-            rating={rankRating} 
-            onRatingChange={setRankRating} 
+          <StarRating
+            label={t("rating.rateRank")}
+            rating={rankRating}
+            onRatingChange={setRankRating}
           />
         </View>
 
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Taxi Information</ThemedText>
+          <ThemedText style={styles.sectionTitle}>{t("rating.taxiInfo")}</ThemedText>
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Number Plate</ThemedText>
+            <ThemedText style={styles.inputLabel}>{t("rating.plateLabel")}</ThemedText>
             <TextInput
               style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
-              placeholder="e.g. GP 123 456"
+              placeholder={t("rating.platePlaceholder")}
               placeholderTextColor={theme.textSecondary}
               value={plateNumber}
               onChangeText={setPlateNumber}
@@ -215,7 +217,7 @@ export default function RatingScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Driver Name (Optional)</ThemedText>
+            <ThemedText style={styles.inputLabel}>{t("rating.driverName")}</ThemedText>
             <TextInput
               style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
               placeholder="Full Name"
@@ -226,7 +228,7 @@ export default function RatingScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Rank / Location</ThemedText>
+            <ThemedText style={styles.inputLabel}>{t("rating.locationLabel")}</ThemedText>
             <TextInput
               style={[styles.input, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.border }]}
               placeholder="Where did you get the taxi?"
@@ -238,7 +240,7 @@ export default function RatingScreen() {
         </View>
 
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Visual Proof</ThemedText>
+          <ThemedText style={styles.sectionTitle}>{t("rating.visualProof")}</ThemedText>
           <View style={styles.imagePickerContainer}>
             {image ? (
               <View style={styles.previewContainer}>
@@ -254,14 +256,14 @@ export default function RatingScreen() {
                   onPress={takePhoto}
                 >
                   <Feather name="camera" size={24} color={BrandColors.primary.red} />
-                  <ThemedText style={styles.photoButtonText}>Take Photo</ThemedText>
+                  <ThemedText style={styles.photoButtonText}>{t("rating.takePhoto")}</ThemedText>
                 </Pressable>
-                <Pressable 
-                  style={[styles.photoButton, { backgroundColor: theme.backgroundSecondary }]} 
+                <Pressable
+                  style={[styles.photoButton, { backgroundColor: theme.backgroundSecondary }]}
                   onPress={pickImage}
                 >
                   <Feather name="image" size={24} color={BrandColors.primary.red} />
-                  <ThemedText style={styles.photoButtonText}>Upload</ThemedText>
+                  <ThemedText style={styles.photoButtonText}>{t("rating.upload")}</ThemedText>
                 </Pressable>
               </View>
             )}
@@ -280,7 +282,7 @@ export default function RatingScreen() {
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <ThemedText style={styles.submitButtonText}>
-              {image ? "Submit Feedback + Photo" : "Submit Feedback"}
+              {image ? t("rating.submitWithPhoto") : t("rating.submit")}
             </ThemedText>
           )}
         </Pressable>

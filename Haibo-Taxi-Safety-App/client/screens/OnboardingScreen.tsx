@@ -18,6 +18,7 @@ import type { SvgProps } from "react-native-svg";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
@@ -44,38 +45,34 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface OnboardingSlide {
   id: string;
-  title: string;
-  description: string;
+  titleKey: string;
+  descKey: string;
   Illustration: React.FC<SvgProps>;
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
     id: "1",
-    title: "Safety first",
-    description:
-      "One-tap SOS and live location sharing keep you covered on every ride.",
+    titleKey: "onboarding.safetyFirst",
+    descKey: "onboarding.safetyDesc",
     Illustration: SosIllustration,
   },
   {
     id: "2",
-    title: "Find every rank",
-    description:
-      "Discover taxi ranks and routes across South Africa with real-time updates.",
+    titleKey: "onboarding.findRanks",
+    descKey: "onboarding.findRanksDesc",
     Illustration: TaxiStopIllustration,
   },
   {
     id: "3",
-    title: "Built by your community",
-    description:
-      "Share rides, lost-and-found, and safety alerts with commuters near you.",
+    titleKey: "onboarding.community",
+    descKey: "onboarding.communityDesc",
     Illustration: CommunityIllustration,
   },
   {
     id: "4",
-    title: "Pay the smart way",
-    description:
-      "Cashless payments to drivers and ranks — fast, secure, and tracked.",
+    titleKey: "onboarding.smartPay",
+    descKey: "onboarding.smartPayDesc",
     Illustration: FindRanksIllustration,
   },
 ];
@@ -88,6 +85,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   // Consent gate — shown after the marketing slides finish. Non-dismissable:
   // the only way past is to tick the box. Captures POPIA §11 consent +
@@ -156,11 +154,11 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             { backgroundColor: theme.backgroundRoot },
           ]}
         >
-          <ThemedText style={styles.slideTitle}>{item.title}</ThemedText>
+          <ThemedText style={styles.slideTitle}>{t(item.titleKey)}</ThemedText>
           <ThemedText
             style={[styles.slideDescription, { color: theme.textSecondary }]}
           >
-            {item.description}
+            {t(item.descKey)}
           </ThemedText>
         </View>
       </View>
@@ -189,7 +187,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           <View style={styles.consentIconWrap}>
             <Feather name="shield" size={56} color="#FFFFFF" />
           </View>
-          <ThemedText style={styles.consentEyebrow}>ONE QUICK THING</ThemedText>
+          <ThemedText style={styles.consentEyebrow}>{t("onboarding.oneQuickThing")}</ThemedText>
         </Animated.View>
 
         <View
@@ -203,14 +201,12 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             showsVerticalScrollIndicator={false}
           >
             <ThemedText style={styles.consentTitle}>
-              Your privacy, your call
+              {t("onboarding.privacyTitle")}
             </ThemedText>
             <ThemedText
               style={[styles.consentBody, { color: theme.textSecondary }]}
             >
-              Haibo! is a safety app, so we take data seriously. Before you get
-              started, please read how we collect and protect your information
-              under South Africa's POPIA, and what you can expect from us.
+              {t("onboarding.privacyDesc")}
             </ThemedText>
 
             <View style={styles.consentLinkRow}>
@@ -221,17 +217,17 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                 style={styles.consentLinkChip}
               >
                 <ThemedText style={styles.consentLinkText}>
-                  Privacy policy
+                  {t("onboarding.privacyPolicy")}
                 </ThemedText>
               </Pressable>
               <Pressable
                 onPress={openTerms}
                 accessibilityRole="link"
-                accessibilityLabel="Open terms of service"
+                accessibilityLabel={t("onboarding.termsOfService")}
                 style={styles.consentLinkChip}
               >
                 <ThemedText style={styles.consentLinkText}>
-                  Terms of service
+                  {t("onboarding.termsOfService")}
                 </ThemedText>
               </Pressable>
             </View>
@@ -269,9 +265,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   { color: theme.text },
                 ]}
               >
-                I've read and accept the Privacy Policy and Terms of Service,
-                and I understand Haibo!'s SOS feature is not a substitute for
-                emergency services.
+                {t("onboarding.acceptTerms")}
               </ThemedText>
             </Pressable>
           </ScrollView>
@@ -289,7 +283,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
               icon="check"
               iconPosition="right"
             >
-              Get started
+              {t("onboarding.getStarted")}
             </GradientButton>
           </View>
         </View>
@@ -322,7 +316,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           accessibilityRole="button"
           accessibilityLabel="Skip onboarding"
         >
-          <ThemedText style={styles.skipText}>SKIP</ThemedText>
+          <ThemedText style={styles.skipText}>{t("common.skip").toUpperCase()}</ThemedText>
         </Pressable>
       </Animated.View>
 
@@ -380,7 +374,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
             icon={isLastSlide ? "check" : "arrow-right"}
             iconPosition="right"
           >
-            {isLastSlide ? "Get started" : "Next"}
+            {isLastSlide ? t("onboarding.getStarted") : t("common.next")}
           </GradientButton>
         </Animated.View>
       </Animated.View>

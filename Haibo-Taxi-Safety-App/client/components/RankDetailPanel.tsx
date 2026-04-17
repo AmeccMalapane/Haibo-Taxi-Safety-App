@@ -8,6 +8,7 @@ import { View, StyleSheet, Pressable, Animated } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import type { MapboxTaxiRank, RankStatus } from "@/data/mapbox_transit_data";
 import { STATUS_CONFIG, ROUTES } from "@/data/mapbox_transit_data";
@@ -33,6 +34,7 @@ const getCapacityLabel = (capacity: number): string => {
 
 export function RankDetailPanel({ rank, onClose, onViewRoutes, onNavigate }: RankDetailPanelProps) {
   const { theme, isDark } = useTheme();
+  const { t } = useLanguage();
   const statusConfig = STATUS_CONFIG[rank.status];
 
   // Find routes connected to this rank
@@ -149,7 +151,7 @@ export function RankDetailPanel({ rank, onClose, onViewRoutes, onNavigate }: Ran
       {connectedRoutes.length > 0 && (
         <View style={styles.routesSection}>
           <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
-            CONNECTED ROUTES
+            {t("ranks.connectedRoutes").toUpperCase()}
           </ThemedText>
           {connectedRoutes.map((route) => (
             <View

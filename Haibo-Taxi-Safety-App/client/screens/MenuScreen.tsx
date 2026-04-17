@@ -18,6 +18,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import {
   Spacing,
   BorderRadius,
@@ -154,6 +155,7 @@ function ThemeOption({
 export default function MenuScreen() {
   const reducedMotion = useReducedMotion();
   const { theme, themeMode, setThemeMode } = useTheme();
+  const { t } = useLanguage();
   const { isAuthenticated, user } = useAuth();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
@@ -185,11 +187,11 @@ export default function MenuScreen() {
   const isDriver = user?.avatarType === "driver";
 
   const accountTitle = isAuthenticated
-    ? user?.displayName || "Manage your account"
-    : "Sign in to Haibo!";
+    ? user?.displayName || t("menu.manageAccount")
+    : t("menu.signIn");
   const accountHint = isAuthenticated
-    ? "View profile, edit details and security"
-    : "Save your contacts and unlock Haibo Pay";
+    ? t("menu.manageAccountHint")
+    : t("menu.signInHint");
 
   return (
     <ThemedView style={styles.container}>
@@ -205,11 +207,11 @@ export default function MenuScreen() {
       >
         {/* Header */}
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.header}>
-          <ThemedText style={styles.headerTitle}>Menu</ThemedText>
+          <ThemedText style={styles.headerTitle}>{t("menu.title")}</ThemedText>
           <ThemedText
             style={[styles.headerSubtitle, { color: theme.textSecondary }]}
           >
-            Services, safety tools and your account
+            {t("menu.subtitle")}
           </ThemedText>
         </Animated.View>
 
@@ -221,7 +223,7 @@ export default function MenuScreen() {
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
-            APPEARANCE
+            {t("menu.appearance")}
           </ThemedText>
           <View
             style={[
@@ -233,21 +235,21 @@ export default function MenuScreen() {
               mode="light"
               currentMode={themeMode}
               icon="sun"
-              label="Light"
+              label={t("menu.light")}
               onPress={handleThemeChange}
             />
             <ThemeOption
               mode="dark"
               currentMode={themeMode}
               icon="moon"
-              label="Dark"
+              label={t("menu.dark")}
               onPress={handleThemeChange}
             />
             <ThemeOption
               mode="system"
               currentMode={themeMode}
               icon="smartphone"
-              label="Auto"
+              label={t("menu.auto")}
               onPress={handleThemeChange}
             />
           </View>
@@ -261,7 +263,7 @@ export default function MenuScreen() {
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
-            FEATURED
+            {t("menu.featured")}
           </ThemedText>
 
           {/* City Explorer — gradient hero card */}
@@ -282,10 +284,10 @@ export default function MenuScreen() {
               </View>
               <View style={styles.featuredTextWrap}>
                 <ThemedText style={styles.featuredTitle}>
-                  City Explorer Challenge
+                  {t("menu.cityExplorer")}
                 </ThemedText>
                 <ThemedText style={styles.featuredSubtitle}>
-                  Earn points across Mzansi
+                  {t("menu.cityExplorerHint")}
                 </ThemedText>
               </View>
               <View style={styles.featuredBadge}>
@@ -324,7 +326,7 @@ export default function MenuScreen() {
             </View>
             <View style={styles.featuredTextWrap}>
               <ThemedText style={styles.featuredOutlineTitle}>
-                Rate your driver
+                {t("menu.rateDriver")}
               </ThemedText>
               <ThemedText
                 style={[
@@ -332,7 +334,7 @@ export default function MenuScreen() {
                   { color: theme.textSecondary },
                 ]}
               >
-                Help us improve safety on every trip
+                {t("menu.rateDriverHint")}
               </ThemedText>
             </View>
             <Feather
@@ -351,7 +353,7 @@ export default function MenuScreen() {
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
-            SERVICES
+            {t("menu.services")}
           </ThemedText>
           <View
             style={[
@@ -364,43 +366,43 @@ export default function MenuScreen() {
           >
             <MenuItem
               icon="phone-call"
-              label="Emergency services"
-              hint="10111, ambulance, fire"
+              label={t("menu.emergencyServices")}
+              hint={t("menu.emergencyServicesHint")}
               onPress={handleEmergencyServices}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="book-open"
-              label="Safety directory"
-              hint="Trusted contacts and resources"
+              label={t("menu.safetyDirectory")}
+              hint={t("menu.safetyDirectoryHint")}
               onPress={handleSafetyDirectory}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="search"
-              label="Lost & found"
-              hint="Report or claim items left in taxis"
+              label={t("menu.lostFound")}
+              hint={t("menu.lostFoundHint")}
               onPress={handleLostFound}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="package"
-              label="Haibo! Hub"
-              hint="Send packages across SA"
+              label={t("menu.haiboHub")}
+              hint={t("menu.haiboHubHint")}
               onPress={handleHub}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="gift"
-              label="Refer friends"
-              hint="Earn rewards for every signup"
+              label={t("menu.referFriends")}
+              hint={t("menu.referFriendsHint")}
               onPress={handleReferral}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="briefcase"
-              label="Jobs"
-              hint="Driver, association and admin roles"
+              label={t("menu.jobs")}
+              hint={t("menu.jobsHint")}
               onPress={handleJobs}
             />
             {isDriver ? (
@@ -408,8 +410,8 @@ export default function MenuScreen() {
                 <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <MenuItem
                   icon="truck"
-                  label="Driver dashboard"
-                  hint="GPS tracking, Haibo Pay, quick actions"
+                  label={t("menu.driverDashboard")}
+                  hint={t("menu.driverDashboardHint")}
                   onPress={handleDriverDashboard}
                 />
               </>
@@ -418,8 +420,8 @@ export default function MenuScreen() {
                 <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <MenuItem
                   icon="truck"
-                  label="Become a driver"
-                  hint="Register your taxi to accept Haibo Pay"
+                  label={t("menu.becomeDriver")}
+                  hint={t("menu.becomeDriverHint")}
                   onPress={handleDriverOnboarding}
                 />
               </>
@@ -427,14 +429,14 @@ export default function MenuScreen() {
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="bell"
-              label="Notifications"
-              hint="Payment receipts, alerts and updates"
+              label={t("menu.notifications")}
+              hint={t("menu.notificationsHint")}
               onPress={handleNotifications}
             />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <MenuItem
               icon="settings"
-              label="Settings"
+              label={t("menu.settingsLabel")}
               onPress={handleSettings}
             />
           </View>
@@ -448,7 +450,7 @@ export default function MenuScreen() {
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
-            ACCOUNT
+            {t("menu.account")}
           </ThemedText>
 
           <Pressable

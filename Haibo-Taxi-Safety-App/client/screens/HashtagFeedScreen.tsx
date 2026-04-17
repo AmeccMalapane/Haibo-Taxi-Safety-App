@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
@@ -36,6 +37,7 @@ interface ReelPost {
 
 export default function HashtagFeedScreen() {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteParams>();
@@ -105,7 +107,7 @@ export default function HashtagFeedScreen() {
         <View style={styles.headerTitle}>
           <ThemedText style={styles.tagTitle}>#{tag}</ThemedText>
           <ThemedText style={[styles.postCount, { color: theme.textSecondary }]}>
-            {feedQ.data?.total ?? "..."} posts
+            {String(t("hashtag.posts", { count: feedQ.data?.total ?? "..." }))}
           </ThemedText>
         </View>
       </View>
@@ -124,7 +126,7 @@ export default function HashtagFeedScreen() {
             <View style={styles.center}>
               <Feather name="hash" size={48} color={theme.textSecondary} />
               <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No posts with #{tag} yet
+                {String(t("hashtag.empty", { tag }))}
               </ThemedText>
             </View>
           }

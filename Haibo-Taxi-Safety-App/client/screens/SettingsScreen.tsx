@@ -60,7 +60,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { isAuthenticated, logout } = useAuth();
-  const { currentLang, setLanguage, languages } = useLanguage();
+  const { currentLang, setLanguage, languages, t } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [notifications, setNotifications] = useState(true);
@@ -299,9 +299,9 @@ export default function SettingsScreen() {
             entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
             style={styles.heroText}
           >
-            <ThemedText style={styles.heroTitle}>Settings</ThemedText>
+            <ThemedText style={styles.heroTitle}>{t("settings.title")}</ThemedText>
             <ThemedText style={styles.heroSubtitle}>
-              Manage notifications, privacy, and account preferences.
+              {t("settings.subtitle")}
             </ThemedText>
           </Animated.View>
         </LinearGradient>
@@ -315,7 +315,7 @@ export default function SettingsScreen() {
           ]}
         >
           {/* Language */}
-          <SectionHeader theme={theme} label="LANGUAGE" />
+          <SectionHeader theme={theme} label={t("settings.languageSection")} />
           <View
             style={[
               styles.card,
@@ -324,7 +324,7 @@ export default function SettingsScreen() {
           >
             <SettingRow
               icon="globe"
-              label="App language"
+              label={t("settings.appLanguage")}
               hint={languages.find((l) => l.code === currentLang)?.nativeLabel || "English"}
               onPress={() => setShowLangPicker(!showLangPicker)}
               theme={theme}
@@ -371,7 +371,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Privacy & Security */}
-          <SectionHeader theme={theme} label="PRIVACY & SECURITY" />
+          <SectionHeader theme={theme} label={t("settings.privacySecurity")} />
           <View
             style={[
               styles.card,
@@ -380,8 +380,8 @@ export default function SettingsScreen() {
           >
             <SettingRow
               icon="bell"
-              label="Push notifications"
-              hint="Alerts for SOS, payments, and updates"
+              label={t("settings.pushNotifications")}
+              hint={t("settings.pushHint")}
               type="toggle"
               value={notifications}
               onValueChange={handleNotificationsToggle}
@@ -390,24 +390,24 @@ export default function SettingsScreen() {
             <Divider theme={theme} />
             <SettingRow
               icon="map-pin"
-              label="Location permission"
-              hint="Manage in system settings"
+              label={t("settings.locationPermission")}
+              hint={t("settings.locationHint")}
               onPress={() => Linking.openSettings()}
               theme={theme}
             />
             <Divider theme={theme} />
             <SettingRow
               icon="shield"
-              label="Privacy policy"
-              hint="How we handle your data"
+              label={t("settings.privacyPolicy")}
+              hint={t("settings.privacyHint")}
               onPress={() => openExternalUrl(PRIVACY_URL, "Privacy policy")}
               theme={theme}
             />
             <Divider theme={theme} />
             <SettingRow
               icon="file-text"
-              label="Terms of service"
-              hint="Your agreement with Haibo!"
+              label={t("settings.termsOfService")}
+              hint={t("settings.termsHint")}
               onPress={() => openExternalUrl(TERMS_URL, "Terms of service")}
               theme={theme}
             />
@@ -417,7 +417,7 @@ export default function SettingsScreen() {
               because both endpoints require a bearer token. */}
           {isAuthenticated ? (
             <>
-              <SectionHeader theme={theme} label="YOUR DATA" />
+              <SectionHeader theme={theme} label={t("settings.yourData")} />
               <View
                 style={[
                   styles.card,
@@ -426,16 +426,16 @@ export default function SettingsScreen() {
               >
                 <SettingRow
                   icon="download"
-                  label={isExporting ? "Loading your data…" : "Export my data"}
-                  hint="See what we have on file (POPIA §23)"
+                  label={isExporting ? t("common.loading") : t("settings.exportData")}
+                  hint={t("settings.exportHint")}
                   onPress={handleExportData}
                   theme={theme}
                 />
                 <Divider theme={theme} />
                 <SettingRow
                   icon="trash-2"
-                  label="Delete my account"
-                  hint="Lock and anonymize — 30 day purge (POPIA §24)"
+                  label={t("settings.deleteAccount")}
+                  hint={t("settings.deleteAccountHint")}
                   onPress={handleDeleteAccount}
                   theme={theme}
                   destructive
@@ -445,7 +445,7 @@ export default function SettingsScreen() {
           ) : null}
 
           {/* Support */}
-          <SectionHeader theme={theme} label="SUPPORT" />
+          <SectionHeader theme={theme} label={t("settings.support")} />
           <View
             style={[
               styles.card,
@@ -454,15 +454,15 @@ export default function SettingsScreen() {
           >
             <SettingRow
               icon="help-circle"
-              label="Help centre"
-              hint="Guides and FAQs"
+              label={t("settings.helpCentre")}
+              hint={t("settings.helpHint")}
               onPress={() => openExternalUrl(HELP_URL, "Help centre")}
               theme={theme}
             />
             <Divider theme={theme} />
             <SettingRow
               icon="mail"
-              label="Contact support"
+              label={t("settings.contactSupport")}
               hint={SUPPORT_EMAIL}
               onPress={handleContactSupport}
               theme={theme}
@@ -470,7 +470,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* About */}
-          <SectionHeader theme={theme} label="ABOUT" />
+          <SectionHeader theme={theme} label={t("settings.about")} />
           <View
             style={[
               styles.card,
@@ -493,11 +493,11 @@ export default function SettingsScreen() {
                 />
               </View>
               <View style={styles.settingLabelWrap}>
-                <ThemedText style={styles.settingLabel}>App version</ThemedText>
+                <ThemedText style={styles.settingLabel}>{t("settings.appVersion")}</ThemedText>
                 <ThemedText
                   style={[styles.settingHint, { color: theme.textSecondary }]}
                 >
-                  Built for Mzansi
+                  {t("settings.builtForMzansi")}
                 </ThemedText>
               </View>
               <View style={styles.versionPill}>
@@ -539,7 +539,7 @@ export default function SettingsScreen() {
                     { color: BrandColors.status.emergency },
                   ]}
                 >
-                  Sign out
+                  {t("settings.signOut")}
                 </ThemedText>
               </Pressable>
             </Animated.View>

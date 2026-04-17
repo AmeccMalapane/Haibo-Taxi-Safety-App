@@ -27,6 +27,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { ThemedText } from "@/components/ThemedText";
 import {
   Spacing,
@@ -75,11 +76,11 @@ interface PhushaPost {
 }
 
 const categories = [
-  { id: "for_you", name: "For You", icon: "star" as const },
-  { id: "safety_tips", name: "Safety", icon: "shield" as const },
-  { id: "taxi_hacks", name: "Hacks", icon: "zap" as const },
-  { id: "driver_stories", name: "Drivers", icon: "user" as const },
-  { id: "route_reviews", name: "Routes", icon: "map-pin" as const },
+  { id: "for_you", nameKey: "reels.forYou", icon: "star" as const },
+  { id: "safety_tips", nameKey: "reels.safetyTips", icon: "shield" as const },
+  { id: "taxi_hacks", nameKey: "reels.taxiHacks", icon: "zap" as const },
+  { id: "driver_stories", nameKey: "reels.driverStories", icon: "user" as const },
+  { id: "route_reviews", nameKey: "reels.routeReviews", icon: "map-pin" as const },
 ];
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
@@ -357,6 +358,7 @@ const PhushaCard = memo(function PhushaCard({
 
 export default function PushaScreen() {
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeCategory, setActiveCategory] = useState("for_you");
@@ -520,7 +522,7 @@ export default function PushaScreen() {
                 }
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Filter: ${cat.name}`}
+              accessibilityLabel={`Filter: ${t(cat.nameKey as any)}`}
               accessibilityState={{ selected: activeCategory === cat.id }}
             >
               <Feather
@@ -532,7 +534,7 @@ export default function PushaScreen() {
               <ThemedText
                 style={[styles.categoryText, activeCategory === cat.id ? styles.categoryTextActive : null]}
               >
-                {cat.name}
+                {t(cat.nameKey as any)}
               </ThemedText>
             </Pressable>
           ))}

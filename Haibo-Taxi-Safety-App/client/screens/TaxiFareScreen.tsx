@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { useQuery } from "@tanstack/react-query";
 
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   Spacing,
@@ -47,6 +48,7 @@ export default function TaxiFareScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   const [originQuery, setOriginQuery] = useState("");
   const [destinationQuery, setDestinationQuery] = useState("");
@@ -412,7 +414,7 @@ export default function TaxiFareScreen() {
                         >
                           {route.fare && route.fare > 0
                             ? `R${route.fare.toFixed(0)}`
-                            : "TBD"}
+                            : t("fares.priceTbd")}
                         </ThemedText>
                       </View>
                     </View>

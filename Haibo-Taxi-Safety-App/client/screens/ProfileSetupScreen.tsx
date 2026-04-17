@@ -20,6 +20,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import { AuthUser } from "@/contexts/AuthContext";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
@@ -27,6 +28,7 @@ import { GradientButton } from "@/components/GradientButton";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { uploadFromUri } from "@/lib/uploads";
 import { apiRequest } from "@/lib/query-client";
+import { getDeviceId } from "@/lib/deviceId";
 
 // typeui-clean rework of the profile-setup hero.
 //
@@ -66,17 +68,18 @@ type AvatarType = "commuter" | "driver" | "operator";
 const AVATAR_OPTIONS: {
   type: AvatarType;
   icon: keyof typeof Feather.glyphMap;
-  label: string;
+  labelKey: string;
 }[] = [
-  { type: "commuter", icon: "user", label: "Commuter" },
-  { type: "driver", icon: "truck", label: "Driver" },
-  { type: "operator", icon: "briefcase", label: "Operator" },
+  { type: "commuter", icon: "user", labelKey: "profile.commuter" },
+  { type: "driver", icon: "truck", labelKey: "profile.driver" },
+  { type: "operator", icon: "briefcase", labelKey: "profile.operator" },
 ];
 
 export default function ProfileSetupScreen() {
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const { updateProfile } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -104,14 +107,14 @@ export default function ProfileSetupScreen() {
     const clean = normalizeHandle(raw);
     setHandle(clean);
     if (!clean) { setHandleError(""); return; }
-    if (clean.length < 3) { setHandleError("At least 3 characters"); return; }
-    if (!HANDLE_RE.test(clean)) { setHandleError("Letters, numbers, underscores only"); return; }
+    if (clean.length < 3) { setHandleError(t("profile.handleMin")); return; }
+    if (!HANDLE_RE.test(clean)) { setHandleError(t("profile.handleLettersOnly")); return; }
     setHandleError("");
     // Check availability (debounced inline — fire and forget, last write wins)
     apiRequest("GET", `/api/auth/handle/available?h=${encodeURIComponent(clean)}`)
       .then((res: any) => {
         if (res?.available === false && clean === handle) {
-          setHandleError("Already taken — try another");
+          setHandleError(t("profile.handleTaken"));
         }
       })
       .catch(() => {});
@@ -125,8 +128,8 @@ export default function ProfileSetupScreen() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          "Permission needed",
-          "Grant photo library access to upload a profile photo.",
+          t("profile.permissionNeeded"),
+          t("profile.permissionNeededDesc"),
         );
         return;
       }
@@ -145,7 +148,7 @@ export default function ProfileSetupScreen() {
       });
       setAvatarUrl(uploaded.url);
     } catch (error: any) {
-      Alert.alert("Upload failed", error.message || "Please try again.");
+      Alert.alert(t("profile.uploadFailed"), error.message || t("common.retry"));
     } finally {
       setAvatarUploading(false);
     }
@@ -164,7 +167,7 @@ export default function ProfileSetupScreen() {
 
   const handleSave = async () => {
     if (!displayName.trim()) {
-      Alert.alert("Name required", "Please enter your display name.");
+      Alert.alert(t("profile.nameRequired"), t("profile.nameRequiredDesc"));
       return;
     }
     if (isSaving) return;
@@ -181,7 +184,7 @@ export default function ProfileSetupScreen() {
         });
       } catch (err: any) {
         if (err?.message?.includes("409") || err?.message?.includes("taken")) {
-          setHandleError("Already taken — try another");
+          setHandleError(t("profile.handleTaken"));
           setIsSaving(false);
           return;
         }
@@ -204,15 +207,25 @@ export default function ProfileSetupScreen() {
 
     if (result.success) {
       if (referralCode.trim()) {
-        // TODO: server-side user-supplied referral claim endpoint doesn't
-        // exist yet. Logging for now so we can wire it up later without
-        // losing the captured code.
-        console.log("[ProfileSetup] referral code captured (not applied):", referralCode.trim());
+        // Fire-and-forget: apply the referral code so the referrer gets
+        // credit. Failures are non-blocking — the user still reaches the
+        // main app. The endpoint is idempotent (re-submits succeed silently).
+        getDeviceId().then((deviceId) =>
+          apiRequest("/api/referral/apply", {
+            method: "POST",
+            body: JSON.stringify({
+              referralCode: referralCode.trim(),
+              referredDeviceId: deviceId,
+            }),
+          }).catch((err: any) =>
+            console.warn("[ProfileSetup] referral apply failed (non-blocking):", err?.message),
+          ),
+        );
       }
       finishSetup();
     } else {
       setIsSaving(false);
-      Alert.alert("Couldn't save", result.error || "Please try again.");
+      Alert.alert(t("profile.couldntSave"), result.error || t("common.retry"));
     }
   };
 
@@ -238,9 +251,9 @@ export default function ProfileSetupScreen() {
         </Animated.View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)} style={styles.heroText}>
-          <ThemedText style={styles.title}>Set up your profile</ThemedText>
+          <ThemedText style={styles.title}>{t("profile.setupTitle")}</ThemedText>
           <ThemedText style={styles.subtitle}>
-            A few quick details so we can personalize your Haibo experience
+            {t("profile.setupSubtitle")}
           </ThemedText>
         </Animated.View>
       </LinearGradient>
@@ -258,7 +271,7 @@ export default function ProfileSetupScreen() {
         >
           {/* Profile photo picker — optional but visually prominent */}
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-            PROFILE PHOTO (OPTIONAL)
+            {t("profile.profilePhoto")}
           </ThemedText>
           <View style={styles.photoPickRow}>
             <Pressable
@@ -294,24 +307,24 @@ export default function ProfileSetupScreen() {
             <View style={{ flex: 1 }}>
               <ThemedText style={[styles.photoPickTitle, { color: theme.text }]}>
                 {avatarUrl
-                  ? "Looking good"
+                  ? t("profile.lookingGood")
                   : avatarUploading
-                    ? "Uploading…"
-                    : "Tap to add a photo"}
+                    ? t("profile.uploading")
+                    : t("profile.tapToAdd")}
               </ThemedText>
               <ThemedText
                 style={[styles.photoPickHint, { color: theme.textSecondary }]}
               >
                 {avatarUrl
-                  ? "Tap the circle to change it"
-                  : "Makes it easier for drivers and vendors to recognize you"}
+                  ? t("profile.tapToChange")
+                  : t("profile.photoRecognize")}
               </ThemedText>
             </View>
           </View>
 
           {/* Role picker */}
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-            WHO ARE YOU?
+            {t("profile.whoAreYou")}
           </ThemedText>
           <View style={styles.avatarRow}>
             {AVATAR_OPTIONS.map((option) => {
@@ -339,7 +352,7 @@ export default function ProfileSetupScreen() {
                   }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={option.label}
+                  accessibilityLabel={t(option.labelKey)}
                 >
                   <View
                     style={[
@@ -367,7 +380,7 @@ export default function ProfileSetupScreen() {
                       },
                     ]}
                   >
-                    {option.label}
+                    {t(option.labelKey)}
                   </ThemedText>
                 </Pressable>
               );
@@ -377,7 +390,7 @@ export default function ProfileSetupScreen() {
           {/* Display name */}
           <View style={styles.fieldGroup}>
             <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              DISPLAY NAME *
+              {t("profile.displayNameStar")}
             </ThemedText>
             <TextInput
               style={[
@@ -390,7 +403,7 @@ export default function ProfileSetupScreen() {
                     : theme.border,
                 },
               ]}
-              placeholder="e.g., Sipho M"
+              placeholder={t("profile.displayNamePlaceholder")}
               placeholderTextColor={theme.textSecondary}
               value={displayName}
               onChangeText={setDisplayName}
@@ -404,7 +417,7 @@ export default function ProfileSetupScreen() {
           {/* Handle / username */}
           <View style={styles.fieldGroup}>
             <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              @HANDLE
+              {t("profile.handleLabel")}
             </ThemedText>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <ThemedText style={[styles.handlePrefix, { color: theme.textSecondary }]}>
@@ -424,7 +437,7 @@ export default function ProfileSetupScreen() {
                         : theme.border,
                   },
                 ]}
-                placeholder="e.g., sipho_m"
+                placeholder={t("profile.handlePlaceholder")}
                 placeholderTextColor={theme.textSecondary}
                 value={handle}
                 onChangeText={onHandleChange}
@@ -439,10 +452,10 @@ export default function ProfileSetupScreen() {
             {handleError ? (
               <ThemedText style={styles.handleErrorText}>{handleError}</ThemedText>
             ) : handle.length >= 3 ? (
-              <ThemedText style={styles.handleOkText}>Looks good</ThemedText>
+              <ThemedText style={styles.handleOkText}>{t("profile.handleOk")}</ThemedText>
             ) : (
               <ThemedText style={[styles.handleHint, { color: theme.textSecondary }]}>
-                Shown on your posts and comments instead of your phone number
+                {t("profile.handleHint")}
               </ThemedText>
             )}
           </View>
@@ -456,11 +469,11 @@ export default function ProfileSetupScreen() {
                 color={BrandColors.primary.gradientStart}
               />
               <ThemedText style={styles.emergencyTitle}>
-                Emergency contact
+                {t("emergency.contactTitle")}
               </ThemedText>
             </View>
             <ThemedText style={[styles.emergencyHelp, { color: theme.textSecondary }]}>
-              Notified when you trigger SOS. You can add more contacts later.
+              {t("emergency.contactHint")}
             </ThemedText>
 
             <TextInput
@@ -511,7 +524,7 @@ export default function ProfileSetupScreen() {
           {/* Referral code */}
           <View style={styles.fieldGroup}>
             <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-              REFERRAL CODE <ThemedText style={styles.optionalTag}>(optional)</ThemedText>
+              {t("profile.referralCode")} <ThemedText style={styles.optionalTag}>({t("common.optional")})</ThemedText>
             </ThemedText>
             <TextInput
               style={[
@@ -550,7 +563,7 @@ export default function ProfileSetupScreen() {
               icon={isSaving ? undefined : "arrow-right"}
               iconPosition="right"
             >
-              {isSaving ? "Saving..." : "Complete setup"}
+              {isSaving ? t("profile.saving") : t("profile.completeSetup")}
             </GradientButton>
           </View>
 
@@ -562,7 +575,7 @@ export default function ProfileSetupScreen() {
             accessibilityLabel="Skip profile setup for now"
           >
             <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>
-              Skip for now
+              {t("profile.skipForNow")}
             </ThemedText>
           </Pressable>
         </Animated.View>

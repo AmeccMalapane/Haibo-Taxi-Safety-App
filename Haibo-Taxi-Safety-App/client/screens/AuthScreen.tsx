@@ -18,6 +18,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated"
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useLanguage } from "@/hooks/useLanguage";
 import {
   Spacing,
   BrandColors,
@@ -67,6 +68,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 export default function AuthScreen() {
   const reducedMotion = useReducedMotion();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const { sendOTP, skipAuth } = useAuth();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -110,8 +112,8 @@ export default function AuthScreen() {
     if (phone.length < 9) {
       triggerHaptic("error");
       Alert.alert(
-        "Invalid number",
-        "Please enter a valid South African phone number."
+        t("auth.invalidNumber"),
+        t("auth.invalidNumberDesc"),
       );
       return;
     }
@@ -127,13 +129,13 @@ export default function AuthScreen() {
       } else {
         triggerHaptic("error");
         Alert.alert(
-          "Couldn't send code",
-          result.error || "Please check your connection and try again."
+          t("auth.couldntSend"),
+          result.error || t("auth.couldntSendDesc"),
         );
       }
     } catch (error) {
       triggerHaptic("error");
-      Alert.alert("Couldn't send code", "Please try again in a moment.");
+      Alert.alert(t("auth.couldntSend"), t("auth.couldntSendDesc"));
     } finally {
       setLoading(false);
     }
@@ -189,9 +191,9 @@ export default function AuthScreen() {
           entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(150)}
           style={styles.heroText}
         >
-          <ThemedText style={styles.title}>Welcome to Haibo!</ThemedText>
+          <ThemedText style={styles.title}>{t("auth.welcome")}</ThemedText>
           <ThemedText style={styles.subtitle}>
-            Your safety companion for minibus taxi travel in South Africa
+            {t("auth.subtitle")}
           </ThemedText>
         </Animated.View>
       </LinearGradient>
@@ -208,7 +210,7 @@ export default function AuthScreen() {
           style={[styles.formCard, { backgroundColor: theme.backgroundRoot }]}
         >
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
-            PHONE NUMBER
+            {t("auth.phoneLabel")}
           </ThemedText>
           <View style={styles.phoneInputRow}>
             <View
@@ -235,7 +237,7 @@ export default function AuthScreen() {
                     : theme.border,
                 },
               ]}
-              placeholder="82 123 4567"
+              placeholder={t("auth.phonePlaceholder")}
               placeholderTextColor={theme.textSecondary}
               value={phone}
               onChangeText={formatPhoneInput}
@@ -249,7 +251,7 @@ export default function AuthScreen() {
             />
           </View>
           <ThemedText style={[styles.helperText, { color: theme.textSecondary }]}>
-            We'll send you a 6-digit verification code via SMS
+            {t("auth.smsHelper")}
           </ThemedText>
 
           <View style={styles.ctaWrap}>
@@ -260,7 +262,7 @@ export default function AuthScreen() {
               icon={loading ? undefined : "arrow-right"}
               iconPosition="right"
             >
-              {loading ? "Sending code..." : "Send verification code"}
+              {loading ? t("auth.sendingCode") : t("auth.sendOtp")}
             </GradientButton>
           </View>
 
@@ -277,7 +279,7 @@ export default function AuthScreen() {
                 pressed && styles.pressed,
               ]}
               accessibilityRole="button"
-              accessibilityLabel="Quick login with biometrics"
+              accessibilityLabel={t("auth.biometricLogin")}
             >
               <Feather
                 name="smartphone"
@@ -290,7 +292,7 @@ export default function AuthScreen() {
                   { color: BrandColors.primary.gradientStart },
                 ]}
               >
-                Quick login with biometrics
+                {t("auth.biometricLogin")}
               </ThemedText>
             </Pressable>
           ) : null}
@@ -298,7 +300,7 @@ export default function AuthScreen() {
           <View style={styles.divider}>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>
-              or continue with
+              {t("auth.orContinueWith")}
             </ThemedText>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
           </View>
@@ -308,11 +310,13 @@ export default function AuthScreen() {
               icon="chrome"
               label="Google"
               theme={theme}
+              soonLabel={t("auth.comingSoon")}
             />
             <SocialGhostButton
               icon="smartphone"
               label="Apple"
               theme={theme}
+              soonLabel={t("auth.comingSoon")}
             />
           </View>
 
@@ -327,12 +331,12 @@ export default function AuthScreen() {
             <ThemedText
               style={[styles.skipText, { color: theme.textSecondary }]}
             >
-              Continue as guest
+              {t("auth.continueGuest")}
             </ThemedText>
           </Pressable>
 
           <ThemedText style={[styles.footerText, { color: theme.textSecondary }]}>
-            By continuing, you agree to our Terms of Service and Privacy Policy
+            {t("auth.agreeTerms")}
           </ThemedText>
         </Animated.View>
       </KeyboardAwareScrollViewCompat>
@@ -347,10 +351,12 @@ function SocialGhostButton({
   icon,
   label,
   theme,
+  soonLabel,
 }: {
   icon: keyof typeof Feather.glyphMap;
   label: string;
   theme: any;
+  soonLabel: string;
 }) {
   return (
     <Pressable
@@ -374,7 +380,7 @@ function SocialGhostButton({
         {label}
       </ThemedText>
       <View style={styles.soonBadge}>
-        <ThemedText style={styles.soonBadgeText}>SOON</ThemedText>
+        <ThemedText style={styles.soonBadgeText}>{soonLabel}</ThemedText>
       </View>
     </Pressable>
   );
