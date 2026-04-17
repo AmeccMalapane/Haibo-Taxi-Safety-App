@@ -49,14 +49,19 @@ _(76 chars)_
 > straight from the people on the ground. You see what's happening on
 > the ranks before you leave the house.
 >
+> ★ GET DIRECTIONS FROM THE CREW
+> Ask real commuters for directions, the cheapest route, and which rank
+> is running. No maps app can tell you that the 3pm kombi to Soweto is
+> cancelled. Your community can.
+>
 > ★ CASHLESS FARES (coming to your city)
 > Pay your fare with a tap. Tips directly to drivers. Wallet protected
 > with PIN + biometrics.
 >
-> Haibo! is built in South Africa, for South Africa. It works in every
-> province and every language our commuters speak. Data charges are kept
-> tiny — the app is designed to run well on an entry-level Android phone
-> over 3G.
+> Haibo! is built in South Africa, for South Africa. Available in
+> English, isiZulu, and Sesotho — switch anytime from settings. Data
+> charges are kept tiny — the app is designed to run well on an
+> entry-level Android phone over 3G.
 >
 > Sala kahle. Travel safe.
 >
@@ -67,9 +72,9 @@ _(76 chars)_
 
 | Asset              | Size             | Format   | Status |
 | ------------------ | ---------------- | -------- | ------ |
-| App icon           | 512 × 512        | PNG      | ⚠️ Need hi-res export (have 1024 source) |
-| Feature graphic    | 1024 × 500       | PNG/JPG  | ❌ TODO — must be designed |
-| Phone screenshots  | ≥2, up to 8      | PNG/JPG  | ❌ TODO — capture from device |
+| App icon           | 512 × 512        | PNG      | ✅ `store-assets/app-icon-512.png` |
+| Feature graphic    | 1024 × 500       | PNG/JPG  | ✅ `store-assets/feature-graphic.png` (SVG source alongside) |
+| Phone screenshots  | ≥2, up to 8      | PNG/JPG  | ❌ TODO — capture from preview build on device |
 | 7-inch tablet      | ≥1 (optional)    | PNG/JPG  | Skip (not optimised) |
 | Promo video        | YouTube URL      | optional | Skip for v1 |
 
