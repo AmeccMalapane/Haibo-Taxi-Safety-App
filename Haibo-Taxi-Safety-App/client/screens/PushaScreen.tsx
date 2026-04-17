@@ -36,9 +36,10 @@ import {
 } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { createReelLink, getAppStoreLink } from "@/lib/deepLinks";
+import { useQuery } from "@tanstack/react-query";
 import phushaContentData from "@/data/phusha_content.json";
 import CommentTray from "@/components/CommentTray";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 // typeui-clean polish on top of the existing reels feed:
 //  - Bookmark active state switched from blue tint to rose tint (was
@@ -367,7 +368,41 @@ export default function PushaScreen() {
   const [commentReelId, setCommentReelId] = useState<string | null>(null);
   const [commentSeed, setCommentSeed] = useState<{ id: string; count: number } | null>(null);
 
-  const allPosts: PhushaPost[] = phushaContentData as PhushaPost[];
+  const localPosts = phushaContentData as PhushaPost[];
+
+  const feedQ = useQuery({
+    queryKey: ["/api/community/posts", activeCategory],
+    queryFn: async () => {
+      if (!getApiUrl()) return null;
+      const catParam = activeCategory === "for_you" ? "" : `&category=${activeCategory}`;
+      const res = await apiRequest("GET", `/api/community/posts?limit=50${catParam}`);
+      return res?.data as any[] | null;
+    },
+    staleTime: 60_000,
+  });
+
+  const allPosts: PhushaPost[] = React.useMemo(() => {
+    const apiRows = feedQ.data;
+    if (!apiRows || apiRows.length === 0) return localPosts;
+    return apiRows.map((r: any) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: r.userName || "user",
+      contentType: r.contentType || "photo",
+      caption: r.caption || "",
+      hashtags: r.hashtags || [],
+      locationName: r.locationName,
+      likeCount: r.likeCount ?? 0,
+      commentCount: r.commentCount ?? 0,
+      shareCount: r.shareCount ?? 0,
+      viewCount: r.viewCount ?? 0,
+      isLiked: false,
+      createdAt: r.createdAt,
+      category: r.category || "community",
+      localImage: "",
+      gradient: BrandColors.gradient.primary,
+    }));
+  }, [feedQ.data, localPosts]);
 
   const filteredPosts =
     activeCategory === "for_you"
