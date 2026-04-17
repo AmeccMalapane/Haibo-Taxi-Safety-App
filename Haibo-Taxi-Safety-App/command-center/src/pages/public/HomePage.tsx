@@ -38,12 +38,17 @@ const MapHero = React.lazy(() =>
 // reads as colorful and confident instead of single-hue. Gradients mirror
 // the mobile CommunityScreen tile treatment — SOS = rose/emergency brand
 // moment, Rank Finder = sky, Haibo Pay = teal, Group Rides = fuchsia,
-// Route Tracking = yellow, Live Alerts = red/orange urgency.
+// Route Tracking = yellow, Live Alerts = red/gold urgency.
+//
+// `iconColor` overrides the default white icon on high-luminance
+// backgrounds (yellow/lime) where white fails WCAG 1.4.11 3:1 contrast.
+// Warning-sign convention: dark glyphs on bright chips.
 const FEATURES: Array<{
   Icon: typeof Shield;
   title: string;
   desc: string;
   gradient: [string, string];
+  iconColor?: string;
 }> = [
   {
     Icon: Shield,
@@ -74,6 +79,7 @@ const FEATURES: Array<{
     title: "Route Tracking",
     desc: "Real-time GPS tracking of taxi routes for safety monitoring and data-driven optimization.",
     gradient: [colors.accentYellow, colors.accentYellowLight],
+    iconColor: colors.haiboDark,
   },
   {
     Icon: AlertTriangle,
@@ -443,13 +449,14 @@ function Features() {
         }}
         className="hb-feat-grid"
       >
-        {FEATURES.map(({ Icon, title, desc, gradient }) => (
+        {FEATURES.map(({ Icon, title, desc, gradient, iconColor }) => (
           <FeatureCard
             key={title}
             Icon={Icon}
             title={title}
             desc={desc}
             gradient={gradient}
+            iconColor={iconColor}
           />
         ))}
       </StaggerIn>
@@ -474,14 +481,17 @@ function FeatureCard({
   title,
   desc,
   gradient,
+  iconColor,
 }: {
   Icon: typeof Shield;
   title: string;
   desc: string;
   gradient: [string, string];
+  iconColor?: string;
 }) {
   const [hovered, setHovered] = React.useState(false);
   const [gradStart] = gradient;
+  const resolvedIconColor = iconColor || "#FFFFFF";
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -505,14 +515,14 @@ function FeatureCard({
           width: 52,
           height: 52,
           borderRadius: radius.md,
-          // Gradient icon backplate mirrors the mobile CommunityScreen tiles
-          // exactly — white icon floats on a solid gradient chip with a
-          // subtle colored shadow for depth.
+          // Gradient icon backplate mirrors the mobile CommunityScreen tiles.
+          // Icon color defaults to white; yellow/lime tiles pass a dark
+          // `iconColor` because white fails WCAG on those backgrounds.
           background: `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#FFFFFF",
+          color: resolvedIconColor,
           marginBottom: spacing.xl,
           boxShadow: `0 6px 14px ${gradStart}33`,
         }}

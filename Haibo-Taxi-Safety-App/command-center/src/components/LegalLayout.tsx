@@ -8,6 +8,7 @@ import {
   gradients,
   fonts,
 } from "../lib/brand";
+import { FadeInUp } from "../lib/motion";
 
 /**
  * Shared chrome for long-form legal pages (privacy policy, terms of service).
@@ -309,37 +310,41 @@ function Hero({
           zIndex: 1,
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: spacing.xs,
-            padding: `${spacing.xs}px ${spacing.md}px`,
-            borderRadius: radius.full,
-            background: colors.roseFaint,
-            color: colors.rose,
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-            marginBottom: spacing.xl,
-          }}
-        >
-          <Sparkles size={13} /> {eyebrow}
-        </div>
-        <h1
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: "clamp(36px, 5vw, 56px)",
-            fontWeight: 700,
-            lineHeight: 1.05,
-            letterSpacing: -1,
-            color: colors.text,
-            margin: 0,
-          }}
-        >
-          {title}
-        </h1>
+        <FadeInUp delay={0}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: spacing.xs,
+              padding: `${spacing.xs}px ${spacing.md}px`,
+              borderRadius: radius.full,
+              background: colors.roseFaint,
+              color: colors.rose,
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+              marginBottom: spacing.xl,
+            }}
+          >
+            <Sparkles size={13} /> {eyebrow}
+          </div>
+        </FadeInUp>
+        <FadeInUp delay={0.1}>
+          <h1
+            style={{
+              fontFamily: fonts.heading,
+              fontSize: "clamp(36px, 5vw, 56px)",
+              fontWeight: 800,
+              lineHeight: 1.05,
+              letterSpacing: -1,
+              color: colors.text,
+              margin: 0,
+            }}
+          >
+            {title}
+          </h1>
+        </FadeInUp>
         <div
           style={{
             display: "flex",

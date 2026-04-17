@@ -107,6 +107,9 @@ interface StaggerInProps {
   duration?: number;
   /** Distance (px) each child travels upward. */
   distance?: number;
+  /** Initial delay before the stagger begins, in seconds. Use this to
+   *  chain after a sibling FadeInUp without needing a wrapper. */
+  delay?: number;
   /** When true, animate on scroll into view instead of immediately on
    *  mount. Uses ScrollTrigger with a 15% viewport offset so the reveal
    *  fires before the card fully enters the viewport. */
@@ -123,6 +126,7 @@ export function StaggerIn({
   stagger = 0.08,
   duration = 0.6,
   distance = 20,
+  delay = 0,
   onScroll = false,
   className,
   style,
@@ -146,6 +150,7 @@ export function StaggerIn({
         opacity: 0,
         y: distance,
         duration,
+        delay,
         ease: "power3.out",
         stagger,
       };
@@ -165,7 +170,7 @@ export function StaggerIn({
     },
     {
       scope: ref,
-      dependencies: [reduced, stagger, duration, distance, onScroll, childCount],
+      dependencies: [reduced, stagger, duration, distance, delay, onScroll, childCount],
       revertOnUpdate: true,
     },
   );

@@ -45,7 +45,14 @@ interface Highlight {
 
 // Pull from the accent palette so each highlight type feels distinct
 // instead of a wall of rose. Live events keep warm urgency, jobs use
-// teal for trust, achievements use yellow, community updates use fuchsia.
+// teal for trust, community updates use purple/fuchsia.
+//
+// Yellow/lime accents are intentionally NOT used here — the carousel
+// card has a lot of small white text (subtitle 14px, description 13px,
+// footer 11px) that would fail WCAG 1.4.3 on bright backgrounds.
+// Icons on yellow are fine on the standalone CommunityScreen tiles
+// (they use dark icons via the iconColor override), but this card's
+// text volume makes that pattern impractical here.
 const TYPE_CONFIG: Record<string, { gradient: [string, string]; iconBg: string }> = {
   event: {
     gradient: [BrandColors.primary.gradientStart, BrandColors.primary.gradientEnd],
@@ -58,10 +65,6 @@ const TYPE_CONFIG: Record<string, { gradient: [string, string]; iconBg: string }
   live: {
     gradient: [BrandColors.primary.orange, BrandColors.secondary.orangeLight],
     iconBg: "rgba(255,255,255,0.2)",
-  },
-  achievement: {
-    gradient: [BrandColors.accent.yellow, BrandColors.accent.yellowLight],
-    iconBg: "rgba(0,0,0,0.15)",
   },
   community: {
     gradient: [BrandColors.secondary.purple, BrandColors.accent.fuchsiaLight],

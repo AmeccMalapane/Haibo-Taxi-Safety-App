@@ -11,6 +11,7 @@ import {
   transitions,
 } from "../../lib/brand";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { FadeInUp, StaggerIn } from "../../lib/motion";
 
 const SHORTCUTS: Array<{
   to: string;
@@ -96,51 +97,60 @@ function Hero() {
           textAlign: "center",
         }}
       >
-        <div
-          aria-hidden
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: "clamp(96px, 18vw, 180px)",
-            fontWeight: 700,
-            letterSpacing: -6,
-            lineHeight: 0.85,
-            background: gradients.primary,
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            marginBottom: spacing.xl,
-          }}
-        >
-          404
-        </div>
-        <h1
-          style={{
-            fontFamily: fonts.heading,
-            fontSize: "clamp(28px, 4vw, 44px)",
-            fontWeight: 700,
-            letterSpacing: -0.8,
-            lineHeight: 1.1,
-            color: colors.text,
-            margin: 0,
-          }}
-        >
-          Haibo — wrong turn.
-        </h1>
-        <p
-          style={{
-            fontSize: 17,
-            lineHeight: 1.6,
-            color: colors.textSecondary,
-            marginTop: spacing.lg,
-            maxWidth: 540,
-            marginLeft: "auto",
-            marginRight: "auto",
-          }}
-        >
-          The page you were heading to doesn't exist — or it moved while you
-          weren't looking. Let's get you back on route.
-        </p>
-        <div
+        <FadeInUp delay={0} duration={0.8} distance={40}>
+          <div
+            aria-hidden
+            style={{
+              fontFamily: fonts.heading,
+              fontSize: "clamp(112px, 22vw, 220px)",
+              fontWeight: 800,
+              letterSpacing: -8,
+              lineHeight: 0.82,
+              background: gradients.primary,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              marginBottom: spacing.xl,
+            }}
+          >
+            404
+          </div>
+        </FadeInUp>
+        <FadeInUp delay={0.15}>
+          <h1
+            style={{
+              fontFamily: fonts.heading,
+              fontSize: "clamp(32px, 4.5vw, 52px)",
+              fontWeight: 800,
+              letterSpacing: -1.0,
+              lineHeight: 1.08,
+              color: colors.text,
+              margin: 0,
+            }}
+          >
+            Haibo — wrong turn.
+          </h1>
+        </FadeInUp>
+        <FadeInUp delay={0.3}>
+          <p
+            style={{
+              fontSize: 17,
+              lineHeight: 1.6,
+              color: colors.textSecondary,
+              marginTop: spacing.lg,
+              maxWidth: 540,
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            The page you were heading to doesn't exist — or it moved while you
+            weren't looking. Let's get you back on route.
+          </p>
+        </FadeInUp>
+        <StaggerIn
+          stagger={0.1}
+          duration={0.5}
+          delay={0.4}
           style={{
             display: "flex",
             justifyContent: "center",
@@ -186,7 +196,7 @@ function Hero() {
           >
             See what's happening
           </Link>
-        </div>
+        </StaggerIn>
       </div>
     </section>
   );
@@ -214,7 +224,11 @@ function Shortcuts() {
       >
         Jump to
       </div>
-      <div
+      <StaggerIn
+        stagger={0.08}
+        duration={0.5}
+        distance={16}
+        onScroll
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
@@ -225,7 +239,7 @@ function Shortcuts() {
         {SHORTCUTS.map((s) => (
           <ShortcutCard key={s.to} {...s} />
         ))}
-      </div>
+      </StaggerIn>
       <style>{`
         @media (max-width: 720px) {
           .hb-404-grid {

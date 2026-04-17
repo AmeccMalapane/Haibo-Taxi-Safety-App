@@ -46,6 +46,11 @@ type TileConfig = {
   /** Gradient pair used for the tile icon backplate + hover glow. Each
    *  category gets its own hue so the grid reads as playful, not monotone. */
   gradient: [string, string];
+  /** Icon fill color. Defaults to white for dark gradients (rose, teal,
+   *  fuchsia, sky). Switch to dark (#0C121A) on yellow/lime tiles — those
+   *  backgrounds are too luminous for white icons (fail WCAG 1.4.11 3:1
+   *  contrast). Warning-sign convention: dark glyphs on bright chips. */
+  iconColor?: string;
 };
 
 const communityTiles: TileConfig[] = [
@@ -72,6 +77,7 @@ const communityTiles: TileConfig[] = [
     icon: "search",
     screen: "LostFound",
     gradient: [BrandColors.accent.yellow, BrandColors.accent.yellowLight],
+    iconColor: "#0C121A",
   },
   {
     id: "haibo_fam",
@@ -104,6 +110,7 @@ const communityTiles: TileConfig[] = [
     icon: "calendar",
     screen: "Events",
     gradient: [BrandColors.accent.lime, BrandColors.accent.limeLight],
+    iconColor: "#0C121A",
   },
 ];
 
@@ -156,7 +163,7 @@ function CommunityTile({
           end={{ x: 1, y: 1 }}
           style={styles.tileIcon}
         >
-          <Feather name={tile.icon} size={22} color="#FFFFFF" />
+          <Feather name={tile.icon} size={22} color={tile.iconColor || "#FFFFFF"} />
         </LinearGradient>
         <ThemedText style={styles.tileTitle} numberOfLines={1}>
           {tile.title}
