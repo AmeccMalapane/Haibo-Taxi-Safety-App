@@ -8,9 +8,10 @@ to Postgres for the admin review queue and the city-explorer feature.
 Pipeline:
 
 ```
-apify-client.ts  ──▶  extractor.ts  ──▶  redact.ts  ──▶  Postgres
-  (Facebook           (Claude Haiku        (PII + hash)       │
-   groups scraper)     + prompt MD)                            ├── fare_imports
+apify-client.ts  ──▶  extractor.ts  ──▶  redact.ts  ──▶  Postgres  ──▶  canonicalize.ts
+  (Facebook           (Claude Haiku        (PII + hash)       │           (trigram match
+   groups scraper)     + prompt MD)                            │            vs taxi_locations)
+                                                               ├── fare_imports
                                                                └── route_demand_signals
 ```
 
@@ -91,6 +92,52 @@ loud before you write rows to prod.
    stamps it on every row, and existing rows remain pinned to their
    old version — no rewrites, clean audit trail.
 
+## Canonicalization pass
+
+After a harvest writes rows with `status = 'pending_canonicalization'`,
+run `canonicalize.ts` to match `origin_raw` / `destination_raw` against
+the `taxi_locations` gazetteer and promote rows into the review queue.
+
+```bash
+# Run against both tables with defaults (threshold 0.35).
+tsx scripts/fare-sync/canonicalize.ts
+
+# Dry-run: log match decisions without updating any rows.
+tsx scripts/fare-sync/canonicalize.ts --dry-run
+
+# Only one table, first N rows, custom threshold.
+tsx scripts/fare-sync/canonicalize.ts --table fare_imports --limit 20 --threshold 0.40
+```
+
+Matching runs entirely in-memory using a trigram-Jaccard score
+([`match.ts`](./match.ts)) — no `pg_trgm` extension required, so it
+works on Azure's managed Postgres out of the box. Three-pass strategy:
+
+1. **Exact** on noise-stripped forms (drops `taxi`, `rank`, `station`,
+   `mall`, `cbd`, etc.). `"Bosman rank"` → `"bosman"` → exact hit on
+   `"Bosman Station Taxi Rank"` which strips to `"bosman"`. Score 1.0.
+2. **Contains** if one side is a clean substring of the other.
+   `"Bree"` → `"Bree Street Taxi Rank"`. Score 0.9.
+3. **Trigram Jaccard** over padded, normalized strings. Best score
+   above `threshold` wins. Scores below fall through to `orphan`.
+
+Status transitions after the pass:
+
+| Table | Destination matched | Destination orphan |
+|---|---|---|
+| `fare_imports` | `pending_review` | `orphan` |
+| `route_demand_signals` | `canonicalized` | `orphan` |
+
+Origin-orphan with destination-matched is fine — the reviewer sees
+`origin_raw` verbatim and can either add a new `taxi_locations` row or
+approve the fare anyway. A destination-orphan is the stronger signal
+that the gazetteer needs a new entry.
+
+Validated against the 10 trial-fare keywords: 4 clean matches (Bree,
+Bosman, Germiston, Bara) and 6 expected orphans (MTN, Bloed Mall,
+Monte Casino, Hammanskraal, Vosloorus, Parktown) — the highest orphan
+score was 0.29 (Parktown → Pinetown), comfortably below the 0.35 cutoff.
+
 ## Scheduling
 
 Nightly cron (host side, not in-repo yet):
@@ -99,6 +146,5 @@ Nightly cron (host side, not in-repo yet):
 0 2 * * *  cd /srv/haibo && tsx scripts/fare-sync/harvest.ts >> /var/log/haibo/harvest.log 2>&1
 ```
 
-Out of scope for this module: the canonicalizer pass (matches
-`origin_raw`/`destination_raw` to the `taxi_locations` gazetteer) and
-the admin review UI — both land separately.
+Out of scope for this module: the admin review UI (`/admin/fare-imports`
+in command-center) — lands separately.
