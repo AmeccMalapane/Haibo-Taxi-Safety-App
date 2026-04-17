@@ -1141,6 +1141,11 @@ export const driverRatings = pgTable("driver_ratings", {
   rideId: varchar("ride_id"),
   rating: integer("rating").notNull(), // 1-5
   review: text("review"),
+  // URLs of photos/videos the rider attached as evidence (taxi interior,
+  // driver behaviour, damage etc). JSONB array so we can grow to multiple
+  // attachments without a schema change. Stored as returned by
+  // /api/uploads/image — Azure blob URLs in prod, /uploads/* in dev.
+  mediaUrls: jsonb("media_urls").$type<string[]>().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

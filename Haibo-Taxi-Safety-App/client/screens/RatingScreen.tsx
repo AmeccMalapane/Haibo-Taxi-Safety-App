@@ -19,6 +19,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
+import { uploadFromUri } from "@/lib/uploads";
 
 interface TripRatingPayload {
   plateNumber: string;
@@ -27,6 +28,7 @@ interface TripRatingPayload {
   driverName?: string;
   location?: string;
   review?: string;
+  mediaUrls?: string[];
 }
 
 interface TripRatingResponse {
@@ -71,7 +73,12 @@ export default function RatingScreen() {
   const [plateNumber, setPlateNumber] = useState("");
   const [driverName, setDriverName] = useState("");
   const [location, setLocation] = useState("");
+  // Local URI from expo-image-picker. Only uploaded to the server when the
+  // rider taps Submit — no point burning bandwidth on photos they'll
+  // discard. On successful upload we swap `image` to the returned URL so
+  // the preview keeps working without re-fetching.
   const [image, setImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const submitMutation = useMutation<TripRatingResponse, Error, TripRatingPayload>({
     mutationFn: (payload) =>
@@ -127,7 +134,7 @@ export default function RatingScreen() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (driverRating === 0 || rankRating === 0 || !plateNumber.trim()) {
       Alert.alert(
         "Incomplete",
@@ -135,12 +142,36 @@ export default function RatingScreen() {
       );
       return;
     }
+
+    let mediaUrls: string[] | undefined;
+    // Upload the attached photo first (if any). A failed upload shouldn't
+    // block the rating from reaching the Taxi Association — evidence is a
+    // bonus, not a gate — so we warn and proceed text-only.
+    if (image && !/^https?:\/\//.test(image)) {
+      try {
+        setUploading(true);
+        const uploaded = await uploadFromUri(image, { folder: "ratings" });
+        mediaUrls = [uploaded.url];
+        setImage(uploaded.url);
+      } catch (err: any) {
+        Alert.alert(
+          "Photo upload failed",
+          "We'll submit your rating without the photo. You can add media later.",
+        );
+      } finally {
+        setUploading(false);
+      }
+    } else if (image) {
+      mediaUrls = [image];
+    }
+
     submitMutation.mutate({
       plateNumber: plateNumber.trim(),
       driverRating,
       rankRating,
       driverName: driverName.trim() || undefined,
       location: location.trim() || undefined,
+      mediaUrls,
     });
   };
 
@@ -240,15 +271,17 @@ export default function RatingScreen() {
         <Pressable
           style={[
             styles.submitButton,
-            submitMutation.isPending && styles.submitButtonDisabled,
+            (submitMutation.isPending || uploading) && styles.submitButtonDisabled,
           ]}
           onPress={handleSubmit}
-          disabled={submitMutation.isPending}
+          disabled={submitMutation.isPending || uploading}
         >
-          {submitMutation.isPending ? (
+          {submitMutation.isPending || uploading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <ThemedText style={styles.submitButtonText}>Submit Feedback</ThemedText>
+            <ThemedText style={styles.submitButtonText}>
+              {image ? "Submit Feedback + Photo" : "Submit Feedback"}
+            </ThemedText>
           )}
         </Pressable>
       </ScrollView>

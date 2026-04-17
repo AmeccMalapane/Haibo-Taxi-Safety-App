@@ -22,7 +22,8 @@ export type UploadFolder =
   | "lost-found"
   | "drivers"
   | "profiles"
-  | "locations";
+  | "locations"
+  | "ratings";
 
 export interface UploadedFile {
   url: string;

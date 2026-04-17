@@ -214,6 +214,7 @@ router.post("/ratings/trip", authMiddleware, async (req: AuthRequest, res: Respo
       driverName,
       location,
       review,
+      mediaUrls,
     } = req.body as {
       plateNumber?: string;
       driverRating?: number;
@@ -221,6 +222,7 @@ router.post("/ratings/trip", authMiddleware, async (req: AuthRequest, res: Respo
       driverName?: string;
       location?: string;
       review?: string;
+      mediaUrls?: string[];
     };
 
     if (!plateNumber || typeof plateNumber !== "string") {
@@ -271,12 +273,22 @@ router.post("/ratings/trip", authMiddleware, async (req: AuthRequest, res: Respo
       if (driverLink) linkedDriverId = driverLink.driverId;
     }
 
+    // Normalize + cap media URLs. Drop anything that doesn't look like a
+    // URL to prevent junk rows, and cap at 6 to match what the client UI
+    // can realistically attach without freezing the submit flow.
+    const safeMedia = Array.isArray(mediaUrls)
+      ? mediaUrls
+          .filter((u): u is string => typeof u === "string" && /^https?:\/\/|^\//.test(u))
+          .slice(0, 6)
+      : [];
+
     if (linkedDriverId) {
       await db.insert(driverRatings).values({
         driverId: linkedDriverId,
         userId: req.user!.userId,
         rating: driverRating,
         review: enrichedReview,
+        mediaUrls: safeMedia,
       });
 
       // Refresh the driver's cached average — same pattern as drivers.ts.
@@ -300,8 +312,9 @@ router.post("/ratings/trip", authMiddleware, async (req: AuthRequest, res: Respo
       // can still mine feedback on unregistered plates during the launch
       // window. Post-launch this should write to a dedicated unlinked-ratings
       // table for proper moderation.
+      const mediaSuffix = safeMedia.length ? ` · media=${safeMedia.join(",")}` : "";
       console.info(
-        `[trip-rating] unlinked feedback from user ${req.user!.userId} for plate ${normalizedPlate}: ${enrichedReview}`,
+        `[trip-rating] unlinked feedback from user ${req.user!.userId} for plate ${normalizedPlate}: ${enrichedReview}${mediaSuffix}`,
       );
     }
 

@@ -193,22 +193,22 @@ router.post("/posts/:id/like", authMiddleware, async (req: AuthRequest, res: Res
 // — nesting (parentId) is preserved on each row for the client to thread.
 router.get("/posts/:id/comments", optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { limit, offset } = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    const params = parsePagination(req.query);
 
     const rows = await db
       .select()
       .from(reelComments)
       .where(eq(reelComments.reelId, req.params.id))
       .orderBy(desc(reelComments.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .limit(params.limit)
+      .offset(params.offset);
 
     const [{ total }] = await db
       .select({ total: count() })
       .from(reelComments)
       .where(eq(reelComments.reelId, req.params.id));
 
-    res.json(paginationResponse(rows, Number(total), limit, offset));
+    res.json({ data: rows, ...paginationResponse(Number(total), params) });
   } catch (error: any) {
     console.error("List comments error:", error);
     res.status(500).json({ error: "Failed to load comments" });
