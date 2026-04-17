@@ -273,4 +273,45 @@ router.post("/posts/:id/comment", authMiddleware, async (req: AuthRequest, res: 
   }
 });
 
+// GET /api/community/hashtags/:tag/posts - Posts matching a hashtag
+router.get("/hashtags/:tag/posts", optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const tag = decodeURIComponent(req.params.tag).toLowerCase().replace(/^#/, "");
+    if (!tag || tag.length > 50) {
+      res.status(400).json({ error: "Invalid hashtag" });
+      return;
+    }
+
+    const params = parsePagination(req.query);
+
+    const rows = await db
+      .select()
+      .from(reels)
+      .where(
+        and(
+          sql`${reels.hashtags}::text[] @> ARRAY[${tag}]::text[]`,
+          eq(reels.status, "published"),
+        ),
+      )
+      .orderBy(desc(reels.createdAt))
+      .limit(params.limit)
+      .offset(params.offset);
+
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(reels)
+      .where(
+        and(
+          sql`${reels.hashtags}::text[] @> ARRAY[${tag}]::text[]`,
+          eq(reels.status, "published"),
+        ),
+      );
+
+    res.json({ data: rows, tag, ...paginationResponse(Number(total), params) });
+  } catch (error: any) {
+    console.error("Hashtag feed error:", error);
+    res.status(500).json({ error: "Failed to load hashtag feed" });
+  }
+});
+
 export default router;

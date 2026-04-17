@@ -116,6 +116,7 @@ const PhushaCard = memo(function PhushaCard({
   onComment,
   onShare,
   onBookmark,
+  onHashtag,
 }: {
   post: PhushaPost;
   isActive: boolean;
@@ -123,6 +124,7 @@ const PhushaCard = memo(function PhushaCard({
   onComment: (id: string) => void;
   onShare: (id: string) => void;
   onBookmark: (id: string) => void;
+  onHashtag: (tag: string) => void;
 }) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -234,9 +236,14 @@ const PhushaCard = memo(function PhushaCard({
           {post.hashtags.length > 0 ? (
             <View style={styles.hashtagsContainer}>
               {post.hashtags.slice(0, 3).map((tag, idx) => (
-                <ThemedText key={idx} style={styles.hashtag}>
-                  {tag}
-                </ThemedText>
+                <Pressable
+                  key={idx}
+                  onPress={() => onHashtag(tag)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`View posts tagged ${tag}`}
+                >
+                  <ThemedText style={styles.hashtag}>{tag}</ThemedText>
+                </Pressable>
               ))}
             </View>
           ) : null}
@@ -416,6 +423,10 @@ export default function PushaScreen() {
     }
   };
 
+  const handleHashtag = (tag: string) => {
+    navigation.navigate("HashtagFeed" as any, { tag });
+  };
+
   const handleCreateReel = () => {
     if (Platform.OS !== "web") {
       import("expo-haptics")
@@ -450,6 +461,7 @@ export default function PushaScreen() {
         onComment={handleComment}
         onShare={handleShare}
         onBookmark={handleBookmark}
+        onHashtag={handleHashtag}
       />
     ),
     [activeIndex]

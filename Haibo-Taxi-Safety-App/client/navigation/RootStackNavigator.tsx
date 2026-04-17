@@ -50,6 +50,7 @@ import VendorDirectoryScreen from "@/screens/VendorDirectoryScreen";
 import PayVendorScreen from "@/screens/PayVendorScreen";
 import PasopFeedScreen from "@/screens/PasopFeedScreen";
 import PasopReportScreen from "@/screens/PasopReportScreen";
+import HashtagFeedScreen from "@/screens/HashtagFeedScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -105,6 +106,7 @@ export type RootStackParamList = {
   PayVendor: { vendorRef?: string } | undefined;
   PasopFeed: undefined;
   PasopReport: undefined;
+  HashtagFeed: { tag: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -497,6 +499,11 @@ export default function RootStackNavigator() {
           presentation: "modal",
           headerShown: false,
         }}
+      />
+      <Stack.Screen
+        name="HashtagFeed"
+        component={HashtagFeedScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
