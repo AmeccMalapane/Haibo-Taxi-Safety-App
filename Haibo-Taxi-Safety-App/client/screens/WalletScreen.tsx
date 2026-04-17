@@ -920,6 +920,21 @@ function BrandLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Per-type visual treatment. Green income for top-ups/refunds, rose
+// for payments (brand moment — the core wallet action), teal for
+// internal transfers, warning-orange for withdrawals heading off-app.
+// Default falls back to rose so unknown types still match brand.
+const TX_TYPE_META: Record<
+  string,
+  { accent: string; icon: keyof typeof Feather.glyphMap }
+> = {
+  top_up: { accent: BrandColors.status.success, icon: "arrow-down-left" },
+  refund: { accent: BrandColors.status.success, icon: "rotate-ccw" },
+  payment: { accent: BrandColors.primary.gradientStart, icon: "arrow-up-right" },
+  transfer: { accent: BrandColors.accent.teal, icon: "repeat" },
+  withdrawal: { accent: BrandColors.status.warning, icon: "download" },
+};
+
 function TransactionRow({
   tx,
   index,
@@ -931,7 +946,8 @@ function TransactionRow({
 }) {
   const reducedMotion = useReducedMotion();
   const isIncome = tx.type === "top_up" || tx.type === "refund";
-  const accent = isIncome ? BrandColors.status.success : BrandColors.primary.gradientStart;
+  const meta = TX_TYPE_META[tx.type] || TX_TYPE_META.payment;
+  const accent = meta.accent;
 
   return (
     <Animated.View
@@ -949,11 +965,11 @@ function TransactionRow({
         <View
           style={[
             styles.txIcon,
-            { backgroundColor: accent + "12" },
+            { backgroundColor: accent + "18" },
           ]}
         >
           <Feather
-            name={isIncome ? "arrow-down-left" : "arrow-up-right"}
+            name={meta.icon}
             size={16}
             color={accent}
           />
