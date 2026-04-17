@@ -10,7 +10,7 @@ export const users = pgTable("users", {
   phone: text("phone").notNull().unique(),
   email: text("email").unique(),
   password: text("password"), // bcrypt hashed
-  role: text("role").default("commuter"), // commuter, driver, owner, association, admin
+  role: text("role").default("commuter"), // commuter, driver, owner, vendor, association, admin
   displayName: text("display_name"),
   // Public handle — shown as the author label on reels, comments, ratings
   // etc. Must be unique + lowercase + 3–20 chars, but stored nullable so
@@ -31,6 +31,13 @@ export const users = pgTable("users", {
   referredBy: text("referred_by"),
   referralCount: integer("referral_count").default(0),
   walletBalance: real("wallet_balance").default(0),
+  // Driver-specific sub-balance: money the driver has earned from fares
+  // and Hub deliveries that belongs to their linked owner. Driver can see
+  // it; withdrawing settles it to the owner's bank (via withdrawal_requests
+  // with balanceType='fare' and routeToUserId=ownerId). Non-driver roles
+  // leave this at 0 — they only use walletBalance. Tips live here too for
+  // MVP (all pooled); phase 2 will split out a tipBalance column.
+  fareBalance: real("fare_balance").default(0),
   fcmToken: text("fcm_token"), // Firebase Cloud Messaging token for push notifications
   // Suspension state — when isSuspended is true, authMiddleware blocks
   // all authed API access with 403 until an admin restores the account.
@@ -67,12 +74,20 @@ export type User = typeof users.$inferSelect;
 export type OtpCode = typeof otpCodes.$inferSelect;
 
 // ============================================
-// USER ROLES (for reference):
-// - commuter: Regular app users
-// - driver: Taxi drivers
-// - owner: Taxi owners (can have multiple taxis)
-// - association: Taxi association representatives
-// - admin: Platform administrators
+// USER ROLES
+// ============================================
+// - commuter (default): Regular app users — rides, pays, sends packages
+// - driver: Taxi drivers — collect fares into fareBalance, settle to owner
+// - owner: Taxi owners — receive driver settlements, manage fleet
+// - vendor: Merchants accepting Haibo Pay — revenue to own wallet/bank
+// - association: Taxi association reps (legacy — kept for compat)
+// - admin: Platform administrators — manage Hub, platform-fee treasury
+//
+// Payment routing summary:
+//   commuter/owner/vendor → withdraw walletBalance → own bank
+//   driver                → withdraw fareBalance → owner's bank (via linkage)
+// If driver and owner are the same user (solo operator), both route to
+// the same bank and UI consolidates to a single "Withdraw" CTA.
 // ============================================
 
 // ============================================
@@ -884,13 +899,31 @@ export const walletTransactions = pgTable("wallet_transactions", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
-  type: text("type").notNull(), // 'topup', 'transfer_sent', 'transfer_received', 'payment', 'refund', 'sponsorship_sent', 'sponsorship_received'
+  // Transaction types:
+  //   topup / transfer_sent / transfer_received / payment / refund — existing
+  //   sponsorship_sent / sponsorship_received — existing
+  //   fare_in          — passenger paid a driver for a ride (→ fareBalance)
+  //   hub_delivery_in  — sender paid for a package, driver leg (→ fareBalance)
+  //   vendor_revenue_in — customer paid a vendor via Haibo Pay (→ walletBalance)
+  //   platform_fee_out — Haibo's 15% cut, routed to admin treasury wallet
+  //   driver_settlement — driver settled fareBalance → owner's wallet
+  //   withdrawal_out   — funds left a wallet via withdrawal_requests
+  type: text("type").notNull(),
   amount: real("amount").notNull(),
   description: text("description"),
   status: text("status").notNull().default("completed"), // 'pending', 'completed', 'failed'
   paymentReference: text("payment_reference"), // Paystack reference
   relatedUserId: varchar("related_user_id"), // For transfers/sponsorship
   relatedUserPhone: text("related_user_phone"), // For transfers/sponsorship
+  // Which sub-balance on the user's wallet this transaction affected.
+  // 'wallet' = users.walletBalance (default, all legacy rows).
+  // 'fare'   = users.fareBalance (driver fares + hub delivery shares).
+  balanceAffected: text("balance_affected").default("wallet"),
+  // Companion transaction link — when a single real-world event creates
+  // multiple rows (e.g. passenger pays R50 → fare_in to driver + platform_fee_out
+  // to admin), both rows share a parentTransactionId so the audit trail
+  // can group them.
+  parentTransactionId: varchar("parent_transaction_id"),
   metadata: jsonb("metadata").$type<Record<string, any>>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -965,6 +998,16 @@ export const vendorProfiles = pgTable("vendor_profiles", {
   salesCount: integer("sales_count").notNull().default(0),
   reviewedBy: varchar("reviewed_by"),
   reviewedAt: timestamp("reviewed_at"),
+  // Payout bank — where the vendor's withdrawals land. Same inline
+  // storage pattern as owner_profiles (rotation is rare, no join needed).
+  bankCode: text("bank_code"),
+  accountNumber: text("account_number"),
+  accountName: text("account_name"),
+  // Paystack subaccount code. When set, payments can be split directly
+  // by Paystack (platform fee auto-retained). When null, the full amount
+  // lands in the Haibo treasury and we settle via transfer later.
+  paystackSubaccountCode: text("paystack_subaccount_code"),
+  paystackRecipientCode: text("paystack_recipient_code"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1129,8 +1172,122 @@ export const driverProfiles = pgTable("driver_profiles", {
   currentLatitude: real("current_latitude"),
   currentLongitude: real("current_longitude"),
   lastLocationUpdate: timestamp("last_location_update"),
+  // Driver ↔ Owner linkage. Set when the driver redeems an owner-issued
+  // invitation code during onboarding. All fare withdrawals route to this
+  // owner's bank. Null until linked — driver can earn but not withdraw.
+  // Same user can sit on both sides (solo operator): ownerId === userId.
+  ownerId: varchar("owner_id"),
+  // Driver's share of each fare, 0–100. 0 = all money to owner (default
+  // for MVP, matches the "settle to owner" flow). Future: non-zero values
+  // split the fare into the driver's walletBalance at transaction time.
+  splitPercentFare: integer("split_percent_fare").default(0),
+  // pending: just signed up, no owner yet — blocked from withdrawals.
+  // active: linked to an owner via invitation, can earn + settle.
+  // suspended: owner or admin revoked — earnings freeze pending resolution.
+  linkStatus: text("link_status").default("pending"),
+  linkedAt: timestamp("linked_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ============================================
+// OWNER PROFILES — Taxi owners (fleet operators)
+// ============================================
+// One row per user with role='owner'. Holds payout bank details for
+// receiving driver settlements, plus optional company metadata. Separate
+// from driver_profiles because the same user can hold both roles (solo
+// operator) without the tables conflicting.
+export const ownerProfiles = pgTable("owner_profiles", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  companyName: text("company_name"),
+  // Payout bank — where driver settlements and the owner's own withdrawals
+  // land. Stored denormalised (not FK'd to a separate payout_accounts table)
+  // because owners rarely rotate banks and inline storage is simpler.
+  bankCode: text("bank_code"),
+  accountNumber: text("account_number"),
+  accountName: text("account_name"),
+  // Paystack subaccount code (created when the owner verifies bank details
+  // server-side). Non-null = ready to receive settlements via Paystack
+  // transfer API. Null = bank details entered but not yet verified.
+  paystackRecipientCode: text("paystack_recipient_code"),
+  // KYC — unverified | pending | verified | rejected. Driver settlements
+  // can still accrue against an unverified owner, but withdrawals block
+  // until verified. Separate from driver_profiles.linkStatus.
+  kycStatus: text("kyc_status").default("unverified"),
+  kycReviewedAt: timestamp("kyc_reviewed_at"),
+  kycReviewedBy: varchar("kyc_reviewed_by"),
+  kycRejectionReason: text("kyc_rejection_reason"),
+  // Business ID (CK number) — optional, helps with tax compliance.
+  companyRegNumber: text("company_reg_number"),
+  vatNumber: text("vat_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOwnerProfileSchema = createInsertSchema(ownerProfiles).omit({
+  id: true,
+  paystackRecipientCode: true,
+  kycStatus: true,
+  kycReviewedAt: true,
+  kycReviewedBy: true,
+  kycRejectionReason: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OwnerProfile = typeof ownerProfiles.$inferSelect;
+export type InsertOwnerProfile = z.infer<typeof insertOwnerProfileSchema>;
+
+// ============================================
+// DRIVER-OWNER INVITATIONS
+// ============================================
+// Owner-issued codes that a driver redeems during signup to link to a
+// specific owner. The owner creates N codes (one per driver they hire)
+// from their dashboard; each code is single-use.
+//
+// Why codes (not "enter owner's phone + approve"): avoids spam-invite
+// harassment vectors, and lets owners pre-provision links before the
+// driver even signs up (e.g. hand a printed code to a new hire).
+export const driverOwnerInvitations = pgTable("driver_owner_invitations", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  ownerId: varchar("owner_id").notNull(),
+  // Short, human-readable code — 8 chars, alphanumeric, no ambiguous
+  // glyphs (0/O, 1/I/L). Format: HBO-XXXXXX. Unique globally so a driver
+  // can redeem without needing to know which owner to search.
+  code: text("code").notNull().unique(),
+  // Optional note from the owner ("Morning shift — Sipho"). Helps the
+  // owner track which invitation went to whom before it's redeemed.
+  label: text("label"),
+  // Who redeemed it and when. Single-use: once usedByUserId is set, the
+  // code is no longer redeemable.
+  usedByUserId: varchar("used_by_user_id"),
+  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at"),
+  // pending: created, awaiting redemption
+  // used: redeemed by a driver, now inactive
+  // revoked: owner cancelled before redemption
+  // expired: passed expiresAt without redemption
+  status: text("status").default("pending"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDriverOwnerInvitationSchema = createInsertSchema(driverOwnerInvitations).omit({
+  id: true,
+  code: true, // server-generated
+  usedByUserId: true,
+  usedAt: true,
+  status: true,
+  revokedAt: true,
+  createdAt: true,
+});
+
+export type DriverOwnerInvitation = typeof driverOwnerInvitations.$inferSelect;
+export type InsertDriverOwnerInvitation = z.infer<typeof insertDriverOwnerInvitationSchema>;
 
 export const driverRatings = pgTable("driver_ratings", {
   id: varchar("id")
@@ -1262,7 +1419,16 @@ export const withdrawalRequests = pgTable("withdrawal_requests", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull(), // who clicked "Withdraw"
+  // Where the money actually lands. For drivers withdrawing fareBalance,
+  // this is the linked owner's user id. For everyone else (commuter,
+  // vendor, owner, solo operators), this equals userId. Nullable for
+  // backward compat with rows created before the routing column existed —
+  // those rows route to userId implicitly.
+  routeToUserId: varchar("route_to_user_id"),
+  // Which sub-balance is being drawn down. 'wallet' = walletBalance,
+  // 'fare' = fareBalance. Default 'wallet' preserves legacy semantics.
+  balanceType: text("balance_type").default("wallet"),
   amount: real("amount").notNull(),
   status: text("status").notNull().default("pending"), // pending, approved, processing, completed, rejected
   bankCode: text("bank_code").notNull(),
@@ -1451,6 +1617,279 @@ export const taxiFares = pgTable("taxi_fares", {
 }));
 
 export type TaxiFare = typeof taxiFares.$inferSelect;
+
+// ============================================
+// FARE IMPORTS - External-source candidate fares awaiting review
+// ============================================
+// Landing zone for fares harvested from external sources (initially the
+// Facebook taxi-fare community group, extensible to WhatsApp exports,
+// Twitter, etc.). A row here is a *candidate* — it does NOT appear in
+// the app until an admin approves it into taxi_fares.
+//
+// Lifecycle: the same post may produce multiple fare_imports rows as
+// the extractor prompt/model improves. We version rather than mutate —
+// new extraction → new row, old rows get status="superseded". Keeps a
+// full audit trail without a child table (launch-sprint pragmatism).
+//
+// Review flow lives in command-center at /admin/fare-imports. Deliberate
+// divergence from the reactive-moderation norm: fares are operational
+// data, not user content — a wrong R80 fare causes rank arguments, so
+// the small admin-review cost is warranted here. Once approved, the row
+// either creates a new taxi_fares row or updates the existing canonical
+// fare for that (origin_rank_id, destination_rank_id) pair, with
+// taxi_fare_id set as back-reference for provenance.
+//
+// POPIA notes:
+//   * raw_text_redacted has SA phone numbers + emails stripped BEFORE
+//     storage. Original text never persists beyond the redaction step.
+//   * raw_text_hash is sha256 of the *original* (pre-redaction) text —
+//     this lets us detect edits to posts we've already seen without
+//     retaining the PII.
+//   * raw_text_redacted is nullable and should be nulled once status
+//     reaches a terminal state (approved/rejected/duplicate) to
+//     minimize retention of third-party content.
+//
+// FK to taxi_locations on origin_rank_id / destination_rank_id is
+// opportunistic (same convention as taxi_fares above) — many community
+// posts reference informal pickup points that have no rank row.
+export const fareImports = pgTable("fare_imports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // --- Provenance ---
+  // source: coarse origin type. "facebook_group" | "manual_upload" |
+  // future "whatsapp_export" | "twitter" | etc. Kept as free text so
+  // new sources don't require a schema migration.
+  source: text("source").notNull(),
+  // sourceRef: identifier within the source. For Facebook this is the
+  // group id (e.g. "1034488700317989").
+  sourceRef: text("source_ref").notNull(),
+  // sourcePostId: unique post identifier within (source, source_ref).
+  // The composite (source, source_ref, source_post_id, source_comment_id,
+  // extractor_version) is the dedupe key — see index below.
+  sourcePostId: text("source_post_id").notNull(),
+  sourcePostUrl: text("source_post_url"),
+  // sourceCommentId / sourceCommentUrl: for Q+A-style sources (e.g. the
+  // "Where can I get a taxi to ?" Facebook group) the fare lives in a
+  // *comment*, not the post body — e.g. a post "how much JHB → Monte
+  // Casino?" can produce two fare_imports rows (one per answering
+  // comment, "R23 at MTN" and "R20 taxis at Bree"). These fields record
+  // which comment each row came from. Nullable: some future sources may
+  // put the fare directly in the post, in which case the post is the
+  // unit of extraction and comment_id stays null.
+  sourceCommentId: text("source_comment_id"),
+  sourceCommentUrl: text("source_comment_url"),
+  // When the original post was authored (per the source). Distinct from
+  // harvested_at, which is when *we* pulled it.
+  postTimestamp: timestamp("post_timestamp"),
+  harvestedAt: timestamp("harvested_at").defaultNow().notNull(),
+  // Batch id linking all rows collected in the same scrape run — useful
+  // for "undo this run" and for measuring harvester yield over time.
+  harvesterRunId: varchar("harvester_run_id"),
+  // "apify" | "playwright" | "manual" | ...
+  harvesterTool: text("harvester_tool"),
+
+  // --- Raw content (POPIA-sensitive, short retention) ---
+  rawTextRedacted: text("raw_text_redacted"),
+  rawTextHash: text("raw_text_hash").notNull(),
+  containsPhoneNumber: boolean("contains_phone_number").default(false),
+  containsEmail: boolean("contains_email").default(false),
+  // "en" | "zu" | "xh" | "af" | "tsotsi" | "mixed" | null
+  languageDetected: text("language_detected"),
+
+  // --- Extraction (LLM pass output) ---
+  // extractor_version: semver string for the prompt+model combo that
+  // produced this row. Re-running extraction with a new version inserts
+  // new rows and marks the old ones superseded; never mutate in place.
+  extractorVersion: text("extractor_version").notNull(),
+  // e.g. "claude-haiku-4-5"
+  extractorModel: text("extractor_model"),
+  extractedAt: timestamp("extracted_at"),
+  originRaw: text("origin_raw"),
+  destinationRaw: text("destination_raw"),
+  // Nullable — community posts often say "ask at rank" / "varies" /
+  // mention multiple legs without a total.
+  fareZar: real("fare_zar"),
+  // "JHB" | "CPT" | "DBN" | "PE" | ... — often inferred from context
+  // (rank names, phrasing) rather than explicit in the post.
+  metroHint: text("metro_hint"),
+  // "high" | "medium" | "low" — extractor self-reported.
+  confidence: text("confidence"),
+  // Literal substring from the post that justifies the extraction.
+  // Required at extract time so reviewers can audit without going back
+  // to the original post (especially after raw_text_redacted is nulled).
+  evidenceQuote: text("evidence_quote"),
+  extractionNotes: text("extraction_notes"),
+
+  // --- Canonicalization (match to taxi_locations gazetteer) ---
+  canonicalizedAt: timestamp("canonicalized_at"),
+  originRankId: varchar("origin_rank_id"),
+  destinationRankId: varchar("destination_rank_id"),
+  // 0..1 — rapidfuzz trigram score or LLM confidence, depending on method.
+  originMatchScore: real("origin_match_score"),
+  destinationMatchScore: real("destination_match_score"),
+  // "exact" | "fuzzy" | "llm_tiebreak" | "manual"
+  canonicalizationMethod: text("canonicalization_method"),
+
+  // --- Review state machine ---
+  // pending_extraction → pending_canonicalization → pending_review →
+  //   approved | rejected | duplicate | superseded
+  status: text("status").notNull().default("pending_extraction"),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  rejectionReason: text("rejection_reason"),
+  // Set once status = "approved" — points at the taxi_fares row that
+  // was created or updated by this import. Back-reference for audit.
+  taxiFareId: varchar("taxi_fare_id"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Dedupe lookup key: one row per (post, comment, extractor_version).
+  // A single post can legitimately produce multiple rows when multiple
+  // comments each answer with a different rank+fare — so the comment id
+  // must be part of the dedupe tuple. Re-harvesting the same
+  // post+comment under the same extractor version is a no-op;
+  // re-extracting with a new version inserts new rows and supersedes
+  // the old ones. For sources where the fare lives in the post body
+  // (source_comment_id IS NULL), the tuple still uniquely identifies
+  // the row because post_id is unique within (source, source_ref).
+  sourcePostVersionIdx: index("idx_fare_imports_post_version").on(
+    table.source,
+    table.sourceRef,
+    table.sourcePostId,
+    table.sourceCommentId,
+    table.extractorVersion,
+  ),
+  // Admin queue lookups ("give me everything pending_review").
+  statusIdx: index("idx_fare_imports_status").on(table.status),
+  // Time-windowed dashboards ("what did last night's run yield?").
+  harvestedAtIdx: index("idx_fare_imports_harvested_at").on(table.harvestedAt),
+  // Canonical-pair lookup for "is there already an approved fare for
+  // this route?" during the approve step.
+  canonicalPairIdx: index("idx_fare_imports_canonical_pair").on(
+    table.originRankId,
+    table.destinationRankId,
+  ),
+}));
+
+export const insertFareImportSchema = createInsertSchema(fareImports).omit({
+  id: true,
+  harvestedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FareImport = typeof fareImports.$inferSelect;
+export type InsertFareImport = z.infer<typeof insertFareImportSchema>;
+
+// --------------------------------------------
+// route_demand_signals — companion to fare_imports.
+//
+// Every community post that asks "how much from X to Y?" or "where can
+// I get a taxi to Y?" is a demand signal — useful for the city-explorer
+// feature ("most-asked routes in JHB this month") even when no comment
+// supplied a fare. One post → one row (keyed at post level, unlike
+// fare_imports which is keyed at comment level).
+//
+// Intentionally has NO review state machine: demand signals are counted
+// and aggregated, not individually approved. Canonicalization still
+// runs — we want to map "voslorus" in the post to the canonical
+// Vosloorus rank so the aggregation buckets correctly — but there's no
+// human gatekeeper between extraction and use.
+//
+// Retention: rows may be pruned older than N months once aggregated
+// counts have been rolled up into a materialized view; rawTextHash
+// alone lets us dedupe future re-harvests.
+// --------------------------------------------
+
+export const routeDemandSignals = pgTable("route_demand_signals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // --- Provenance (mirrors fare_imports) ---
+  source: text("source").notNull(),
+  sourceRef: text("source_ref").notNull(),
+  sourcePostId: text("source_post_id").notNull(),
+  sourcePostUrl: text("source_post_url"),
+  postTimestamp: timestamp("post_timestamp"),
+  harvestedAt: timestamp("harvested_at").defaultNow().notNull(),
+  harvesterRunId: varchar("harvester_run_id"),
+  harvesterTool: text("harvester_tool"),
+
+  // --- Raw content (shorter retention than fare_imports) ---
+  rawTextRedacted: text("raw_text_redacted"),
+  rawTextHash: text("raw_text_hash").notNull(),
+  languageDetected: text("language_detected"),
+
+  // --- Extraction (LLM pass output) ---
+  extractorVersion: text("extractor_version").notNull(),
+  extractorModel: text("extractor_model"),
+  extractedAt: timestamp("extracted_at"),
+  // originRaw is nullable — many posts name only the destination
+  // ("where can I get a taxi to Daveyton") with origin implicit from
+  // the group's JHB-centric context. Extractor leaves null rather than
+  // guessing "JHB".
+  originRaw: text("origin_raw"),
+  // destinationRaw is NOT NULL — a demand signal without a destination
+  // has no useful aggregation key, so the extractor shouldn't emit one.
+  destinationRaw: text("destination_raw").notNull(),
+  metroHint: text("metro_hint"),
+  confidence: text("confidence"),
+  // A literal substring from the post showing the route question —
+  // used by city-explorer UI to display a sample quote per route.
+  evidenceQuote: text("evidence_quote"),
+  extractionNotes: text("extraction_notes"),
+
+  // --- Canonicalization (match to taxi_locations gazetteer) ---
+  canonicalizedAt: timestamp("canonicalized_at"),
+  originRankId: varchar("origin_rank_id"),
+  destinationRankId: varchar("destination_rank_id"),
+  originMatchScore: real("origin_match_score"),
+  destinationMatchScore: real("destination_match_score"),
+  canonicalizationMethod: text("canonicalization_method"),
+
+  // "pending_canonicalization" | "canonicalized" | "orphan"
+  // (orphan = couldn't match origin or destination to the gazetteer;
+  // still kept for audit but excluded from city-explorer aggregation).
+  status: text("status").notNull().default("pending_canonicalization"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // One demand signal per (post, extractor_version). Re-harvesting the
+  // same post under the same extractor is a no-op; re-extracting with
+  // a new version inserts a fresh row.
+  sourcePostVersionIdx: index("idx_rds_post_version").on(
+    table.source,
+    table.sourceRef,
+    table.sourcePostId,
+    table.extractorVersion,
+  ),
+  // Primary aggregation lookup: "how many demand signals for route
+  // origin_rank_id -> destination_rank_id in the last 30 days?"
+  canonicalPairIdx: index("idx_rds_canonical_pair").on(
+    table.originRankId,
+    table.destinationRankId,
+  ),
+  // Metro-scoped aggregation: "top-asked routes in JHB."
+  metroIdx: index("idx_rds_metro").on(table.metroHint),
+  // Time-windowed queries for city-explorer charts.
+  harvestedAtIdx: index("idx_rds_harvested_at").on(table.harvestedAt),
+}));
+
+export const insertRouteDemandSignalSchema = createInsertSchema(
+  routeDemandSignals,
+).omit({
+  id: true,
+  harvestedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type RouteDemandSignal = typeof routeDemandSignals.$inferSelect;
+export type InsertRouteDemandSignal = z.infer<
+  typeof insertRouteDemandSignalSchema
+>;
 
 // ============================================
 // TYPE EXPORTS
