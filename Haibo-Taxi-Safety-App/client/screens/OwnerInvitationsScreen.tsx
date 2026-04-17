@@ -8,6 +8,7 @@ import {
   Platform,
   Share,
   FlatList,
+  Image,
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,7 +31,9 @@ import {
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
 import { SkeletonBlock } from "@/components/Skeleton";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { getCurrentToken } from "@/contexts/AuthContext";
+import { createInviteDriverLink } from "@/lib/deepLinks";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // OwnerInvitationsScreen — the owner's "invite a driver" hub.
@@ -169,8 +172,13 @@ export default function OwnerInvitationsScreen() {
 
   const handleShare = async (inv: Invitation) => {
     try {
+      const link = createInviteDriverLink(inv.code);
       await Share.share({
-        message: `Welcome to the fleet. Enter this code on Haibo to link your driver profile to me:\n\n${inv.code}\n\n(Expires in 30 days)`,
+        // Include both the code (for manual entry) and the smart link
+        // (tappable in WhatsApp/SMS — lands the driver on ProfileSetup
+        // with the code pre-filled). Drivers can also aim their camera
+        // at the QR displayed next to the code in the dashboard.
+        message: `Welcome to the fleet. Tap the link or enter this code on Haibo to link your driver profile to me:\n\nCode: ${inv.code}\n${link}\n\n(Expires in 30 days)`,
         title: "Haibo driver invitation",
       });
     } catch {
@@ -196,9 +204,21 @@ export default function OwnerInvitationsScreen() {
   const rows = invitationsQ.data?.data || [];
   const pendingCount = rows.filter((r) => r.status === "pending").length;
 
+  const apiBase = getApiUrl();
+  const token = getCurrentToken();
+  // Append the token as a query param because RN's Image source only
+  // accepts headers on some platforms. The endpoint also accepts
+  // Authorization: Bearer (via authMiddleware) so in-app fetches can
+  // use either — query param works everywhere.
+  const qrUrlFor = (invId: string): string | null => {
+    if (!apiBase || !token) return null;
+    return `${apiBase.replace(/\/$/, "")}/api/owner/invitations/${encodeURIComponent(invId)}/qr.png?token=${encodeURIComponent(token)}`;
+  };
+
   const renderRow = ({ item }: { item: Invitation }) => {
     const meta = STATUS_META[item.status];
     const canRevoke = item.status === "pending";
+    const qrSrc = item.status === "pending" ? qrUrlFor(item.id) : null;
     return (
       <View
         style={[
@@ -223,6 +243,19 @@ export default function OwnerInvitationsScreen() {
           <ThemedText style={[styles.label, { color: theme.textSecondary }]}>
             {item.label}
           </ThemedText>
+        ) : null}
+
+        {qrSrc ? (
+          <View style={styles.qrWrap}>
+            <Image
+              source={{ uri: qrSrc }}
+              style={styles.qrImage}
+              accessibilityLabel={`Scannable QR code for invitation ${item.code}`}
+            />
+            <ThemedText style={[styles.qrHint, { color: theme.textSecondary }]}>
+              Driver scans with their phone camera to sign up
+            </ThemedText>
+          </View>
         ) : null}
 
         {item.status === "used" && item.usedByDisplayName ? (
@@ -559,6 +592,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   usedByText: { fontSize: 12 },
+  qrWrap: {
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  qrImage: {
+    width: 160,
+    height: 160,
+    borderRadius: BorderRadius.md,
+    // Subtle matte backdrop so the QR renders crisp regardless of the
+    // row's surface colour in light/dark mode.
+    backgroundColor: "#FFFFFF",
+    padding: Spacing.xs,
+  },
+  qrHint: {
+    ...Typography.small,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "center",
+  },
   actions: {
     flexDirection: "row",
     gap: Spacing.sm,

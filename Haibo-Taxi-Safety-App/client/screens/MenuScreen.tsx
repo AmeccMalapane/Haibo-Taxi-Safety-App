@@ -171,6 +171,9 @@ export default function MenuScreen() {
     }
   };
 
+  const handlePayVendor = () => navigation.navigate("PayVendor");
+  const handlePayDriver = () => navigation.navigate("PayDriver");
+  const handleWallet = () => navigation.navigate("Wallet");
   const handleEmergencyServices = () => navigation.navigate("EmergencyServices");
   const handleSafetyDirectory = () => navigation.navigate("SafetyDirectory");
   const handleHub = () => navigation.navigate("Hub");
@@ -344,6 +347,52 @@ export default function MenuScreen() {
               color={theme.textSecondary}
             />
           </Pressable>
+        </Animated.View>
+
+        {/* Pay — one-tap access to the three payment surfaces so users
+            don't have to scan a QR or type a deep link every time. */}
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(250)}
+          style={styles.section}
+        >
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
+            PAY
+          </ThemedText>
+          <View
+            style={[
+              styles.menuCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <MenuItem
+              icon="shopping-bag"
+              label="Pay a vendor"
+              hint="Enter the HBV code or scan the stall's QR"
+              onPress={handlePayVendor}
+              accent={BrandColors.primary.gradientStart}
+            />
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <MenuItem
+              icon="truck"
+              label="Pay a taxi fare"
+              hint="Enter the plate or scan the taxi's QR"
+              onPress={handlePayDriver}
+              accent={BrandColors.accent.teal}
+            />
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <MenuItem
+              icon="credit-card"
+              label="Wallet"
+              hint="Top up, transfer, and withdraw"
+              onPress={handleWallet}
+              accent={BrandColors.accent.fuchsia}
+            />
+          </View>
         </Animated.View>
 
         {/* Services */}

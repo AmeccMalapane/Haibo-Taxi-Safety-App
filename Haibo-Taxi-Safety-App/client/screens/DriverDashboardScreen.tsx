@@ -7,6 +7,8 @@ import {
   Alert,
   Switch,
   Platform,
+  Image,
+  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -26,9 +28,11 @@ import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/them
 import { startDriverTracking, stopDriverTracking, isTrackingActive } from "@/lib/tracking";
 import { useDriverTracking } from "@/hooks/useDriverTracking";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { createPayDriverLink } from "@/lib/deepLinks";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { BalanceCard } from "@/components/dashboards/BalanceCard";
+import { RoleChip } from "@/components/RoleChip";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -279,7 +283,12 @@ export default function DriverDashboardScreen() {
                 {trackingEnabled ? "Online" : "Offline"}
               </ThemedText>
             </View>
-            <View style={styles.heroSpacer} />
+            {/* Role switcher for drivers who are also owners/vendors.
+                RoleChip renders null for single-role users, so the
+                heroSpacer fallback keeps the row layout balanced. */}
+            <View style={styles.heroRight}>
+              <RoleChip compact />
+            </View>
           </View>
 
           <ThemedText style={styles.heroGreeting}>Mzansi greets you,</ThemedText>
@@ -410,11 +419,12 @@ export default function DriverDashboardScreen() {
             style={styles.section}
           >
             <ThemedText style={styles.sectionLabel}>Haibo Pay</ThemedText>
-            {plateNumber && payRef ? (
-              <HaiboPayQR
+            {plateNumber ? (
+              <DriverPayQRCard
                 driverName={driverName}
                 plateNumber={plateNumber}
-                payReferenceCode={payRef}
+                cardSurface={cardSurface}
+                theme={theme}
               />
             ) : (
               <View style={[styles.setupCard, { backgroundColor: cardSurface }]}>
@@ -597,6 +607,183 @@ function EarningsStat({
   );
 }
 
+// DriverPayQRCard — renders the driver's Haibo Pay QR (loaded from the
+// public /api/drivers/plate/:plate/qr.png endpoint) plus a share CTA
+// that posts the deep link to WhatsApp/SMS. Replaces the older
+// HaiboPayQR "reference code" card, which had no actual QR image.
+function DriverPayQRCard({
+  driverName,
+  plateNumber,
+  cardSurface,
+  theme,
+}: {
+  driverName: string;
+  plateNumber: string;
+  cardSurface: string;
+  theme: any;
+}) {
+  const apiBase = getApiUrl();
+  // Normalise the plate for both the endpoint and the share link so the
+  // scanned QR always resolves regardless of how the driver capitalised
+  // or spaced their plate on the onboarding screen.
+  const normalised = plateNumber.replace(/[\s-]/g, "").toUpperCase();
+  const qrSrc = apiBase
+    ? `${apiBase.replace(/\/$/, "")}/api/drivers/plate/${encodeURIComponent(normalised)}/qr.png`
+    : null;
+  const shareLink = createPayDriverLink(normalised);
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Pay your taxi fare with Haibo Pay.\n\nDriver: ${driverName}\nPlate: ${plateNumber}\n${shareLink}`,
+        title: "Haibo Pay",
+      });
+    } catch {
+      // User cancelled — silent.
+    }
+  };
+
+  return (
+    <View
+      style={[
+        qrCardStyles.card,
+        { backgroundColor: cardSurface, borderColor: theme.border },
+      ]}
+    >
+      <View style={qrCardStyles.header}>
+        <Feather
+          name="credit-card"
+          size={18}
+          color={BrandColors.primary.gradientStart}
+        />
+        <ThemedText style={qrCardStyles.headerText}>Haibo Pay</ThemedText>
+      </View>
+      <ThemedText style={[qrCardStyles.driverName, { color: theme.text }]}>
+        {driverName}
+      </ThemedText>
+      <ThemedText
+        style={[qrCardStyles.plate, { color: theme.textSecondary }]}
+      >
+        {plateNumber}
+      </ThemedText>
+
+      {qrSrc ? (
+        <Image
+          source={{ uri: qrSrc }}
+          style={qrCardStyles.qrImage}
+          accessibilityLabel={`Scannable QR code for taxi plate ${plateNumber}`}
+        />
+      ) : (
+        <View style={[qrCardStyles.qrImage, qrCardStyles.qrFallback]}>
+          <ThemedText
+            style={[qrCardStyles.qrFallbackText, { color: theme.textSecondary }]}
+          >
+            API unavailable
+          </ThemedText>
+        </View>
+      )}
+
+      <ThemedText
+        style={[qrCardStyles.hint, { color: theme.textSecondary }]}
+      >
+        Commuters scan to pay your fare directly into your wallet.
+      </ThemedText>
+
+      <Pressable
+        onPress={handleShare}
+        style={({ pressed }) => [
+          qrCardStyles.shareButton,
+          pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Share your Haibo Pay link"
+      >
+        <LinearGradient
+          colors={BrandColors.gradient.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={qrCardStyles.shareGradient}
+        >
+          <Feather name="share-2" size={16} color="#FFFFFF" />
+          <ThemedText style={qrCardStyles.shareText}>Share link</ThemedText>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+const qrCardStyles = StyleSheet.create({
+  card: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  headerText: {
+    ...Typography.label,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    color: BrandColors.primary.gradientStart,
+  },
+  driverName: {
+    ...Typography.h4,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  plate: {
+    ...Typography.small,
+    letterSpacing: 1,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 2,
+    marginBottom: Spacing.lg,
+  },
+  qrImage: {
+    width: 180,
+    height: 180,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+  },
+  qrFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrFallbackText: {
+    ...Typography.small,
+    fontSize: 11,
+  },
+  hint: {
+    ...Typography.small,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+    maxWidth: 260,
+  },
+  shareButton: {
+    alignSelf: "stretch",
+  },
+  shareGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+  },
+  shareText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -641,6 +828,13 @@ const styles = StyleSheet.create({
   },
   heroSpacer: {
     width: 40,
+  },
+  // Right-side slot in the hero top row — sized to match the back
+  // button (40 min) so the row stays balanced when RoleChip renders
+  // null (single-role users).
+  heroRight: {
+    minWidth: 40,
+    alignItems: "flex-end",
   },
   heroGreeting: {
     ...Typography.small,

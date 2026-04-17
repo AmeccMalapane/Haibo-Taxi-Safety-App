@@ -28,6 +28,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { SkeletonBlock } from "@/components/Skeleton";
 import { BalanceCard } from "@/components/dashboards/BalanceCard";
 import { StatTrendChart, ChartWindow } from "@/components/dashboards/StatTrendChart";
+import { RoleChip } from "@/components/RoleChip";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -152,10 +153,13 @@ export default function VendorDashboardScreen() {
           entering={reducedMotion ? undefined : FadeIn.duration(400)}
           style={styles.header}
         >
-          <View style={{ flex: 1 }}>
-            <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
-              VENDOR DASHBOARD
-            </ThemedText>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.eyebrowRow}>
+              <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
+                VENDOR DASHBOARD
+              </ThemedText>
+              <RoleChip accent={ACCENT} compact />
+            </View>
             <ThemedText style={styles.heading} numberOfLines={1}>
               {d?.vendor.businessName || "Vendor"}
             </ThemedText>
@@ -174,32 +178,46 @@ export default function VendorDashboardScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* KYC banner — only when pending/suspended */}
+        {/* KYC banner — tap to jump into the doc upload flow. */}
         {d && !d.vendor.kycVerified ? (
           <Animated.View
             entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(50)}
-            style={[
-              styles.kycBanner,
-              {
-                backgroundColor: BrandColors.status.warning + "16",
-                borderColor: BrandColors.status.warning + "55",
-              },
-            ]}
           >
-            <Feather
-              name="alert-triangle"
-              size={16}
-              color={BrandColors.status.warning}
-            />
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.kycTitle}>
-                Verification pending
-              </ThemedText>
-              <ThemedText style={[styles.kycBody, { color: theme.textSecondary }]}>
-                Your vendor profile is under review. You can accept payments,
-                but withdrawals unlock once we verify your details.
-              </ThemedText>
-            </View>
+            <Pressable
+              onPress={() =>
+                navigation.navigate("KYCUpload", { role: "vendor" })
+              }
+              style={({ pressed }) => [
+                styles.kycBanner,
+                {
+                  backgroundColor: BrandColors.status.warning + "16",
+                  borderColor: BrandColors.status.warning + "55",
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Verify your business"
+            >
+              <Feather
+                name="alert-triangle"
+                size={16}
+                color={BrandColors.status.warning}
+              />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.kycTitle}>
+                  Verify to unlock withdrawals
+                </ThemedText>
+                <ThemedText style={[styles.kycBody, { color: theme.textSecondary }]}>
+                  Accept payments now; upload your ID and business papers
+                  to unlock withdrawals. Tap to start.
+                </ThemedText>
+              </View>
+              <Feather
+                name="chevron-right"
+                size={18}
+                color={BrandColors.status.warning}
+              />
+            </Pressable>
           </Animated.View>
         ) : null}
 
@@ -447,6 +465,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     fontWeight: "800",
     marginBottom: 4,
+  },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: 2,
   },
   heading: {
     ...Typography.h1,

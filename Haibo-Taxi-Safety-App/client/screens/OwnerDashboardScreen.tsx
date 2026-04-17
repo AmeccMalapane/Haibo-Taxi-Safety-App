@@ -27,6 +27,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { SkeletonBlock } from "@/components/Skeleton";
 import { BalanceCard } from "@/components/dashboards/BalanceCard";
 import { StatTrendChart, ChartWindow } from "@/components/dashboards/StatTrendChart";
+import { RoleChip } from "@/components/RoleChip";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -46,6 +47,7 @@ interface OwnerDashboard {
   owner: {
     displayName: string;
     walletBalance: number;
+    kycStatus: "unverified" | "pending" | "verified" | "rejected";
   };
   fleet: {
     driverCount: number;
@@ -129,10 +131,15 @@ export default function OwnerDashboardScreen() {
           entering={reducedMotion ? undefined : FadeIn.duration(400)}
           style={styles.header}
         >
-          <View>
-            <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
-              OWNER DASHBOARD
-            </ThemedText>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.eyebrowRow}>
+              <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
+                OWNER DASHBOARD
+              </ThemedText>
+              {/* Multi-role users see a one-tap switcher right next to
+                  the eyebrow. Single-role owners don't render anything. */}
+              <RoleChip accent={ACCENT} compact />
+            </View>
             <ThemedText style={styles.heading}>
               {d?.owner.displayName || user?.displayName || "Owner"}
             </ThemedText>
@@ -150,6 +157,66 @@ export default function OwnerDashboardScreen() {
             <Feather name="settings" size={18} color={theme.text} />
           </Pressable>
         </Animated.View>
+
+        {/* KYC banner — only when not verified. Tapping opens the
+            document upload flow. Pending state gets a different tone
+            because the owner has already done their bit. */}
+        {d && d.owner.kycStatus !== "verified" ? (
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.duration(400).delay(50)}
+          >
+            <Pressable
+              onPress={() =>
+                navigation.navigate("KYCUpload", { role: "owner" })
+              }
+              style={({ pressed }) => [
+                styles.kycBanner,
+                {
+                  backgroundColor:
+                    d.owner.kycStatus === "pending"
+                      ? ACCENT + "14"
+                      : BrandColors.status.warning + "16",
+                  borderColor:
+                    d.owner.kycStatus === "pending"
+                      ? ACCENT + "55"
+                      : BrandColors.status.warning + "55",
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Verify your fleet"
+            >
+              <Feather
+                name={d.owner.kycStatus === "pending" ? "clock" : "alert-triangle"}
+                size={16}
+                color={
+                  d.owner.kycStatus === "pending"
+                    ? ACCENT
+                    : BrandColors.status.warning
+                }
+              />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.kycTitle}>
+                  {d.owner.kycStatus === "pending"
+                    ? "Verification in progress"
+                    : d.owner.kycStatus === "rejected"
+                      ? "Re-upload required"
+                      : "Verify to unlock withdrawals"}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.kycBody, { color: theme.textSecondary }]}
+                >
+                  {d.owner.kycStatus === "pending"
+                    ? "Our team is reviewing your documents — usually 1–2 business days."
+                    : d.owner.kycStatus === "rejected"
+                      ? "Your documents didn't pass. Tap to re-submit."
+                      : "Upload your ID and company papers to start withdrawing driver settlements."}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {/* Balance card — withdraw from here */}
         {dashboardQ.isLoading ? (
@@ -364,6 +431,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 4,
   },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: 2,
+  },
   heading: {
     ...Typography.h1,
     fontSize: 26,
@@ -377,6 +450,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+  },
+  kycBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  kycTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  kycBody: {
+    ...Typography.small,
+    fontSize: 12,
+    lineHeight: 16,
   },
   statsRow: {
     flexDirection: "row",

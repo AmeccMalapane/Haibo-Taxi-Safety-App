@@ -51,7 +51,9 @@ import OwnerOnboardingScreen from "@/screens/OwnerOnboardingScreen";
 import OwnerInvitationsScreen from "@/screens/OwnerInvitationsScreen";
 import OwnerDashboardScreen from "@/screens/OwnerDashboardScreen";
 import VendorDashboardScreen from "@/screens/VendorDashboardScreen";
+import KYCUploadScreen from "@/screens/KYCUploadScreen";
 import PayVendorScreen from "@/screens/PayVendorScreen";
+import PayDriverScreen from "@/screens/PayDriverScreen";
 import PasopFeedScreen from "@/screens/PasopFeedScreen";
 import PasopReportScreen from "@/screens/PasopReportScreen";
 import HashtagFeedScreen from "@/screens/HashtagFeedScreen";
@@ -61,7 +63,7 @@ import { useAuth } from "@/hooks/useAuth";
 export type RootStackParamList = {
   Auth: undefined;
   OTPVerification: { phone: string };
-  ProfileSetup: undefined;
+  ProfileSetup: { inviteCode?: string } | undefined;
   MainTabs: undefined;
   Main: undefined;
   Emergency: undefined;
@@ -112,9 +114,11 @@ export type RootStackParamList = {
   VendorDashboard: undefined;
   VendorDirectory: undefined;
   PayVendor: { vendorRef?: string } | undefined;
+  PayDriver: { plate?: string } | undefined;
   PasopFeed: undefined;
   PasopReport: undefined;
   HashtagFeed: { tag: string };
+  KYCUpload: { role: "owner" | "vendor" };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -486,6 +490,14 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
+        name="KYCUpload"
+        component={KYCUploadScreen}
+        options={{
+          presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="OwnerInvitations"
         component={OwnerInvitationsScreen}
         options={{
@@ -520,6 +532,14 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="PayVendor"
         component={PayVendorScreen}
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="PayDriver"
+        component={PayDriverScreen}
         options={{
           presentation: "modal",
           headerShown: false,

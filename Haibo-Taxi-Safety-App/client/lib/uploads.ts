@@ -23,7 +23,9 @@ export type UploadFolder =
   | "drivers"
   | "profiles"
   | "locations"
-  | "ratings";
+  | "ratings"
+  | "kyc-owner"
+  | "kyc-vendor";
 
 export interface UploadedFile {
   url: string;

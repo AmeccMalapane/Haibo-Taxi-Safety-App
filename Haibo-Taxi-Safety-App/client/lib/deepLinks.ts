@@ -86,6 +86,26 @@ export function createVendorPayLink(vendorRef: string): string {
 }
 
 /**
+ * Owner-to-driver invitation link — lands on ProfileSetup with the
+ * HBO-XXXXXX code pre-filled. Paired with the QR that the owner
+ * renders from /api/owner/invitations/:id/qr.png so a driver can scan
+ * it off a printed card or WhatsApp screenshot with any native camera.
+ */
+export function createInviteDriverLink(code: string): string {
+  return createShareableLink("invite-driver", code);
+}
+
+/**
+ * Haibo Pay driver link — shareable URL that lands on PayDriver with
+ * the plate pre-filled. Paired with the QR at
+ * /api/drivers/plate/:plate/qr.png that drivers print for their
+ * windscreen so commuters can scan-to-pay with any native camera.
+ */
+export function createPayDriverLink(plate: string): string {
+  return createShareableLink("pay-driver", plate);
+}
+
+/**
  * Screen route map for deep links. Keys are the URL path segment, values are
  * the actual screen name in RootStackParamList. Screens that take a param
  * declare the target paramKey; screens that don't just navigate bare.
@@ -103,6 +123,8 @@ const SCREEN_ROUTES: Record<string, { screen: string; paramKey?: string }> = {
   job: { screen: "Jobs" },
   event: { screen: "Events" },
   pay: { screen: "PayVendor", paramKey: "vendorRef" },
+  "pay-driver": { screen: "PayDriver", paramKey: "plate" },
+  "invite-driver": { screen: "ProfileSetup", paramKey: "inviteCode" },
   sos: { screen: "Emergency" },
   home: { screen: "Main" },
   community: { screen: "Community" },

@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   Share,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -322,6 +323,23 @@ export default function ReferralScreen() {
                   </ThemedText>
                 </View>
               )}
+
+              {referralCode && deviceId && getApiUrl() ? (
+                <View style={styles.qrWrap}>
+                  <Image
+                    source={{
+                      uri: `${getApiUrl()!.replace(/\/$/, "")}/api/referral/code/${encodeURIComponent(deviceId)}/qr.png`,
+                    }}
+                    style={styles.qrImage}
+                    accessibilityLabel="Scannable QR code for your referral link"
+                  />
+                  <ThemedText
+                    style={[styles.qrHint, { color: theme.textSecondary }]}
+                  >
+                    Friends scan with their phone camera to sign up
+                  </ThemedText>
+                </View>
+              ) : null}
 
               <View style={styles.shareCta}>
                 <GradientButton
@@ -886,6 +904,22 @@ const styles = StyleSheet.create({
   },
   shareCta: {
     marginTop: 0,
+  },
+  qrWrap: {
+    alignItems: "center",
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  qrImage: {
+    width: 180,
+    height: 180,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#FFFFFF",
+  },
+  qrHint: {
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "center",
   },
 
   // Stats
