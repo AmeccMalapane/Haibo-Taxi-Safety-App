@@ -34,6 +34,7 @@ import ownerRoutes from "./routes/owner";
 import uploadRoutes from "./routes/uploads";
 import userRoutes from "./routes/user";
 import { getLocalUploadDir, getLocalUrlPrefix, isAzureConfigured } from "./services/storage";
+import { ensureAdminTreasury } from "./services/payments";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -239,6 +240,17 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   if (!process.env.DATABASE_URL) {
     console.warn("WARNING: DATABASE_URL not set.");
   }
+
+  // Bootstrap the platform-fee treasury user so the payments service
+  // has somewhere to park the 15% cut. Idempotent — creates on first
+  // boot, no-op thereafter. Failures log but don't crash the server;
+  // payments will re-try on each call via the cached-then-refresh
+  // pattern inside ensureAdminTreasury().
+  ensureAdminTreasury()
+    .then((id) => console.log(`[payments] Treasury ready: ${id}`))
+    .catch((err) =>
+      console.error("[payments] Treasury bootstrap failed:", err),
+    );
 });
 
 export default app;

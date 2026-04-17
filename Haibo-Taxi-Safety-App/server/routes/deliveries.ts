@@ -7,6 +7,7 @@ import {
 import { eq, desc, sql, count, and } from "drizzle-orm";
 import { authMiddleware, optionalAuth, AuthRequest } from "../middleware/auth";
 import { parsePagination, paginationResponse, generateTrackingNumber, generateConfirmationCode } from "../utils/helpers";
+import { processPayment } from "../services/payments";
 
 const router = Router();
 
@@ -381,5 +382,101 @@ router.get("/courier-hubs", optionalAuth, async (req: AuthRequest, res: Response
     res.status(500).json({ error: "Failed to fetch courier hubs" });
   }
 });
+
+// ─── POST /api/deliveries/:id/pay ───────────────────────────────────────
+// Sender settles the delivery fee from their wallet. Routes through
+// processPayment() with type='hub_delivery' so 15% goes to the admin
+// treasury and the assigned driver gets the net 85% credited to their
+// fareBalance (owner's money).
+//
+// Preconditions:
+//   - caller must be the sender on the delivery row
+//   - delivery must have an assigned driverId (driver accepted the job)
+//   - paymentStatus must be 'pending' (idempotent — second call 400s)
+//
+// On success, flips paymentStatus='completed' + returns the breakdown.
+router.post(
+  "/:id/pay",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const [delivery] = await db
+        .select()
+        .from(deliveries)
+        .where(eq(deliveries.id, req.params.id))
+        .limit(1);
+
+      if (!delivery) {
+        res.status(404).json({ error: "Delivery not found" });
+        return;
+      }
+      if (delivery.senderId !== req.user!.userId) {
+        res.status(403).json({ error: "Only the sender can pay for this delivery" });
+        return;
+      }
+      if (!delivery.driverId) {
+        res.status(400).json({
+          error: "No driver assigned yet — payment can only happen after a driver accepts",
+        });
+        return;
+      }
+      if (delivery.paymentStatus === "completed") {
+        res.status(400).json({ error: "Already paid" });
+        return;
+      }
+      if (!delivery.amount || delivery.amount <= 0) {
+        res.status(400).json({ error: "Delivery has no fare to charge" });
+        return;
+      }
+
+      let result;
+      try {
+        result = await processPayment({
+          senderId: delivery.senderId,
+          recipientId: delivery.driverId,
+          amount: delivery.amount,
+          type: "hub_delivery",
+          message: `Package: ${delivery.description?.slice(0, 50) || "Hub delivery"}`,
+          context: {
+            deliveryId: delivery.id,
+            plate: delivery.taxiPlateNumber,
+            pickup: delivery.pickupRank,
+            dropoff: delivery.dropoffRank,
+          },
+        });
+      } catch (err: any) {
+        if (err?.message === "INSUFFICIENT_FUNDS") {
+          res.status(400).json({ error: "Insufficient balance" });
+          return;
+        }
+        throw err;
+      }
+
+      // Flip payment status on the delivery row. Uses the parent txn id
+      // as the payment reference so ops can trace a payout to the exact
+      // ledger entries that created it.
+      const [updated] = await db
+        .update(deliveries)
+        .set({
+          paymentStatus: "completed",
+          paymentReference: result.parentTransactionId,
+        })
+        .where(eq(deliveries.id, delivery.id))
+        .returning();
+
+      res.json({
+        message: "Payment successful",
+        delivery: updated,
+        gross: result.grossAmount,
+        fee: result.feeAmount,
+        net: result.netAmount,
+        recipientBalance: result.recipientBalance,
+      });
+    } catch (error: any) {
+      console.error("Pay delivery error:", error);
+      res.status(500).json({ error: "Payment failed" });
+    }
+  },
+);
 
 export default router;
