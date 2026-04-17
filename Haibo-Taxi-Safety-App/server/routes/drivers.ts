@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import QRCode from "qrcode";
 import { db } from "../db";
 import {
   driverProfiles,
@@ -32,6 +33,105 @@ function isSafeImageUrl(value: unknown): value is string {
     (/^https:\/\//i.test(value) || value.startsWith("/uploads/"))
   );
 }
+
+// ─── GET /api/drivers/lookup/:plate ──────────────────────────────────────
+// Resolves a plate number to the public driver card so the passenger
+// sees who they're about to pay before confirming the amount. Mirrors
+// /api/vendor-profile/lookup/:vendorRef for the Haibo Pay fare flow.
+//
+// Suspended / unverified drivers still resolve — a passenger might
+// scan a taxi's plate QR at the rank before the driver's KYC clears;
+// blocking the lookup would surface a confusing "not found" at a
+// moment where the driver is clearly in front of them.
+router.get("/lookup/:plate", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const normalized = normalizePlate(req.params.plate);
+
+    const [row] = await db
+      .select({
+        userId: driverProfiles.userId,
+        taxiPlateNumber: driverProfiles.taxiPlateNumber,
+        vehicleColor: driverProfiles.vehicleColor,
+        vehicleModel: driverProfiles.vehicleModel,
+        vehicleYear: driverProfiles.vehicleYear,
+        totalRides: driverProfiles.totalRides,
+        safetyRating: driverProfiles.safetyRating,
+        totalRatings: driverProfiles.totalRatings,
+        isVerified: driverProfiles.isVerified,
+        linkStatus: driverProfiles.linkStatus,
+        displayName: users.displayName,
+        handle: users.handle,
+      })
+      .from(driverProfiles)
+      .leftJoin(users, eq(users.id, driverProfiles.userId))
+      .where(eq(driverProfiles.taxiPlateNumber, normalized))
+      .limit(1);
+
+    if (!row) {
+      res.status(404).json({ error: "Driver not found" });
+      return;
+    }
+
+    res.json({ data: row });
+  } catch (error: any) {
+    console.error("Lookup driver error:", error);
+    res.status(500).json({ error: "Failed to look up driver" });
+  }
+});
+
+// ─── GET /api/drivers/plate/:plate/qr.png ────────────────────────────────
+// Public — prints the driver's Haibo Pay QR so it can be stuck on the
+// windscreen and scanned by any native camera app. The URL the QR
+// encodes lands on the PayDriver screen with the plate pre-filled.
+//
+// Public not because leaking plates is secure (they're visible on the
+// taxi itself) but because forcing auth on a printed sticker breaks
+// the "scan and pay" UX end to end.
+router.get("/plate/:plate/qr.png", async (req, res: Response) => {
+  try {
+    const normalized = normalizePlate(req.params.plate);
+
+    const [driver] = await db
+      .select({ userId: driverProfiles.userId })
+      .from(driverProfiles)
+      .where(eq(driverProfiles.taxiPlateNumber, normalized))
+      .limit(1);
+
+    if (!driver) {
+      res.status(404).json({ error: "Driver not found" });
+      return;
+    }
+
+    const shareBase =
+      process.env.DRIVER_SHARE_BASE_URL ||
+      (process.env.EXPO_PUBLIC_DOMAIN
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+        : null);
+    const url = shareBase
+      ? `${shareBase.replace(/\/$/, "")}/pay-driver/${encodeURIComponent(normalized)}`
+      : `haibo-taxi://pay-driver/${encodeURIComponent(normalized)}`;
+
+    const png = await QRCode.toBuffer(url, {
+      type: "png",
+      errorCorrectionLevel: "M",
+      width: 512,
+      margin: 2,
+      color: {
+        // Rose brand primary — keeps driver QRs visually aligned with
+        // vendor QRs so commuters learn one visual affordance.
+        dark: "#C81E5E",
+        light: "#FFFFFF",
+      },
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(png);
+  } catch (error: any) {
+    console.error("Driver QR error:", error);
+    res.status(500).json({ error: "Failed to generate QR" });
+  }
+});
 
 // GET /api/drivers/me - Read the current user's driver profile (or null)
 router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {

@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import QRCode from "qrcode";
 import { db } from "../db";
 import {
   ownerProfiles,
@@ -8,7 +9,7 @@ import {
   users,
 } from "../../shared/schema";
 import { eq, desc, and, sql, gte, inArray } from "drizzle-orm";
-import { authMiddleware, AuthRequest } from "../middleware/auth";
+import { authMiddleware, AuthRequest, verifyToken } from "../middleware/auth";
 
 const router = Router();
 
@@ -135,6 +136,76 @@ router.post("/profile", authMiddleware, async (req: AuthRequest, res: Response) 
   }
 });
 
+// ─── POST /api/owner/profile/kyc ────────────────────────────────────────
+// Owner submits KYC document URLs (uploaded via /api/uploads/image first).
+// Stores the URL set on owner_profiles.kycDocuments and flips kycStatus
+// to 'pending' so an admin picks it up in the command-center review queue.
+//
+// Accepts partial uploads (only idDocumentUrl required) so the client can
+// implement a save-and-continue-later flow without the server rejecting
+// incomplete submissions.
+router.post(
+  "/profile/kyc",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const {
+        idDocumentUrl,
+        proofOfAddressUrl,
+        companyRegDocUrl,
+      } = req.body ?? {};
+
+      if (!idDocumentUrl || typeof idDocumentUrl !== "string") {
+        res.status(400).json({
+          error: "idDocumentUrl is required (at minimum, a government ID)",
+        });
+        return;
+      }
+
+      const [existing] = await db
+        .select()
+        .from(ownerProfiles)
+        .where(eq(ownerProfiles.userId, userId))
+        .limit(1);
+
+      if (!existing) {
+        // Can't upload KYC for a profile that doesn't exist — force the
+        // user to complete onboarding first so we have bank details on
+        // file before any admin even looks at their docs.
+        res.status(404).json({
+          error: "Complete owner onboarding first",
+          code: "PROFILE_NOT_FOUND",
+        });
+        return;
+      }
+
+      const docs = {
+        idDocumentUrl,
+        proofOfAddressUrl: proofOfAddressUrl || undefined,
+        companyRegDocUrl: companyRegDocUrl || undefined,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const [updated] = await db
+        .update(ownerProfiles)
+        .set({
+          kycDocuments: docs,
+          kycStatus: "pending",
+          kycRejectionReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(ownerProfiles.userId, userId))
+        .returning();
+
+      res.json(updated);
+    } catch (err: any) {
+      console.error("Owner KYC upload error:", err);
+      res.status(500).json({ error: "Failed to save KYC documents" });
+    }
+  },
+);
+
 // ─── POST /api/owner/invitations ────────────────────────────────────────
 // Owner generates a new invitation code for a driver they're hiring.
 // Returns the generated code so the owner can copy / share it. Limited
@@ -209,6 +280,99 @@ router.post("/invitations", authMiddleware, async (req: AuthRequest, res: Respon
     res.status(500).json({ error: "Failed to create invitation" });
   }
 });
+
+// ─── GET /api/owner/invitations/:id/qr.png ──────────────────────────────
+// Renders a scannable QR image for an invitation — encodes a smart link
+// that opens the Haibo app on ProfileSetup with the invite code pre-
+// filled. Scanning with any phone's native camera app works without
+// needing the in-app scanner.
+//
+// Authenticated + ownership-gated: only the owner who issued the code
+// can fetch its QR (prevents guessing by invitation id). Revoked or
+// used invitations still render the image — owners sometimes want to
+// re-print a retired card, and the redeem endpoint will reject stale
+// codes anyway.
+router.get(
+  "/invitations/:id/qr.png",
+  async (req, res: Response) => {
+    // Custom auth path: the mobile <Image> loader can't set an
+    // Authorization header reliably across iOS/Android/web, so we
+    // accept the bearer token via ?token=… as a fallback. Header still
+    // takes precedence for non-image callers. Either way we verify and
+    // own the lookup ourselves so a forged ?token=random string never
+    // reaches the ownership check below.
+    const authHeader = req.headers.authorization;
+    const headerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : undefined;
+    const queryToken =
+      typeof req.query.token === "string" ? req.query.token : undefined;
+    const token = headerToken || queryToken;
+
+    if (!token) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    let userId: string;
+    try {
+      userId = verifyToken(token).userId;
+    } catch {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+
+    try {
+      const [row] = await db
+        .select({
+          code: driverOwnerInvitations.code,
+          ownerId: driverOwnerInvitations.ownerId,
+        })
+        .from(driverOwnerInvitations)
+        .where(eq(driverOwnerInvitations.id, req.params.id))
+        .limit(1);
+
+      if (!row || row.ownerId !== userId) {
+        res.status(404).json({ error: "Invitation not found" });
+        return;
+      }
+
+      // Same smart-link pattern as vendor QR: prefer HTTPS for native
+      // camera compatibility (iOS 11+ and every modern Android camera
+      // auto-recognises https:// QRs), fall back to the app scheme for
+      // local dev.
+      const shareBase =
+        process.env.INVITE_SHARE_BASE_URL ||
+        (process.env.EXPO_PUBLIC_DOMAIN
+          ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+          : null);
+      const url = shareBase
+        ? `${shareBase.replace(/\/$/, "")}/invite-driver/${encodeURIComponent(row.code)}`
+        : `haibo-taxi://invite-driver/${encodeURIComponent(row.code)}`;
+
+      const png = await QRCode.toBuffer(url, {
+        type: "png",
+        errorCorrectionLevel: "M",
+        width: 512,
+        margin: 2,
+        color: {
+          // Teal for owner-side surfaces — matches the role accent.
+          dark: "#0D9488",
+          light: "#FFFFFF",
+        },
+      });
+
+      res.setHeader("Content-Type", "image/png");
+      // Short TTL so a revoked/used code's QR image stops being cached
+      // on mobile viewers shortly after the state change.
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.send(png);
+    } catch (err: any) {
+      console.error("Invitation QR error:", err);
+      res.status(500).json({ error: "Failed to generate QR" });
+    }
+  },
+);
 
 // ─── GET /api/owner/invitations ─────────────────────────────────────────
 // List the current owner's invitations. Most-recent-first. Includes
@@ -338,6 +502,15 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
       .where(eq(users.id, ownerId))
       .limit(1);
 
+    // KYC state drives the "Verify identity" banner on the mobile
+    // dashboard. Left-joined (separate query) so an owner who hasn't
+    // completed onboarding still gets a dashboard, not a 500.
+    const [ownerProfileRow] = await db
+      .select({ kycStatus: ownerProfiles.kycStatus })
+      .from(ownerProfiles)
+      .where(eq(ownerProfiles.userId, ownerId))
+      .limit(1);
+
     // Linked drivers — for driver count + ids used by downstream aggregates.
     const linkedDrivers = await db
       .select({
@@ -408,6 +581,7 @@ router.get("/dashboard", authMiddleware, async (req: AuthRequest, res: Response)
       owner: {
         displayName: owner?.displayName || "Owner",
         walletBalance: Number(owner?.walletBalance || 0),
+        kycStatus: ownerProfileRow?.kycStatus || "unverified",
       },
       fleet: {
         driverCount: linkedDrivers.length,

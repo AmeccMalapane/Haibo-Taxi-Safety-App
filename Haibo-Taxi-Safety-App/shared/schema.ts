@@ -991,13 +991,16 @@ export const vendorProfiles = pgTable("vendor_profiles", {
   // Short, human-readable code the buyer types or scans (e.g. HBV-1234-XYZ9).
   // Unique so QR lookups are O(1) and collision-free.
   vendorRef: text("vendor_ref").notNull().unique(),
-  status: text("status").notNull().default("pending"), // 'pending' | 'verified' | 'suspended'
+  status: text("status").notNull().default("pending"), // 'pending' | 'verified' | 'rejected' | 'suspended'
   // Derived counter maintained on sale — lets the directory/CC sort
   // by popularity without an aggregate query on every page load.
   totalSales: real("total_sales").notNull().default(0),
   salesCount: integer("sales_count").notNull().default(0),
   reviewedBy: varchar("reviewed_by"),
   reviewedAt: timestamp("reviewed_at"),
+  // Populated when status='rejected' by the admin KYC queue. Left null
+  // for pending/verified/suspended rows.
+  kycRejectionReason: text("kyc_rejection_reason"),
   // Payout bank — where the vendor's withdrawals land. Same inline
   // storage pattern as owner_profiles (rotation is rare, no join needed).
   bankCode: text("bank_code"),
@@ -1008,6 +1011,15 @@ export const vendorProfiles = pgTable("vendor_profiles", {
   // lands in the Haibo treasury and we settle via transfer later.
   paystackSubaccountCode: text("paystack_subaccount_code"),
   paystackRecipientCode: text("paystack_recipient_code"),
+  // KYC uploads — URLs to the ID/proof docs the vendor submitted. Admin
+  // reviews these in the command-center before flipping status='verified'.
+  // JSONB so we can evolve the set of required docs without migrations.
+  kycDocuments: jsonb("kyc_documents").$type<{
+    idDocumentUrl?: string;
+    proofOfAddressUrl?: string;
+    companyRegDocUrl?: string;
+    uploadedAt?: string;
+  }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1020,6 +1032,8 @@ export const insertVendorProfileSchema = createInsertSchema(vendorProfiles).omit
   salesCount: true,
   reviewedBy: true,
   reviewedAt: true,
+  kycDocuments: true,
+  kycRejectionReason: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1219,6 +1233,15 @@ export const ownerProfiles = pgTable("owner_profiles", {
   kycReviewedAt: timestamp("kyc_reviewed_at"),
   kycReviewedBy: varchar("kyc_reviewed_by"),
   kycRejectionReason: text("kyc_rejection_reason"),
+  // Same shape as vendor_profiles.kyc_documents — see that definition
+  // for the contract. Duplicated by design: each profile has its own
+  // document set (an owner's company papers ≠ a vendor's stall papers).
+  kycDocuments: jsonb("kyc_documents").$type<{
+    idDocumentUrl?: string;
+    proofOfAddressUrl?: string;
+    companyRegDocUrl?: string;
+    uploadedAt?: string;
+  }>(),
   // Business ID (CK number) — optional, helps with tax compliance.
   companyRegNumber: text("company_reg_number"),
   vatNumber: text("vat_number"),
@@ -1233,6 +1256,7 @@ export const insertOwnerProfileSchema = createInsertSchema(ownerProfiles).omit({
   kycReviewedAt: true,
   kycReviewedBy: true,
   kycRejectionReason: true,
+  kycDocuments: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -1430,7 +1454,7 @@ export const withdrawalRequests = pgTable("withdrawal_requests", {
   // 'fare' = fareBalance. Default 'wallet' preserves legacy semantics.
   balanceType: text("balance_type").default("wallet"),
   amount: real("amount").notNull(),
-  status: text("status").notNull().default("pending"), // pending, approved, processing, completed, rejected
+  status: text("status").notNull().default("pending"), // pending, approved, processing, completed, failed, rejected
   bankCode: text("bank_code").notNull(),
   accountNumber: text("account_number").notNull(),
   accountName: text("account_name"),
@@ -1441,6 +1465,13 @@ export const withdrawalRequests = pgTable("withdrawal_requests", {
   completedAt: timestamp("completed_at"),
   rejectionReason: text("rejection_reason"),
   reference: text("reference"),
+  // Paystack "TRF_..." code returned by POST /transfer. Looked up by
+  // the webhook handler when transfer.success / transfer.failed fires
+  // so we can move the row to its terminal state.
+  paystackTransferCode: text("paystack_transfer_code"),
+  // Populated on transfer.failed with the gateway_response string from
+  // Paystack. Distinct from rejection_reason (which is admin-facing).
+  failureReason: text("failure_reason"),
   isVerified: boolean("is_verified").default(false),
   requires2FA: boolean("requires_2fa").default(true),
   createdAt: timestamp("created_at").defaultNow(),

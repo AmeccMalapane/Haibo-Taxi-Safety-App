@@ -10,11 +10,20 @@ import { LoadingState, ErrorState, EmptyState } from "../components/States";
 import { useAdminSocket } from "../hooks/useAdminSocket";
 import { colors, radius, shadows, spacing } from "../lib/brand";
 
-type StatusFilter = "pending" | "approved" | "rejected" | "";
+type StatusFilter =
+  | "pending"
+  | "approved"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "rejected"
+  | "";
 
 const STATUS_TABS: Array<{ label: string; value: StatusFilter }> = [
   { label: "Pending", value: "pending" },
-  { label: "Approved", value: "approved" },
+  { label: "Processing", value: "processing" },
+  { label: "Completed", value: "completed" },
+  { label: "Failed", value: "failed" },
   { label: "Rejected", value: "rejected" },
   { label: "All", value: "" },
 ];
@@ -31,7 +40,12 @@ interface WithdrawalRow {
   requestedAt: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  completedAt: string | null;
   rejectionReason: string | null;
+  paystackTransferCode: string | null;
+  failureReason: string | null;
+  balanceType: string | null;
+  routeToUserId: string | null;
   requires2FA: boolean;
   userPhone: string | null;
   userDisplayName: string | null;
@@ -191,20 +205,35 @@ export function WithdrawalsPage() {
                   </TD>
                   <TD>
                     <Badge tone={statusTone(r.status)}>{r.status}</Badge>
-                    {r.rejectionReason ? (
+                    {r.paystackTransferCode ? (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: colors.textTertiary,
+                          marginTop: 2,
+                          fontFamily: "ui-monospace, Menlo, monospace",
+                        }}
+                        title="Paystack transfer code"
+                      >
+                        {r.paystackTransferCode}
+                      </div>
+                    ) : null}
+                    {(r.rejectionReason || r.failureReason) ? (
                       <div
                         style={{
                           fontSize: 11,
-                          color: colors.textTertiary,
+                          color: r.failureReason
+                            ? colors.danger
+                            : colors.textTertiary,
                           marginTop: 2,
                           maxWidth: 200,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={r.rejectionReason}
+                        title={r.failureReason || r.rejectionReason || undefined}
                       >
-                        {r.rejectionReason}
+                        {r.failureReason || r.rejectionReason}
                       </div>
                     ) : null}
                   </TD>

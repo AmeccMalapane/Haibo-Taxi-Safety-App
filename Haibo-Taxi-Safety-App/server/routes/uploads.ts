@@ -86,6 +86,8 @@ router.post(
         "profiles",
         "locations",
         "ratings",
+        "kyc-owner",
+        "kyc-vendor",
       ]);
       if (!allowedFolders.has(folder)) {
         res.status(400).json({ error: "Invalid folder" });

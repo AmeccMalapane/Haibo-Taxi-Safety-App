@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import QRCode from "qrcode";
 import { db } from "../db";
 import {
   complaints, jobs, jobApplications, lostFoundItems,
@@ -1122,6 +1123,40 @@ router.get("/referral/code/:deviceId", async (req, res: Response) => {
   } catch (error: any) {
     console.error("Get referral code error:", error);
     res.status(500).json({ error: "Failed to get referral code" });
+  }
+});
+
+// GET /api/referral/code/:deviceId/qr.png — Scannable QR for the user's
+// referral link. Public (deviceId is already a semi-public hash — same
+// privacy footprint as /code/:deviceId). Encodes the share URL so a
+// recipient scanning with their phone's camera lands straight on the
+// invite screen with the code pre-filled.
+router.get("/referral/code/:deviceId/qr.png", async (req, res: Response) => {
+  try {
+    const row = await getOrCreateReferralCode(req.params.deviceId);
+    const shareBase =
+      process.env.REFERRAL_SHARE_BASE_URL || "https://app.haibo.africa/r";
+    const url = `${shareBase.replace(/\/$/, "")}/${encodeURIComponent(row.code)}`;
+
+    const png = await QRCode.toBuffer(url, {
+      type: "png",
+      errorCorrectionLevel: "M",
+      width: 512,
+      margin: 2,
+      color: {
+        // Fuchsia accent — distinguishes referral QRs from vendor (rose)
+        // and driver (rose) QRs at a glance when printed side-by-side.
+        dark: "#C026D3",
+        light: "#FFFFFF",
+      },
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(png);
+  } catch (error: any) {
+    console.error("Referral QR error:", error);
+    res.status(500).json({ error: "Failed to generate QR" });
   }
 });
 

@@ -16,6 +16,7 @@ import { authMiddleware, AuthRequest, requireRole } from "../middleware/auth";
 import { notifyUser, notifyUsers } from "../services/notifications";
 import { recordAdminAction } from "../services/audit";
 import { kickUserSockets } from "../services/realtime";
+import { createTransferRecipient, initiateTransfer } from "../services/paystack";
 
 const router = Router();
 
@@ -310,7 +311,12 @@ router.get("/withdrawals", authMiddleware, requireRole("admin"), async (req: Aut
         requestedAt: withdrawalRequests.requestedAt,
         approvedAt: withdrawalRequests.approvedAt,
         approvedBy: withdrawalRequests.approvedBy,
+        completedAt: withdrawalRequests.completedAt,
         rejectionReason: withdrawalRequests.rejectionReason,
+        paystackTransferCode: withdrawalRequests.paystackTransferCode,
+        failureReason: withdrawalRequests.failureReason,
+        balanceType: withdrawalRequests.balanceType,
+        routeToUserId: withdrawalRequests.routeToUserId,
         requires2FA: withdrawalRequests.requires2FA,
         userPhone: users.phone,
         userDisplayName: users.displayName,
@@ -375,13 +381,78 @@ router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), asy
 
     const updated = updatedRows[0];
 
-    // Notify the user their withdrawal is cleared for EFT processing
+    // ─── Paystack transfer ──────────────────────────────────────────────
+    // Chain the actual money movement off the status flip. If Paystack
+    // accepts it we move the row to 'processing' (terminal state comes
+    // from the webhook). If Paystack errors, the row stays at 'approved'
+    // with failure_reason populated — ops can retry by re-running the
+    // approval flow or fall back to a manual EFT. A Paystack outage
+    // never loses the admin approval work.
+    let paystackError: string | undefined;
+    try {
+      const recipient = await createTransferRecipient({
+        name: updated.accountName || "Haibo withdrawal",
+        accountNumber: updated.accountNumber,
+        bankCode: updated.bankCode,
+      });
+
+      if (!recipient.success || !recipient.recipientCode) {
+        paystackError = recipient.error || "Recipient creation failed";
+      } else {
+        const transfer = await initiateTransfer({
+          amount: Math.round(Number(updated.amount) * 100),
+          recipientCode: recipient.recipientCode,
+          reason: `Haibo withdrawal ${updated.id.slice(0, 8)}`,
+        });
+
+        if (!transfer.success || !transfer.transferCode) {
+          paystackError = transfer.error || "Transfer initiation failed";
+        } else {
+          // Paystack accepted it — move to 'processing'. Webhook will
+          // flip to 'completed' (transfer.success) or 'failed' (and
+          // refund the balance at that point).
+          await db
+            .update(withdrawalRequests)
+            .set({
+              status: "processing",
+              paystackTransferCode: transfer.transferCode,
+              reference: transfer.reference ?? updated.reference,
+              updatedAt: new Date(),
+            })
+            .where(eq(withdrawalRequests.id, updated.id));
+        }
+      }
+    } catch (transferErr: any) {
+      paystackError = transferErr?.message || "Paystack transfer threw";
+      console.error("[Admin] Paystack transfer threw:", transferErr);
+    }
+
+    if (paystackError) {
+      // Leave status as 'approved' so ops can retry. Stash the error on
+      // the row for triage.
+      await db
+        .update(withdrawalRequests)
+        .set({
+          failureReason: paystackError,
+          updatedAt: new Date(),
+        })
+        .where(eq(withdrawalRequests.id, updated.id));
+      console.warn(
+        `[Admin] Paystack transfer failed for withdrawal ${updated.id}: ${paystackError}`,
+      );
+    }
+
+    // Notify the user. Copy shifts based on whether Paystack accepted
+    // the transfer — if Paystack errored, ops will follow up manually
+    // so we soften the promise ("on its way" vs "processing").
     try {
       await notifyUser({
         userId: updated.userId,
         type: "payment",
         title: "Withdrawal approved",
-        body: `Your R${updated.amount.toFixed(2)} withdrawal is on its way via EFT.`,
+        body: paystackError
+          ? `Your R${updated.amount.toFixed(2)} withdrawal is approved and queued — we'll pay it out shortly.`
+          : `Your R${updated.amount.toFixed(2)} withdrawal is on its way — bank delivery usually takes a few minutes.`,
       });
     } catch (notifyErr) {
       console.log("[Admin] withdrawal approve notify failed:", notifyErr);
@@ -390,9 +461,18 @@ router.put("/withdrawals/:id/approve", authMiddleware, requireRole("admin"), asy
     await recordAdminAction(req, "withdrawal.approve", "withdrawal_requests", req.params.id, {
       amount: updated.amount,
       userId: updated.userId,
+      paystackError: paystackError || null,
     });
 
-    res.json(updated);
+    // Return the row as it stands now — include the possible failure
+    // reason so the admin UI can surface "Paystack failed, retry?" to
+    // the operator.
+    const [fresh] = await db
+      .select()
+      .from(withdrawalRequests)
+      .where(eq(withdrawalRequests.id, updated.id))
+      .limit(1);
+    res.json(fresh ?? updated);
   } catch (error: any) {
     console.error("Approve withdrawal error:", error);
     res.status(500).json({ error: "Failed to approve withdrawal" });

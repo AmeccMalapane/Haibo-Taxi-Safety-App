@@ -25,6 +25,7 @@ import {
   Inbox,
   LogOut,
   MapPin,
+  ShieldCheck,
   LucideIcon,
 } from "lucide-react";
 import { colors, radius, spacing, shadows, gradients, transitions } from "../lib/brand";
@@ -50,6 +51,7 @@ const navItems: NavItem[] = [
 
   // Moderation — content + person review
   { to: "/admin/moderation/pasop", label: "Pasop hazards", Icon: Radar, section: "Moderation" },
+  { to: "/admin/kyc", label: "Identity KYC", Icon: ShieldCheck, section: "Moderation" },
   { to: "/admin/drivers", label: "Driver KYC", Icon: BadgeCheck, section: "Moderation" },
   { to: "/admin/vendors", label: "Vault vendors", Icon: Store, section: "Moderation" },
   { to: "/admin/moderation/routes", label: "Routes", Icon: Route, section: "Moderation" },

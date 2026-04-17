@@ -26,6 +26,7 @@ import rideRoutes from "./routes/rides";
 import miscRoutes from "./routes/misc";
 import adminRoutes from "./routes/admin";
 import adminFareSyncRoutes from "./routes/admin-fare-sync";
+import adminKycRoutes from "./routes/admin-kyc";
 import notificationRoutes from "./routes/notifications";
 import paystackRoutes from "./routes/paystack";
 import pasopRoutes from "./routes/pasop";
@@ -169,6 +170,10 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/deliveries", deliveryRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api", miscRoutes);
+// KYC review queue mounts under /api/admin/kyc first so its routes win
+// even if adminRoutes ever grows a wildcard. Router applies auth +
+// requireRole("admin") middleware internally.
+app.use("/api/admin/kyc", adminKycRoutes);
 app.use("/api/admin", adminRoutes);
 // Fare-sync admin endpoints live in their own router to keep admin.ts
 // from growing past its already-outsized 3k-line footprint. Mounted at

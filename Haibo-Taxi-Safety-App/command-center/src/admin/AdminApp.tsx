@@ -37,6 +37,7 @@ import { LostFoundModerationPage } from "../pages/LostFoundModerationPage";
 import { JobsModerationPage } from "../pages/JobsModerationPage";
 import { RoutesModerationPage } from "../pages/RoutesModerationPage";
 import { VendorsPage } from "../pages/VendorsPage";
+import { KYCReviewPage } from "../pages/KYCReviewPage";
 import { ExplorerContributionsPage } from "../pages/ExplorerContributionsPage";
 import { FleetPage } from "../pages/FleetPage";
 import { EventsPage } from "../pages/EventsPage";
@@ -112,6 +113,7 @@ export default function AdminApp() {
         <Route path="events" element={<EventsPage />} />
         <Route path="referrals" element={<ReferralsPage />} />
         <Route path="vendors" element={<VendorsPage />} />
+        <Route path="kyc" element={<KYCReviewPage />} />
         <Route path="explorer" element={<ExplorerContributionsPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
       </Route>

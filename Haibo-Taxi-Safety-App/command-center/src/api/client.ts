@@ -185,6 +185,32 @@ export const admin = {
     });
   },
 
+  // ─── KYC review queue ──────────────────────────────────────────────
+  //
+  // Unified owner + vendor KYC list. role/status filters mirror the
+  // server query params exactly. approve/reject target a specific
+  // profile by role + profileId.
+  async getKYCSubmissions(params: { role?: string; status?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.role) qs.set("role", params.role);
+    if (params.status) qs.set("status", params.status);
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/api/admin/kyc${q}`);
+  },
+
+  async approveKYC(role: "owner" | "vendor", profileId: string) {
+    return request(`/api/admin/kyc/${role}/${profileId}/approve`, {
+      method: "PUT",
+    });
+  },
+
+  async rejectKYC(role: "owner" | "vendor", profileId: string, reason: string) {
+    return request(`/api/admin/kyc/${role}/${profileId}/reject`, {
+      method: "PUT",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   /**
    * Moderation queues. `resource` is one of the whitelisted values on the
    * server (reels | lost-found | jobs). `status` filter is optional.

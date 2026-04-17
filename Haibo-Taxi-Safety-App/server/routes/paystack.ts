@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { users, walletTransactions, transactions } from "../../shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, walletTransactions, transactions, withdrawalRequests } from "../../shared/schema";
+import { eq, sql, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../middleware/auth";
 import { verifyWebhookSignature, initializeTransaction, verifyTransaction } from "../services/paystack";
 import { notifyUser } from "../services/notifications";
@@ -241,10 +241,192 @@ router.post("/webhook", async (req: Request, res: Response) => {
         break;
       }
 
-      case "transfer.success":
-      case "transfer.failed":
-        console.log(`[Paystack Webhook] Transfer event: ${event.event}`);
+      case "transfer.success": {
+        // Paystack has confirmed the bank delivered. Move the matching
+        // withdrawal_request to 'completed' and notify the user. Keyed
+        // by transfer_code rather than our own reference because only
+        // transfer_code is guaranteed to be on Paystack's event shape.
+        const transferCode = event.data?.transfer_code as string | undefined;
+        if (!transferCode) {
+          console.warn("[Paystack Webhook] transfer.success without transfer_code");
+          break;
+        }
+
+        // Conditional UPDATE gates idempotency — if the webhook fires
+        // twice (Paystack retries) only the first hit sees a returning()
+        // row, subsequent hits no-op. Targets status='processing' so we
+        // can't overwrite a row that's already been reconciled.
+        const [settled] = await db
+          .update(withdrawalRequests)
+          .set({
+            status: "completed",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(withdrawalRequests.paystackTransferCode, transferCode),
+              eq(withdrawalRequests.status, "processing"),
+            ),
+          )
+          .returning();
+
+        if (!settled) {
+          console.log(
+            `[Paystack Webhook] transfer.success already processed: ${transferCode}`,
+          );
+          break;
+        }
+
+        // Flip the pending wallet_transactions row (created on /withdraw)
+        // to 'completed' so the user's history stops showing the "pending"
+        // pill. We match on the negative amount + userId + type since
+        // there's no stable foreign key from wallet_transactions → withdrawal_requests.
+        // Best-effort — if the match misses (older rows, schema drift),
+        // the money movement is still correct, only the history display
+        // is slightly off.
+        try {
+          await db
+            .update(walletTransactions)
+            .set({ status: "completed" })
+            .where(
+              and(
+                eq(walletTransactions.userId, settled.userId),
+                eq(walletTransactions.amount, -Number(settled.amount)),
+                eq(walletTransactions.status, "pending"),
+              ),
+            );
+        } catch (walletErr) {
+          console.warn(
+            "[Paystack Webhook] Could not flip wallet_transactions to completed:",
+            walletErr,
+          );
+        }
+
+        try {
+          await notifyUser({
+            userId: settled.userId,
+            type: "payment",
+            title: "Withdrawal paid",
+            body: `R${Number(settled.amount).toFixed(2)} has landed in your bank account.`,
+          });
+        } catch (notifyErr) {
+          console.log("[Paystack Webhook] transfer.success notify failed:", notifyErr);
+        }
+
+        console.log(`[Paystack Webhook] Transfer completed: ${transferCode}`);
         break;
+      }
+
+      case "transfer.failed":
+      case "transfer.reversed": {
+        // The bank rejected the transfer (or Paystack reversed it after
+        // the fact — same user-visible outcome). Refund the balance to
+        // the requesting user on the correct sub-balance (fare vs.
+        // wallet) and flag the row as 'failed' with the gateway reason.
+        const transferCode = event.data?.transfer_code as string | undefined;
+        const reason =
+          (event.data?.reason as string | undefined) ||
+          (event.data?.gateway_response as string | undefined) ||
+          (event.event === "transfer.reversed"
+            ? "Transfer reversed by Paystack"
+            : "Transfer failed");
+
+        if (!transferCode) {
+          console.warn(
+            "[Paystack Webhook] transfer.failed/reversed without transfer_code",
+          );
+          break;
+        }
+
+        // Whole refund path in a single transaction so we can never
+        // flip status without crediting, or credit without flipping.
+        try {
+          await db.transaction(async (tx) => {
+            const [claimed] = await tx
+              .update(withdrawalRequests)
+              .set({
+                status: "failed",
+                failureReason: reason,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(
+                    withdrawalRequests.paystackTransferCode,
+                    transferCode,
+                  ),
+                  eq(withdrawalRequests.status, "processing"),
+                ),
+              )
+              .returning();
+
+            if (!claimed) {
+              // Already reconciled — idempotent no-op.
+              return;
+            }
+
+            // Refund to the correct sub-balance. balanceType='fare'
+            // was deducted from fareBalance in /withdraw, so we credit
+            // it back to fareBalance, not walletBalance.
+            if (claimed.balanceType === "fare") {
+              await tx
+                .update(users)
+                .set({
+                  fareBalance: sql`${users.fareBalance} + ${claimed.amount}`,
+                })
+                .where(eq(users.id, claimed.userId));
+            } else {
+              await tx
+                .update(users)
+                .set({
+                  walletBalance: sql`${users.walletBalance} + ${claimed.amount}`,
+                })
+                .where(eq(users.id, claimed.userId));
+            }
+
+            await tx.insert(walletTransactions).values({
+              userId: claimed.userId,
+              type: "transfer_received",
+              amount: Number(claimed.amount),
+              description: `Withdrawal failed — refund (R${Number(
+                claimed.amount,
+              ).toFixed(2)})`,
+              status: "completed",
+              balanceAffected: claimed.balanceType || "wallet",
+            });
+
+            // Surface the failure to the user so they know their money
+            // didn't leave — without this they'd think the transfer was
+            // in progress forever.
+            try {
+              await notifyUser({
+                userId: claimed.userId,
+                type: "payment",
+                title: "Withdrawal could not be completed",
+                body: `We've refunded R${Number(claimed.amount).toFixed(
+                  2,
+                )} to your Haibo wallet. Please check your bank details and try again.`,
+              });
+            } catch (notifyErr) {
+              console.log(
+                "[Paystack Webhook] transfer.failed notify failed:",
+                notifyErr,
+              );
+            }
+          });
+        } catch (txErr) {
+          console.error(
+            `[Paystack Webhook] Failed to process transfer.failed for ${transferCode}:`,
+            txErr,
+          );
+        }
+
+        console.log(
+          `[Paystack Webhook] Transfer ${event.event}: ${transferCode} — ${reason}`,
+        );
+        break;
+      }
 
       default:
         console.log(`[Paystack Webhook] Unhandled event: ${event.event}`);

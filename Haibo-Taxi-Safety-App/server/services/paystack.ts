@@ -75,6 +75,117 @@ export async function initializeTransaction(params: {
   }
 }
 
+// ─── Transfer API ───────────────────────────────────────────────────────
+//
+// Two-step flow used by admin withdrawal approval:
+//   1. createTransferRecipient  — register a bank account with Paystack;
+//                                  returns a "RCP_..." recipient code.
+//   2. initiateTransfer          — move money from the Haibo balance to
+//                                  that recipient; returns a "TRF_..."
+//                                  transfer code.
+// Paystack then fires transfer.success / transfer.failed webhooks once
+// the bank confirms. Paystack dedupes recipients by account_number, so
+// calling createTransferRecipient repeatedly for the same account is
+// safe — it returns the existing row.
+
+export async function createTransferRecipient(params: {
+  name: string;
+  accountNumber: string;
+  bankCode: string;
+  currency?: string;
+}): Promise<{ success: boolean; recipientCode?: string; error?: string }> {
+  if (!PAYSTACK_SECRET) {
+    return { success: false, error: "Paystack not configured" };
+  }
+
+  try {
+    const res = await fetch(`${PAYSTACK_BASE_URL}/transferrecipient`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "basa", // ZA banks
+        name: params.name,
+        account_number: params.accountNumber,
+        bank_code: params.bankCode,
+        currency: params.currency || "ZAR",
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.status && data.data?.recipient_code) {
+      return { success: true, recipientCode: data.data.recipient_code };
+    }
+    return {
+      success: false,
+      error: data.message || "Failed to create transfer recipient",
+    };
+  } catch (error: any) {
+    console.error("[Paystack] createTransferRecipient error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function initiateTransfer(params: {
+  amount: number; // in kobo/cents
+  recipientCode: string;
+  reason?: string;
+  reference?: string;
+}): Promise<{
+  success: boolean;
+  transferCode?: string;
+  reference?: string;
+  /** Paystack's own internal state: "pending", "success", "otp", etc. */
+  paystackStatus?: string;
+  error?: string;
+}> {
+  if (!PAYSTACK_SECRET) {
+    return { success: false, error: "Paystack not configured" };
+  }
+
+  const reference =
+    params.reference ||
+    `HB-W-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+
+  try {
+    const res = await fetch(`${PAYSTACK_BASE_URL}/transfer`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "balance",
+        amount: params.amount,
+        recipient: params.recipientCode,
+        reason: params.reason || "Haibo withdrawal",
+        reference,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.status && data.data?.transfer_code) {
+      return {
+        success: true,
+        transferCode: data.data.transfer_code,
+        reference: data.data.reference || reference,
+        paystackStatus: data.data.status,
+      };
+    }
+    return {
+      success: false,
+      error: data.message || "Failed to initiate transfer",
+    };
+  } catch (error: any) {
+    console.error("[Paystack] initiateTransfer error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * Verify a transaction by reference via Paystack API.
  */

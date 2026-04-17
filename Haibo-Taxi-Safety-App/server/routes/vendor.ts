@@ -299,6 +299,62 @@ router.put("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/vendor-profile/me/kyc — vendor submits KYC document URLs
+// (uploaded via /api/uploads/image first). Stored on
+// vendor_profiles.kycDocuments. Does not change `status` directly —
+// that flip stays admin-driven via the command-center review queue.
+router.post("/me/kyc", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      idDocumentUrl,
+      proofOfAddressUrl,
+      companyRegDocUrl,
+    } = req.body ?? {};
+
+    if (!idDocumentUrl || typeof idDocumentUrl !== "string") {
+      res.status(400).json({
+        error: "idDocumentUrl is required (at minimum, a government ID)",
+      });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.userId, req.user!.userId))
+      .limit(1);
+
+    if (!existing) {
+      res.status(404).json({
+        error: "Register your vendor profile first",
+        code: "PROFILE_NOT_FOUND",
+      });
+      return;
+    }
+
+    const docs = {
+      idDocumentUrl,
+      proofOfAddressUrl: proofOfAddressUrl || undefined,
+      companyRegDocUrl: companyRegDocUrl || undefined,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const [row] = await db
+      .update(vendorProfiles)
+      .set({
+        kycDocuments: docs,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorProfiles.id, existing.id))
+      .returning();
+
+    res.json({ data: row });
+  } catch (error: any) {
+    console.error("Vendor KYC upload error:", error);
+    res.status(500).json({ error: "Failed to save KYC documents" });
+  }
+});
+
 // ============ PUBLIC (authenticated but not profile-owner) ============
 
 // GET /api/vendor-profile/lookup/:vendorRef — resolve a ref to a
