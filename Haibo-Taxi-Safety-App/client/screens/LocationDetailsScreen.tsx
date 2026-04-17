@@ -105,7 +105,7 @@ export default function LocationDetailsScreen() {
     return allRoutes.filter(r => 
       r.origin.toLowerCase().includes(location.name.toLowerCase()) || 
       r.destination.toLowerCase().includes(location.name.toLowerCase())
-    ).slice(0, 5);
+    ).slice(0, 10);
   }, [location]);
 
   if (loading) {
@@ -266,21 +266,23 @@ export default function LocationDetailsScreen() {
               </Pressable>
             </View>
             {contributedImages.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.photosRow}
-              >
-                {contributedImages.map((img) => (
-                  <View key={img.id} style={styles.photoTile}>
-                    <Image
-                      source={{ uri: img.url }}
-                      style={styles.photoImage}
-                      contentFit="cover"
-                    />
-                  </View>
-                ))}
-              </ScrollView>
+              <View style={styles.mosaicGrid}>
+                {contributedImages.map((img, idx) => {
+                  const isFirst = idx === 0;
+                  return (
+                    <View
+                      key={img.id}
+                      style={isFirst ? styles.mosaicTileHero : styles.mosaicTileSmall}
+                    >
+                      <Image
+                        source={{ uri: img.url }}
+                        style={styles.photoImage}
+                        contentFit="cover"
+                      />
+                    </View>
+                  );
+                })}
+              </View>
             ) : (
               <ThemedText style={[styles.emptyPhotos, { color: theme.textSecondary }]}>
                 No photos yet — be the first to help commuters find this rank.
@@ -310,8 +312,49 @@ export default function LocationDetailsScreen() {
             </View>
           )}
 
+          {/* Community Confidence */}
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Community Rating</ThemedText>
+            <View style={[styles.confidenceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={styles.confidenceRow}>
+                <View style={styles.confidenceStat}>
+                  <ThemedText style={styles.confidenceValue}>
+                    {location.confidenceScore ?? 50}%
+                  </ThemedText>
+                  <ThemedText style={[styles.confidenceLabel, { color: theme.textSecondary }]}>
+                    Confidence
+                  </ThemedText>
+                </View>
+                <View style={styles.confidenceDivider} />
+                <View style={styles.confidenceStat}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Feather name="thumbs-up" size={16} color={BrandColors.primary.green} />
+                    <ThemedText style={styles.confidenceValue}>
+                      {location.upvotes ?? 0}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={[styles.confidenceLabel, { color: theme.textSecondary }]}>
+                    Upvotes
+                  </ThemedText>
+                </View>
+                <View style={styles.confidenceDivider} />
+                <View style={styles.confidenceStat}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Feather name="thumbs-down" size={16} color={BrandColors.secondary.orange} />
+                    <ThemedText style={styles.confidenceValue}>
+                      {location.downvotes ?? 0}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={[styles.confidenceLabel, { color: theme.textSecondary }]}>
+                    Downvotes
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+          </View>
+
           {/* Rating CTA */}
-          <Pressable 
+          <Pressable
             style={[styles.ratingCTA, { backgroundColor: BrandColors.primary.red }]}
             onPress={() => navigation.navigate("Rating")}
           >
@@ -354,8 +397,39 @@ const styles = StyleSheet.create({
   photosHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   contributeButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, borderWidth: 1.5, minHeight: 32 },
   contributeText: { fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
-  photosRow: { gap: 10, paddingRight: 4 },
-  photoTile: { width: 140, height: 100, borderRadius: 12, overflow: "hidden", backgroundColor: "#00000010" },
+  mosaicGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  mosaicTileHero: {
+    width: "100%",
+    height: 180,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: "#00000010",
+  },
+  mosaicTileSmall: {
+    width: (screenWidth - 40 - 6) / 2,
+    height: 120,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#00000010",
+  },
   photoImage: { width: "100%", height: "100%" },
   emptyPhotos: { fontSize: 13, lineHeight: 18 },
+  confidenceCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+  },
+  confidenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  confidenceStat: { alignItems: "center", gap: 4 },
+  confidenceValue: { fontSize: 22, fontWeight: "800" },
+  confidenceLabel: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
+  confidenceDivider: { width: 1, height: 40, backgroundColor: "rgba(0,0,0,0.08)" },
 });
