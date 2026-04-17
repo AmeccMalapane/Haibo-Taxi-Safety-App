@@ -92,14 +92,16 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
   }));
 
   const generateShareContent = () => {
-    const shareUrl = `https://haibo.app/reel/${reelId}`;
-    const truncatedCaption = caption.length > 100 ? caption.slice(0, 97) + "..." : caption;
-    const watermark = "Via Haibo App";
-    
+    const shareUrl = `https://haibo.africa/reel/${reelId}`;
+    const truncatedCaption = caption.length > 120 ? caption.slice(0, 117) + "..." : caption;
+    const appLink = Platform.OS === "ios"
+      ? "https://apps.apple.com/app/haibo/id0000000000"
+      : "https://play.google.com/store/apps/details?id=com.haibo.africa.haiboapp";
+
     return {
-      message: `${truncatedCaption}\n\n${watermark}\n${shareUrl}`,
+      message: `${truncatedCaption}\n\n— Shared via Haibo! (haibo.africa)\nSafety for Mzansi's taxis\n\n${shareUrl}\nGet the app: ${appLink}`,
       url: shareUrl,
-      title: "Check out this reel on Haibo!",
+      title: "Haibo! — Safety for South Africa's taxis",
     };
   };
 
@@ -200,7 +202,7 @@ export default function ShareTray({ visible, onClose, reelId, caption, mediaUrl 
             <View style={styles.watermarkNote}>
               <Feather name="check-circle" size={16} color={BrandColors.primary.green} />
               <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                Watermark "Via Haibo App" will be added
+                Shared with Haibo! branding + app download link
               </ThemedText>
             </View>
 

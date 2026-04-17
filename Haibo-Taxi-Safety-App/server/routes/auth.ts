@@ -626,4 +626,33 @@ router.put("/profile", authMiddleware, async (req: AuthRequest, res: Response) =
   }
 });
 
+// GET /api/auth/users/search?q=handle_prefix — public handle search.
+// Returns up to 10 matching users (id, handle, displayName, avatarUrl).
+// No phone, no email — safe for @mention autocomplete without PII exposure.
+router.get("/users/search", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    if (!q || q.length < 2) {
+      res.json({ data: [] });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: users.id,
+        handle: users.handle,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(users)
+      .where(sql`${users.handle} LIKE ${q + "%"}`)
+      .limit(10);
+
+    res.json({ data: rows });
+  } catch (error: any) {
+    console.error("User search error:", error);
+    res.status(500).json({ error: "Failed to search users" });
+  }
+});
+
 export default router;

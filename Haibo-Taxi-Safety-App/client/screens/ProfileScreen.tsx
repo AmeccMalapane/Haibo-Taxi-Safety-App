@@ -289,6 +289,9 @@ export default function ProfileScreen() {
                 </View>
               ) : null}
             </View>
+            {user?.handle ? (
+              <ThemedText style={styles.heroHandle}>@{user.handle}</ThemedText>
+            ) : null}
             <ThemedText style={styles.heroPhone}>{phoneText}</ThemedText>
 
             <View style={styles.heroBadgeRow}>
@@ -592,6 +595,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  heroHandle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.75)",
+    fontWeight: "600",
+    marginTop: 2,
   },
   heroPhone: {
     ...Typography.body,
