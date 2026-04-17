@@ -17,29 +17,32 @@ import HomeStackNavigator from "@/navigation/HomeStackNavigator";
 import TaxiFareScreen from "@/screens/TaxiFareScreen";
 import CommunityScreen from "@/screens/CommunityScreen";
 import PushaScreen from "@/screens/PushaScreen";
+import WalletScreen from "@/screens/WalletScreen";
+import DriverDashboardScreen from "@/screens/DriverDashboardScreen";
+import OwnerDashboardScreen from "@/screens/OwnerDashboardScreen";
+import VendorDashboardScreen from "@/screens/VendorDashboardScreen";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 import { BrandColors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { SOSButton } from "@/components/SOSButton";
 
-// 5-tab layout with the central Haibo SOS button:
-//   1. Home      — taxi map, rank finder
-//   2. Taxi fare — fare lookup powered by taxi_routes_fares.json
-//   3. SOS       — center, raised, brand mark, navigates to Emergency
-//   4. Community — Haibo community hub (groups, hashtags, posts)
-//   5. Phusha    — TikTok-style reels feed (PushaScreen + phusha_content.json)
+// Role-aware 5-tab navigator with the central Haibo SOS button always
+// in the center slot (safety is every role's highest priority). The
+// outer tabs rotate based on user.role so each role sees the surfaces
+// that matter to them first:
 //
-// Profile and Menu were removed from the tab bar at the user's request and
-// are now reachable from FloatingHeader corners on Home (top-left = menu,
-// top-right = profile avatar). They remain registered as root-stack screens
-// so deep-link navigation from anywhere still works.
+//   commuter → Home · Fare · [SOS] · Community · Pusha      (legacy)
+//   driver   → Dashboard · Rides · [SOS] · Community · Wallet
+//   owner    → Dashboard · Fleet · [SOS] · Community · Wallet
+//   vendor   → Dashboard · Directory · [SOS] · Community · Wallet
 //
-// The center slot uses a custom tabBarButton that renders SOSButton in
-// inline mode and lifts it above the bar via negative top offset, so the
-// rose-red button "pops" through the floating pill bar — same pattern as
-// Uber Eats / Cash App center actions. The non-Home tabs use the existing
-// EmptyScreen + listener.tabPress.preventDefault trick to navigate to
-// stack screens that live in the root stack instead of inside MainTabs.
+// Admin role gets the commuter tabs (admins also ride taxis). Their
+// admin surfaces live in the command-center app, not mobile.
+//
+// Profile and Menu stay in the FloatingHeader corners on any screen
+// that renders it — those aren't role-specific and work the same for
+// every user.
 
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -47,6 +50,12 @@ export type MainTabParamList = {
   SOSTab: undefined;
   CommunityTab: undefined;
   PushaTab: undefined;
+  // Role-specific tab names — declared so nav type-checks; unused tabs
+  // for a given role are simply not registered on that render.
+  DashboardTab: undefined;
+  WalletTab: undefined;
+  FleetTab: undefined;
+  DirectoryTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -80,15 +89,125 @@ function SOSTabButton({ onPress }: { onPress?: (e: GestureResponderEvent) => voi
   );
 }
 
+// ─── Role tab config ──────────────────────────────────────────────────
+//
+// Each role declares its own 4 outer tabs. The SOS tab is injected in
+// the center by MainTabNavigator itself (roles can't disable it), so
+// this config only lists the outer four. `initialRoute` is the tab
+// key a user lands on after login.
+
+type RoleRole = "commuter" | "driver" | "owner" | "vendor" | "admin";
+
+interface TabDef {
+  name: keyof MainTabParamList;
+  component: React.ComponentType<any>;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+}
+
+interface RoleTabConfig {
+  leftTabs: [TabDef, TabDef];
+  rightTabs: [TabDef, TabDef];
+  initialRoute: keyof MainTabParamList;
+}
+
+const TAB_CONFIG: Record<RoleRole, RoleTabConfig> = {
+  commuter: {
+    leftTabs: [
+      { name: "HomeTab", component: HomeStackNavigator, icon: "map", label: "Home and map" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Taxi fares" },
+    ],
+    rightTabs: [
+      { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
+      { name: "PushaTab", component: PushaScreen, icon: "play-circle", label: "Phusha reels" },
+    ],
+    initialRoute: "HomeTab",
+  },
+  driver: {
+    leftTabs: [
+      { name: "DashboardTab", component: DriverDashboardScreen, icon: "bar-chart-2", label: "Driver dashboard" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Fare reference" },
+    ],
+    rightTabs: [
+      { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
+      { name: "WalletTab", component: WalletScreen, icon: "credit-card", label: "Wallet" },
+    ],
+    initialRoute: "DashboardTab",
+  },
+  owner: {
+    leftTabs: [
+      { name: "DashboardTab", component: OwnerDashboardScreen, icon: "bar-chart-2", label: "Owner dashboard" },
+      // "Fleet" tab routes to the same component because invitations are
+      // fleet management — keeps the navigation model consistent without
+      // a new screen for Phase E.
+      { name: "FleetTab", component: OwnerDashboardScreen, icon: "truck", label: "Fleet" },
+    ],
+    rightTabs: [
+      { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
+      { name: "WalletTab", component: WalletScreen, icon: "credit-card", label: "Wallet" },
+    ],
+    initialRoute: "DashboardTab",
+  },
+  vendor: {
+    leftTabs: [
+      { name: "DashboardTab", component: VendorDashboardScreen, icon: "bar-chart-2", label: "Vendor dashboard" },
+      { name: "DirectoryTab", component: HomeStackNavigator, icon: "map", label: "Explore map" },
+    ],
+    rightTabs: [
+      { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
+      { name: "WalletTab", component: WalletScreen, icon: "credit-card", label: "Wallet" },
+    ],
+    initialRoute: "DashboardTab",
+  },
+  // Admin users see commuter tabs on mobile — their admin surfaces
+  // live in the command-center web app.
+  admin: {
+    leftTabs: [
+      { name: "HomeTab", component: HomeStackNavigator, icon: "map", label: "Home and map" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Taxi fares" },
+    ],
+    rightTabs: [
+      { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
+      { name: "PushaTab", component: PushaScreen, icon: "play-circle", label: "Phusha reels" },
+    ],
+    initialRoute: "HomeTab",
+  },
+};
+
+function getRoleTabConfig(role?: string | null): RoleTabConfig {
+  if (role === "driver" || role === "owner" || role === "vendor" || role === "admin") {
+    return TAB_CONFIG[role];
+  }
+  return TAB_CONFIG.commuter;
+}
+
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user } = useAuth();
+
+  const config = getRoleTabConfig(user?.role);
+
+  // Render helper so the 4 outer tabs and the SOS slot share one code
+  // path. Each TabDef gets turned into a <Tab.Screen> with the standard
+  // TabIcon treatment.
+  const renderTab = (def: TabDef) => (
+    <Tab.Screen
+      key={def.name}
+      name={def.name}
+      component={def.component}
+      options={{
+        tabBarIcon: (props) => <TabIcon name={def.icon} {...props} />,
+        tabBarAccessibilityLabel: def.label,
+      }}
+    />
+  );
 
   return (
     <View style={styles.container}>
       <Tab.Navigator
-        initialRouteName="HomeTab"
+        initialRouteName={config.initialRoute}
         screenOptions={{
           tabBarActiveTintColor: BrandColors.primary.gradientStart,
           tabBarInactiveTintColor: theme.textSecondary,
@@ -115,7 +234,6 @@ export default function MainTabNavigator() {
             transform: [{ translateZ: 0 }] as any,
           },
           tabBarItemStyle: {
-            // Allow SOS slot's lifted button to overflow upward
             overflow: "visible",
           },
           tabBarBackground: () =>
@@ -132,23 +250,8 @@ export default function MainTabNavigator() {
           headerShown: false,
         }}
       >
-        <Tab.Screen
-          name="HomeTab"
-          component={HomeStackNavigator}
-          options={{
-            tabBarIcon: (props) => <TabIcon name="map" {...props} />,
-            tabBarAccessibilityLabel: "Home and map",
-          }}
-        />
-
-        <Tab.Screen
-          name="TaxiFareTab"
-          component={TaxiFareScreen}
-          options={{
-            tabBarIcon: (props) => <TabIcon name="dollar-sign" {...props} />,
-            tabBarAccessibilityLabel: "Taxi fares",
-          }}
-        />
+        {renderTab(config.leftTabs[0])}
+        {renderTab(config.leftTabs[1])}
 
         <Tab.Screen
           name="SOSTab"
@@ -174,23 +277,8 @@ export default function MainTabNavigator() {
           }}
         />
 
-        <Tab.Screen
-          name="CommunityTab"
-          component={CommunityScreen}
-          options={{
-            tabBarIcon: (props) => <TabIcon name="users" {...props} />,
-            tabBarAccessibilityLabel: "Community hub",
-          }}
-        />
-
-        <Tab.Screen
-          name="PushaTab"
-          component={PushaScreen}
-          options={{
-            tabBarIcon: (props) => <TabIcon name="play-circle" {...props} />,
-            tabBarAccessibilityLabel: "Phusha reels",
-          }}
-        />
+        {renderTab(config.rightTabs[0])}
+        {renderTab(config.rightTabs[1])}
       </Tab.Navigator>
     </View>
   );
