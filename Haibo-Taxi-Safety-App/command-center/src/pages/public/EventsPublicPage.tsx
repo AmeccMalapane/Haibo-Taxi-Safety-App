@@ -22,6 +22,7 @@ import {
 } from "../../lib/brand";
 import { events as eventsApi } from "../../api/client";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { StaggerIn } from "../../lib/motion";
 
 interface ServerEvent {
   id: string;
@@ -124,7 +125,9 @@ export function EventsPublicPage() {
         ) : list.length === 0 ? (
           <EmptyState />
         ) : (
-          list.map((event) => <EventCard key={event.id} event={event} />)
+          <StaggerIn stagger={0.06} duration={0.5} distance={16}>
+            {list.map((event) => <EventCard key={event.id} event={event} />)}
+          </StaggerIn>
         )}
       </section>
       <style>{`

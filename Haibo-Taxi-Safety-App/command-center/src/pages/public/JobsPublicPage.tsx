@@ -22,6 +22,7 @@ import {
 } from "../../lib/brand";
 import { jobs as jobsApi } from "../../api/client";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { StaggerIn } from "../../lib/motion";
 
 interface ServerJob {
   id: string;
@@ -141,7 +142,9 @@ export function JobsPublicPage() {
         ) : list.length === 0 ? (
           <EmptyState />
         ) : (
-          list.map((job) => <JobCard key={job.id} job={job} />)
+          <StaggerIn stagger={0.06} duration={0.5} distance={16}>
+            {list.map((job) => <JobCard key={job.id} job={job} />)}
+          </StaggerIn>
         )}
       </section>
       <style>{`

@@ -18,6 +18,7 @@ import {
   transitions,
 } from "../../lib/brand";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { StaggerIn } from "../../lib/motion";
 
 const VALUES: Array<{ Icon: typeof Shield; title: string; desc: string }> = [
   {
@@ -263,7 +264,11 @@ function MissionVision() {
         padding: `${spacing["5xl"]}px ${spacing["2xl"]}px`,
       }}
     >
-      <div
+      <StaggerIn
+        stagger={0.12}
+        duration={0.6}
+        distance={24}
+        onScroll
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
@@ -283,7 +288,7 @@ function MissionVision() {
           eyebrow="Our vision"
           body="A South Africa where every commuter feels safe, every driver is supported, and the taxi industry operates with the transparency and efficiency that 15 million daily riders deserve."
         />
-      </div>
+      </StaggerIn>
       <style>{`
         @media (max-width: 720px) {
           .hb-mv-grid {
@@ -399,7 +404,11 @@ function Values() {
             What drives us
           </h2>
         </div>
-        <div
+        <StaggerIn
+          stagger={0.08}
+          duration={0.55}
+          distance={20}
+          onScroll
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
@@ -410,7 +419,7 @@ function Values() {
           {VALUES.map(({ Icon, title, desc }) => (
             <ValueCard key={title} Icon={Icon} title={title} desc={desc} />
           ))}
-        </div>
+        </StaggerIn>
       </div>
       <style>{`
         @media (max-width: 960px) {

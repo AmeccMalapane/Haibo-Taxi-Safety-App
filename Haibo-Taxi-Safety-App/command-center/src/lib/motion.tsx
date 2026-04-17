@@ -130,6 +130,12 @@ export function StaggerIn({
   const ref = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
 
+  // Count React children so the hook re-animates when async-loaded content
+  // (event lists, job posts, community posts) appears after the component
+  // has mounted. Without this dep, the tween fires once on an empty
+  // container and never again when data lands.
+  const childCount = React.Children.count(children);
+
   useGSAP(
     () => {
       if (reduced || !ref.current) return;
@@ -157,7 +163,11 @@ export function StaggerIn({
         gsap.from(kids, tween);
       }
     },
-    { scope: ref, dependencies: [reduced, stagger, duration, distance, onScroll] },
+    {
+      scope: ref,
+      dependencies: [reduced, stagger, duration, distance, onScroll, childCount],
+      revertOnUpdate: true,
+    },
   );
 
   return (

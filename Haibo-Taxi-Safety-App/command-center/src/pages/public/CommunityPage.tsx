@@ -22,6 +22,7 @@ import {
 } from "../../lib/brand";
 import { community } from "../../api/client";
 import { usePageMeta } from "../../hooks/usePageMeta";
+import { StaggerIn } from "../../lib/motion";
 
 // Post type is derived client-side from hashtags because the server stores
 // reels with a fixed category set (for_you/community/safety/...) that doesn't
@@ -151,7 +152,10 @@ export function CommunityPage() {
         ) : visible.length === 0 ? (
           <EmptyState filter={filter} />
         ) : (
-          <div
+          <StaggerIn
+            stagger={0.06}
+            duration={0.5}
+            distance={16}
             style={{
               marginTop: spacing["2xl"],
               display: "grid",
@@ -163,7 +167,7 @@ export function CommunityPage() {
             {visible.map((post) => (
               <PostCard key={post.id} post={post} />
             ))}
-          </div>
+          </StaggerIn>
         )}
       </section>
       <style>{`

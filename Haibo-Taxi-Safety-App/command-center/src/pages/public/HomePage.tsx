@@ -34,47 +34,52 @@ const MapHero = React.lazy(() =>
   import("../../components/MapHero").then((m) => ({ default: m.MapHero })),
 );
 
+// Each feature gets a gradient pair from the accent palette so the grid
+// reads as colorful and confident instead of single-hue. Gradients mirror
+// the mobile CommunityScreen tile treatment — SOS = rose/emergency brand
+// moment, Rank Finder = sky, Haibo Pay = teal, Group Rides = fuchsia,
+// Route Tracking = yellow, Live Alerts = red/orange urgency.
 const FEATURES: Array<{
   Icon: typeof Shield;
   title: string;
   desc: string;
-  tint: string;
+  gradient: [string, string];
 }> = [
   {
     Icon: Shield,
     title: "Emergency SOS",
     desc: "One-tap SOS shares your GPS location with emergency contacts and local authorities instantly.",
-    tint: colors.rose,
+    gradient: [colors.haiboPink, colors.haiboPinkDark],
   },
   {
     Icon: MapPin,
     title: "Rank Finder",
     desc: "Locate the nearest taxi ranks with real-time availability, safety ratings, and fare estimates.",
-    tint: colors.success,
+    gradient: [colors.accentSky, colors.accentSkyLight],
   },
   {
     Icon: CreditCard,
     title: "Haibo Pay",
     desc: "Cashless fare payments, peer transfers, and driver earnings — all in one digital wallet.",
-    tint: colors.roseLight,
+    gradient: [colors.accentTeal, colors.accentTealLight],
   },
   {
     Icon: Users,
     title: "Group Rides",
     desc: "Coordinate shared rides for school runs, work commutes, and community events.",
-    tint: colors.info,
+    gradient: [colors.accentFuchsia, colors.accentFuchsiaLight],
   },
   {
     Icon: Navigation,
     title: "Route Tracking",
     desc: "Real-time GPS tracking of taxi routes for safety monitoring and data-driven optimization.",
-    tint: colors.warning,
+    gradient: [colors.accentYellow, colors.accentYellowLight],
   },
   {
     Icon: AlertTriangle,
     title: "Live Alerts",
     desc: "Community-powered safety alerts for road conditions, protests, and route disruptions.",
-    tint: colors.danger,
+    gradient: [colors.haiboError, colors.haiboGold],
   },
 ];
 
@@ -438,13 +443,13 @@ function Features() {
         }}
         className="hb-feat-grid"
       >
-        {FEATURES.map(({ Icon, title, desc, tint }) => (
+        {FEATURES.map(({ Icon, title, desc, gradient }) => (
           <FeatureCard
             key={title}
             Icon={Icon}
             title={title}
             desc={desc}
-            tint={tint}
+            gradient={gradient}
           />
         ))}
       </StaggerIn>
@@ -468,14 +473,15 @@ function FeatureCard({
   Icon,
   title,
   desc,
-  tint,
+  gradient,
 }: {
   Icon: typeof Shield;
   title: string;
   desc: string;
-  tint: string;
+  gradient: [string, string];
 }) {
   const [hovered, setHovered] = React.useState(false);
+  const [gradStart] = gradient;
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -483,30 +489,35 @@ function FeatureCard({
       style={{
         background: colors.surface,
         // 2px border (up from 1px) — the typeui-energetic pass wants thicker
-        // borders on cards for a more confident, youth-first feel. Tint
-        // toward the accent color on hover so the card "lights up".
-        border: `2px solid ${hovered ? `${tint}55` : colors.border}`,
+        // borders on cards for a more confident, youth-first feel. Border
+        // tints toward the gradient start color on hover so the card lights
+        // up in its own accent hue rather than the generic brand rose.
+        border: `2px solid ${hovered ? `${gradStart}55` : colors.border}`,
         borderRadius: radius.xl,
         padding: spacing["2xl"],
-        boxShadow: hovered ? shadows.lg : shadows.sm,
+        boxShadow: hovered ? `0 14px 28px ${gradStart}22` : shadows.sm,
         transform: hovered ? "translateY(-4px)" : "none",
         transition: transitions.medium,
       }}
     >
       <div
         style={{
-          width: 48,
-          height: 48,
+          width: 52,
+          height: 52,
           borderRadius: radius.md,
-          background: `${tint}18`,
+          // Gradient icon backplate mirrors the mobile CommunityScreen tiles
+          // exactly — white icon floats on a solid gradient chip with a
+          // subtle colored shadow for depth.
+          background: `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: tint,
+          color: "#FFFFFF",
           marginBottom: spacing.xl,
+          boxShadow: `0 6px 14px ${gradStart}33`,
         }}
       >
-        <Icon size={22} strokeWidth={2.2} />
+        <Icon size={22} strokeWidth={2.4} />
       </div>
       <h3
         style={{
@@ -553,7 +564,7 @@ function SafetyBand() {
         }}
         className="hb-safety-grid"
       >
-        <div>
+        <RevealOnScroll>
           <div
             style={{
               fontSize: 12,
@@ -568,11 +579,11 @@ function SafetyBand() {
           <h2
             style={{
               fontFamily: fonts.heading,
-              fontSize: "clamp(26px, 3.6vw, 40px)",
-              fontWeight: 700,
-              letterSpacing: -0.6,
+              fontSize: "clamp(28px, 3.8vw, 44px)",
+              fontWeight: 800,
+              letterSpacing: -0.8,
               marginTop: spacing.sm,
-              lineHeight: 1.1,
+              lineHeight: 1.08,
             }}
           >
             An SOS that actually reaches someone.
@@ -590,8 +601,10 @@ function SafetyBand() {
             and local responders with your live GPS — plus the taxi's plate and
             route — so help knows exactly where to go.
           </p>
-        </div>
-        <div
+        </RevealOnScroll>
+        <RevealOnScroll
+          startPosition={90}
+          distance={24}
           style={{
             background: "rgba(255, 255, 255, 0.08)",
             border: "1px solid rgba(255, 255, 255, 0.18)",
@@ -639,7 +652,7 @@ function SafetyBand() {
             <br />
             <span style={{ opacity: 0.72 }}>Dispatched 00:08 ago · 2 responders en route</span>
           </div>
-        </div>
+        </RevealOnScroll>
       </div>
       <style>{`
         @media (max-width: 820px) {
@@ -1162,31 +1175,36 @@ function DownloadCTA() {
         textAlign: "center",
       }}
     >
-      <h2
-        style={{
-          fontFamily: fonts.heading,
-          fontSize: "clamp(28px, 4vw, 44px)",
-          fontWeight: 700,
-          letterSpacing: -0.8,
-          color: colors.text,
-        }}
-      >
-        Ready to ride safer?
-      </h2>
-      <p
-        style={{
-          fontSize: 16,
-          lineHeight: 1.6,
-          color: colors.textSecondary,
-          marginTop: spacing.md,
-          maxWidth: 540,
-          margin: `${spacing.md}px auto 0`,
-        }}
-      >
-        Download Haibo! and join the community of commuters, drivers, and fleet
-        owners building a safer taxi network.
-      </p>
-      <div
+      <RevealOnScroll>
+        <h2
+          style={{
+            fontFamily: fonts.heading,
+            fontSize: "clamp(32px, 4.5vw, 52px)",
+            fontWeight: 800,
+            letterSpacing: -1.0,
+            color: colors.text,
+          }}
+        >
+          Ready to ride safer?
+        </h2>
+        <p
+          style={{
+            fontSize: 16,
+            lineHeight: 1.6,
+            color: colors.textSecondary,
+            marginTop: spacing.md,
+            maxWidth: 540,
+            margin: `${spacing.md}px auto 0`,
+          }}
+        >
+          Download Haibo! and join the community of commuters, drivers, and fleet
+          owners building a safer taxi network.
+        </p>
+      </RevealOnScroll>
+      <StaggerIn
+        stagger={0.1}
+        duration={0.5}
+        onScroll
         style={{
           display: "flex",
           justifyContent: "center",
@@ -1225,7 +1243,7 @@ function DownloadCTA() {
         >
           Download for iOS
         </a>
-      </div>
+      </StaggerIn>
     </section>
   );
 }
