@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Regenerate every PNG app-icon derivative from assets/images/icon.svg.
+// Regenerate every PNG app-icon derivative from assets/images/icon.svg
+// and every PNG wordmark derivative from the command-center SVG sources.
 //
 // Run from the repo root:
 //   node scripts/regenerate-icons.mjs
 //
-// Outputs:
+// Outputs (mobile app):
 //   Square derivatives (Expo / web):
 //     - assets/images/icon.png          (1024×1024 — Expo app icon)
 //     - assets/images/splash-icon.png   (1024×1024 — native splash)
@@ -17,6 +18,18 @@
 //       backdrop colour matching app.json adaptiveIcon.backgroundColor)
 //     - assets/images/android-icon-monochrome.png (1024×1024, logo
 //       as a white silhouette for Material You themed icons)
+//
+// Outputs (command-center / web):
+//   PNG derivatives (@1x/@2x/@3x for each SVG variant) so the browser
+//   never has to render the logo's radial + linear gradients itself —
+//   some rendering engines (notably older Safari + a subset of Android
+//   WebView) drop the green radial fallback to flat colour. PNGs of the
+//   exact same pre-rasterised output keep the brand mark consistent
+//   across every surface.
+//     - command-center/public/logo.{png,@2x.png,@3x.png}
+//     - command-center/public/logo-vertical.{png,@2x.png,@3x.png}
+//     - command-center/public/logo-landscape.{png,@2x.png,@3x.png}
+//     - command-center/public/og-image.png (1200×630 social share card)
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -82,7 +95,7 @@ function androidSvgWrapper(contents) {
   const logoH = SRC_VB.h * scale;
   const tx = (ANDROID_CANVAS - logoW) / 2;
   const ty = (ANDROID_CANVAS - logoH) / 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ANDROID_CANVAS} ${ANDROID_CANVAS}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${ANDROID_CANVAS} ${ANDROID_CANVAS}">
     <g transform="translate(${tx}, ${ty}) scale(${scale})">
       ${contents}
     </g>
@@ -112,7 +125,7 @@ const svgInner = innerMatch[1];
 // green — the whole layer regenerates from the constant below.
 const BG_COLOR = "#E6F4FE";
 {
-  const bgSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ANDROID_CANVAS} ${ANDROID_CANVAS}">
+  const bgSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${ANDROID_CANVAS} ${ANDROID_CANVAS}">
     <rect width="${ANDROID_CANVAS}" height="${ANDROID_CANVAS}" fill="${BG_COLOR}"/>
   </svg>`;
   const resvg = new Resvg(bgSvg, {
@@ -141,6 +154,105 @@ const BG_COLOR = "#E6F4FE";
   const png = resvg.render().asPng();
   writeFileSync(resolve(ROOT, "assets/images/android-icon-monochrome.png"), png);
   console.log("  wrote assets/images/android-icon-monochrome.png  (1024×1024)");
+}
+
+// ─── Command-center wordmark derivatives ──────────────────────────────
+//
+// Render each marketing-surface SVG (shield-only, vertical wordmark,
+// landscape wordmark, plus white-foreground variants) into PNGs at @1x,
+// @2x, and @3x so <img srcSet> can pick the right density for retina
+// screens. The @1x width is the natural display width — picked to be a
+// little larger than the biggest on-page slot (~64px for shield, ~360px
+// for landscape wordmark) so any single derivative can serve any
+// consumer without upscaling blur.
+const CC_PUBLIC = "command-center/public";
+
+// Match the viewBox values inside an SVG and rewrite to a square canvas
+// centered on the original content (transparent padding on the short
+// edge). Keeps a portrait shield in a square PNG without distortion.
+function squareViewBox(svg) {
+  return svg.replace(/viewBox="([-\d.\s]+)"/, (_, raw) => {
+    const [x, y, w, h] = raw.trim().split(/\s+/).map(Number);
+    const sideLocal = Math.max(w, h);
+    const ox = x - (sideLocal - w) / 2;
+    const oy = y - (sideLocal - h) / 2;
+    return `viewBox="${ox} ${oy} ${sideLocal} ${sideLocal}"`;
+  });
+}
+
+// The brand SVGs from the Illustrator export embed the shield outline as
+// a base64-encoded raster layer (via <image xlink:href="data:image/png;…"/>).
+// That means a "white silhouette" derivative can't be synthesised by text
+// substitution — the embedded raster always dominates. The full-colour
+// logo reads well on both light and dark surfaces (the shield's own
+// rose/green/blue/white palette is self-contained), so a single colour
+// PNG is used everywhere and no white variant is generated.
+const CC_VARIANTS = [
+  // Shield viewBox is portrait (537×644); squared here so a single
+  // 1:1 PNG drops cleanly into square slots (sidebar avatar, login hero).
+  { src: "logo.svg", base: "logo", baseWidth: 128, square: true },
+  { src: "logo-vertical.svg", base: "logo-vertical", baseWidth: 140, square: false },
+  { src: "logo-landscape.svg", base: "logo-landscape", baseWidth: 360, square: false },
+];
+
+for (const { src, base, baseWidth, square } of CC_VARIANTS) {
+  const srcPath = resolve(ROOT, CC_PUBLIC, src);
+  let svg = readFileSync(srcPath, "utf-8");
+  if (square) svg = squareViewBox(svg);
+  for (const [suffix, multiplier] of [["", 1], ["@2x", 2], ["@3x", 3]]) {
+    const width = baseWidth * multiplier;
+    const resvg = new Resvg(svg, { fitTo: { mode: "width", value: width } });
+    const png = resvg.render().asPng();
+    const out = `${CC_PUBLIC}/${base}${suffix}.png`;
+    writeFileSync(resolve(ROOT, out), png);
+    console.log(`  wrote ${out}  (width ${width}px)`);
+  }
+}
+
+// ─── OG / social share card ───────────────────────────────────────────
+//
+// Twitter / Facebook / LinkedIn / Slack render share cards at ~1200×630.
+// We wrap the landscape wordmark on a brand-tinted background so the
+// mark reads at thumbnail size instead of getting lost as a transparent
+// silhouette on whatever card background the crawler renders behind it.
+{
+  const landscape = readFileSync(resolve(ROOT, CC_PUBLIC, "logo-landscape.svg"), "utf-8");
+  const landscapeInner = landscape.match(/<svg[^>]*>([\s\S]*)<\/svg>\s*$/)?.[1];
+  const landscapeVbMatch = landscape.match(/viewBox="([-\d.\s]+)"/);
+  if (!landscapeInner || !landscapeVbMatch) {
+    throw new Error("Could not parse logo-landscape.svg for OG card");
+  }
+  const [, raw] = landscapeVbMatch;
+  const [, , lw, lh] = raw.trim().split(/\s+/).map(Number);
+
+  const OG_W = 1200;
+  const OG_H = 630;
+  const LOGO_TARGET_W = 780;
+  const scale = LOGO_TARGET_W / lw;
+  const logoDrawW = lw * scale;
+  const logoDrawH = lh * scale;
+  const tx = (OG_W - logoDrawW) / 2;
+  const ty = (OG_H - logoDrawH) / 2;
+
+  const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${OG_W} ${OG_H}">
+    <defs>
+      <linearGradient id="og-bg" x1="0" y1="0" x2="${OG_W}" y2="${OG_H}" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#FCFBFA"/>
+        <stop offset="1" stop-color="#F5E8EE"/>
+      </linearGradient>
+      <radialGradient id="og-glow" cx="${OG_W / 2}" cy="${OG_H / 2}" r="${OG_W / 2}" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#E72369" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#E72369" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="${OG_W}" height="${OG_H}" fill="url(#og-bg)"/>
+    <rect width="${OG_W}" height="${OG_H}" fill="url(#og-glow)"/>
+    <g transform="translate(${tx}, ${ty}) scale(${scale})">${landscapeInner}</g>
+  </svg>`;
+  const resvg = new Resvg(ogSvg, { fitTo: { mode: "width", value: OG_W } });
+  const png = resvg.render().asPng();
+  writeFileSync(resolve(ROOT, `${CC_PUBLIC}/og-image.png`), png);
+  console.log(`  wrote ${CC_PUBLIC}/og-image.png  (${OG_W}×${OG_H})`);
 }
 
 console.log("Done.");

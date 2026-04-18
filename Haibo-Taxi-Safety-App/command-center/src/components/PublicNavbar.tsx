@@ -12,6 +12,7 @@ import {
 } from "../lib/brand";
 import { auth } from "../api/client";
 import { ThemeToggle } from "./ThemeToggle";
+import { HaiboMark } from "./HaiboMark";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
@@ -64,13 +65,7 @@ export function PublicNavbar() {
             textDecoration: "none",
           }}
         >
-          <img
-            src="/logo.svg"
-            alt="Haibo!"
-            width={36}
-            height={36}
-            style={{ filter: "drop-shadow(0 4px 12px rgba(200, 30, 94, 0.28))" }}
-          />
+          <HaiboMark variant="shield" width={36} alt="" />
           <span
             style={{
               fontFamily: fonts.heading,

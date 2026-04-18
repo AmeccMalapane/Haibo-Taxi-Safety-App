@@ -19,6 +19,7 @@ import {
 } from "../../lib/brand";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { StaggerIn } from "../../lib/motion";
+import { HaiboMark } from "../../components/HaiboMark";
 
 const VALUES: Array<{ Icon: typeof Shield; title: string; desc: string }> = [
   {
@@ -233,11 +234,13 @@ function Hero() {
               transform: "rotate(2deg)",
             }}
           >
-            <img
-              src="/logo.svg"
-              alt="Haibo!"
+            <HaiboMark
+              variant="vertical"
+              width={240}
+              alt=""
               style={{
-                width: "60%",
+                width: "68%",
+                height: "auto",
                 filter: "drop-shadow(0 12px 32px rgba(200, 30, 94, 0.45))",
               }}
             />

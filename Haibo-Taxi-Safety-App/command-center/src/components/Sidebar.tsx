@@ -31,6 +31,7 @@ import {
 import { colors, radius, spacing, shadows, gradients, transitions } from "../lib/brand";
 import { auth } from "../api/client";
 import { closeSocket } from "../lib/socket";
+import { HaiboMark } from "./HaiboMark";
 
 interface NavItem {
   to: string;
@@ -101,11 +102,10 @@ export function Sidebar() {
           gap: spacing.md,
         }}
       >
-        <img
-          src="/logo.svg"
-          alt="Haibo!"
+        <HaiboMark
+          variant="shield"
           width={38}
-          height={38}
+          alt=""
           style={{ flexShrink: 0, filter: "drop-shadow(0 2px 8px rgba(200, 30, 94, 0.35))" }}
         />
         <div>

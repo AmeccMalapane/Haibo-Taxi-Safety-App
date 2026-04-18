@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "../api/client";
 import { Button } from "../components/Button";
+import { HaiboMark } from "../components/HaiboMark";
 import {
   colors,
   radius,
@@ -210,11 +211,10 @@ export function LoginPage() {
             marginBottom: spacing["2xl"],
           }}
         >
-          <img
-            src="/logo.svg"
-            alt="Haibo!"
+          <HaiboMark
+            variant="shield"
             width={64}
-            height={64}
+            alt=""
             style={{
               marginBottom: spacing.md,
               filter: "drop-shadow(0 8px 24px rgba(200, 30, 94, 0.35))",

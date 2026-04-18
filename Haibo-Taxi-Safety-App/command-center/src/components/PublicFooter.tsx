@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Shield } from "lucide-react";
-import { colors, spacing, fonts, radius } from "../lib/brand";
+import { colors, spacing } from "../lib/brand";
+import { HaiboMark } from "./HaiboMark";
 
 const LINK_SECTIONS = [
   {
@@ -51,33 +51,15 @@ export function PublicFooter() {
       >
         {/* Brand column */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: spacing.md }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: radius.md,
-                background: `linear-gradient(135deg, ${colors.rose}, ${colors.roseLight})`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 6px 16px rgba(200, 30, 94, 0.35)",
-              }}
-            >
-              <Shield size={20} color="#FFFFFF" />
-            </div>
-            <div
-              style={{
-                fontFamily: fonts.heading,
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: -0.4,
-                color: "#FFFFFF",
-              }}
-            >
-              Haibo<span style={{ color: colors.roseLight }}>!</span>
-            </div>
-          </div>
+          <HaiboMark
+            variant="landscape"
+            width={180}
+            alt="Haibo!"
+            glow={false}
+            style={{
+              filter: "drop-shadow(0 6px 16px rgba(231, 35, 105, 0.28))",
+            }}
+          />
           <p
             style={{
               marginTop: spacing.lg,
