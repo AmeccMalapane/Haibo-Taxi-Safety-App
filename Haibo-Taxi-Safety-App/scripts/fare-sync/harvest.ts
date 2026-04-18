@@ -24,7 +24,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { apifyClientFromEnv, type FacebookPost } from "./apify-client";
+import {
+  apifyClientFromEnv,
+  type FacebookPost,
+  type FacebookComment,
+} from "./apify-client";
 import {
   extractorFromEnv,
   DEFAULT_EXTRACTOR_MODEL,
@@ -66,6 +70,77 @@ function parseArgs(argv: string[]): HarvestOptions {
   return opts;
 }
 
+// --- Trial-fixture normalization -------------------------------------------
+// The curated trial dataset stores two slices with different field shapes
+// from what the extractor expects:
+//  - all_posts: Apify-raw posts (id, text, …) with no nested comments
+//  - qa_rows:   Q+A threads in snake_case (post_id, top_comments[].author, …)
+// We normalize both into FacebookPost so the rest of the pipeline sees the
+// same contract regardless of source.
+
+interface QaRowComment {
+  comment_id?: string;
+  comment_url?: string;
+  date?: string;
+  author?: string;
+  text?: string;
+  likes?: number;
+  threading_depth?: number;
+}
+
+interface QaRow {
+  post_id?: string;
+  post_legacy_id?: string;
+  post_url?: string;
+  post_time?: string;
+  post_author?: string;
+  post_text?: string;
+  comments_count?: number;
+  top_comments?: QaRowComment[];
+}
+
+interface ApifyRawPost {
+  id?: string;
+  legacyId?: string;
+  feedbackId?: string;
+  url?: string;
+  facebookUrl?: string;
+  time?: string;
+  text?: string;
+  user?: { id?: string; name?: string };
+}
+
+function normalizeQaRow(row: QaRow): FacebookPost {
+  const topComments: FacebookComment[] = (row.top_comments ?? []).map(
+    (c) => ({
+      id: c.comment_id ?? "",
+      text: c.text,
+      time: c.date,
+      url: c.comment_url,
+      user: c.author ? { name: c.author } : undefined,
+    }),
+  );
+  return {
+    postId: row.post_id ?? row.post_legacy_id ?? "",
+    url: row.post_url ?? "",
+    time: row.post_time,
+    text: row.post_text,
+    user: row.post_author ? { name: row.post_author } : undefined,
+    topComments,
+  };
+}
+
+function normalizeApifyRawPost(raw: ApifyRawPost): FacebookPost {
+  return {
+    postId: raw.id ?? raw.legacyId ?? raw.feedbackId ?? "",
+    url: raw.url ?? raw.facebookUrl ?? "",
+    time: raw.time,
+    text: raw.text,
+    user: raw.user,
+    topComments: [],
+  };
+}
+
 async function loadPosts(opts: HarvestOptions): Promise<FacebookPost[]> {
   if (opts.trial) {
     if (!fs.existsSync(opts.trialDataPath)) {
@@ -76,12 +151,31 @@ async function loadPosts(opts: HarvestOptions): Promise<FacebookPost[]> {
     }
     const raw = fs.readFileSync(opts.trialDataPath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
-    // The trial file has a wrapper {posts: [...]} OR is a bare array of posts.
-    const posts = Array.isArray(parsed)
-      ? (parsed as FacebookPost[])
-      : (((parsed as { posts?: FacebookPost[] }).posts ??
-          []) as FacebookPost[]);
-    return posts;
+    // The trial file can be:
+    //  - a bare array of already-shaped FacebookPost objects
+    //  - {posts: [...]} — already-shaped
+    //  - {qa_rows: [...]} — the curated Q+A ground-truth set with
+    //    snake_case field names (post_id, post_text, top_comments[], …).
+    //    This is the primary smoke-test input: 14 hand-picked threads
+    //    that exercise the comment-answered-fare extraction path.
+    //  - {all_posts: [...]} — the full 50-post dump in Apify's raw shape
+    //    (id, text, user, but NO nested comments). Falls through as a
+    //    last resort when qa_rows is absent; won't exercise Q+A logic
+    //    but will at least validate post-body extraction and PII redaction.
+    const parsedObj = parsed as {
+      posts?: FacebookPost[];
+      qa_rows?: QaRow[];
+      all_posts?: ApifyRawPost[];
+    };
+    if (Array.isArray(parsed)) return parsed as FacebookPost[];
+    if (parsedObj.posts && parsedObj.posts.length) return parsedObj.posts;
+    if (parsedObj.qa_rows && parsedObj.qa_rows.length) {
+      return parsedObj.qa_rows.map(normalizeQaRow);
+    }
+    if (parsedObj.all_posts && parsedObj.all_posts.length) {
+      return parsedObj.all_posts.map(normalizeApifyRawPost);
+    }
+    return [];
   }
   const apify = apifyClientFromEnv();
   return apify.runSync({

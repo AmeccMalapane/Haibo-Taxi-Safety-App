@@ -91,13 +91,13 @@ export class ApifyClient {
         `Apify run-sync failed: ${res.status} ${res.statusText} ${body.slice(0, 500)}`,
       );
     }
-    const items = (await res.json()) as FacebookPost[];
-    if (!Array.isArray(items)) {
+    const raw = (await res.json()) as unknown;
+    if (!Array.isArray(raw)) {
       throw new Error(
-        `Apify run-sync returned non-array payload (got ${typeof items})`,
+        `Apify run-sync returned non-array payload (got ${typeof raw})`,
       );
     }
-    return items;
+    return raw.map(normalizeApifyPost);
   }
 
   /**
@@ -114,14 +114,58 @@ export class ApifyClient {
         `Apify fetchDataset failed: ${res.status} ${res.statusText} ${body.slice(0, 500)}`,
       );
     }
-    const items = (await res.json()) as FacebookPost[];
-    if (!Array.isArray(items)) {
+    const raw = (await res.json()) as unknown;
+    if (!Array.isArray(raw)) {
       throw new Error(
-        `Apify fetchDataset returned non-array payload (got ${typeof items})`,
+        `Apify fetchDataset returned non-array payload (got ${typeof raw})`,
       );
     }
-    return items;
+    return raw.map(normalizeApifyPost);
   }
+}
+
+/**
+ * Normalize Apify's raw FB-group-scraper output into our FacebookPost shape.
+ * Apify uses `id` as the post identifier and `topComments` is not always
+ * populated by every actor version; older/cheaper actors emit `comments`
+ * instead. We accept both so the harvester doesn't care which actor ran.
+ */
+function normalizeApifyPost(raw: unknown): FacebookPost {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const commentsSrc = (p.topComments ?? p.comments ?? []) as Array<
+    Record<string, unknown>
+  >;
+  const topComments: FacebookComment[] = commentsSrc
+    .map((c) => ({
+      id: String(c.id ?? c.commentId ?? ""),
+      text: typeof c.text === "string" ? c.text : undefined,
+      time: typeof c.time === "string" ? c.time : undefined,
+      url: typeof c.url === "string" ? c.url : undefined,
+      user:
+        c.user && typeof c.user === "object"
+          ? (c.user as { id?: string; name?: string })
+          : typeof c.author === "string"
+            ? { name: c.author }
+            : undefined,
+    }))
+    .filter((c) => c.id);
+  return {
+    postId: String(p.postId ?? p.id ?? p.legacyId ?? p.feedbackId ?? ""),
+    url: String(p.url ?? p.facebookUrl ?? ""),
+    time: typeof p.time === "string" ? p.time : undefined,
+    text: typeof p.text === "string" ? p.text : undefined,
+    user:
+      p.user && typeof p.user === "object"
+        ? (p.user as { id?: string; name?: string })
+        : undefined,
+    topComments,
+    groupId:
+      typeof p.groupId === "string"
+        ? p.groupId
+        : typeof p.facebookId === "string"
+          ? p.facebookId
+          : undefined,
+  };
 }
 
 /**
