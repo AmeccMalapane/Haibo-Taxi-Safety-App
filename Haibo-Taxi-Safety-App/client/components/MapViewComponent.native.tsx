@@ -18,6 +18,7 @@ import { RANKS, ROUTES, STATUS_CONFIG, GAUTENG_CENTER } from "@/data/mapbox_tran
 import type { TaxiLocation, LocationType, TrafficIncident, IncidentType } from "@/lib/types";
 import type { MapboxTaxiRank, MapboxTaxiRoute } from "@/data/mapbox_transit_data";
 import { PasopReport, PASOP_CATEGORIES, isReportActive } from "@/data/pasopReports";
+import { snapRoutesInBatches } from "@/lib/snapRouteToRoads";
 
 // Set access token before any map renders
 setAccessToken(MAPBOX_ACCESS_TOKEN);
@@ -285,7 +286,35 @@ export function MapViewComponent({
   // GeoJSON data
   const locationsGeoJSON = React.useMemo(() => locationsToGeoJSON(locations), [locations]);
   const ranksGeoJSON = React.useMemo(() => ranksToGeoJSON(RANKS), []);
-  const routesGeoJSON = React.useMemo(() => routesToGeoJSON(ROUTES), []);
+
+  // Road-snapped route overrides. ROUTES ships with a synthetic sine
+  // curve between origin and destination — visually distinct but cuts
+  // straight across buildings. snapRoutesInBatches replaces each with
+  // a Mapbox Directions result that actually follows roads, streaming
+  // results into this map as they resolve so the polylines redraw
+  // progressively without blocking the first paint.
+  const [snappedCoords, setSnappedCoords] = useState<Record<string, [number, number][]>>({});
+  useEffect(() => {
+    let cancelled = false;
+    snapRoutesInBatches(ROUTES, (routeId, snapped) => {
+      if (cancelled) return;
+      setSnappedCoords((prev) =>
+        prev[routeId] === snapped ? prev : { ...prev, [routeId]: snapped },
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const routesGeoJSON = React.useMemo(() => {
+    const snappedRoutes = ROUTES.map((route) =>
+      snappedCoords[route.id]
+        ? { ...route, coordinates: snappedCoords[route.id] }
+        : route,
+    );
+    return routesToGeoJSON(snappedRoutes);
+  }, [snappedCoords]);
   const incidentsGeoJSON = React.useMemo(() => incidentsToGeoJSON(incidents), [incidents]);
   const pasopGeoJSON = React.useMemo(
     () => pasopToGeoJSON(pasopReports),
