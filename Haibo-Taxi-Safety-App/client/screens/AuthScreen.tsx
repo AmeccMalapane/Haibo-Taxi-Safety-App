@@ -141,6 +141,17 @@ export default function AuthScreen() {
     }
   };
 
+  // Calling skipAuth() flips the context's isGuest flag, but the root
+  // Stack.Navigator's `initialRouteName` is only evaluated on mount —
+  // so context changes alone leave the user stranded on this screen.
+  // An explicit navigation.reset to MainTabs mirrors what
+  // OTPVerificationScreen does on a successful verify and is what
+  // actually moves the user off the auth stack.
+  const enterAppAsGuest = async () => {
+    await skipAuth();
+    navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+  };
+
   const handleBiometricAuth = async () => {
     try {
       triggerHaptic("selection");
@@ -156,14 +167,14 @@ export default function AuthScreen() {
         // AuthContext method that re-validates the saved refresh token.
         // For now, we fall through to guest mode so the user reaches
         // the app instead of getting stuck.
-        await skipAuth();
+        await enterAppAsGuest();
       }
     } catch {}
   };
 
   const handleSkip = async () => {
     triggerHaptic("selection");
-    await skipAuth();
+    await enterAppAsGuest();
   };
 
   const canSubmit = phone.length >= 9 && !loading;
