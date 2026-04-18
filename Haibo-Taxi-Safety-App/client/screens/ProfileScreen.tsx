@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   avatarMonogram: {
     fontSize: 36,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     color: BrandColors.primary.gradientStart,
   },
   avatarEditBadge: {

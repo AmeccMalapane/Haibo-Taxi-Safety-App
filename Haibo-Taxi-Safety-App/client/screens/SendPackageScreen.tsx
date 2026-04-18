@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   textInput: {
     height: 48,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Nunito_400Regular",
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.sm,
     borderWidth: 1.5,
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 38,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     fontVariant: ["tabular-nums"],
     letterSpacing: -0.5,
   },

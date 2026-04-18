@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
     color: BrandColors.primary.gradientStart,
     fontSize: 26,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 2,
     fontVariant: ["tabular-nums"],
   },
@@ -1076,7 +1076,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
   },
   signupInfo: {
     flex: 1,

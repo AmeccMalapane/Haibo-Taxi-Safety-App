@@ -204,22 +204,25 @@ export const transitions = {
 } as const;
 
 /**
- * Font family stacks — Nunito for body/UI, Space Grotesk for headings,
- * DM Sans as a friendly variant for marketing surfaces. Matches the
- * deployed app.haibo.africa reference.
+ * Font family stacks — Nunito is now the single official typeface
+ * across mobile + command-center (Space Grotesk + DM Sans retired).
+ * Headings + body + accent all resolve to Nunito with different
+ * weights; the heavier weights provide the hierarchy the old Space
+ * Grotesk pairing used to carry.
  */
 export const fonts = {
-  sans: "'Nunito', 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-  body: "'Nunito', 'DM Sans', system-ui, -apple-system, sans-serif",
-  heading: "'Space Grotesk', 'Nunito', system-ui, -apple-system, sans-serif",
-  accent: "'DM Sans', 'Nunito', system-ui, -apple-system, sans-serif",
+  sans: "'Nunito', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  body: "'Nunito', system-ui, -apple-system, sans-serif",
+  heading: "'Nunito', system-ui, -apple-system, sans-serif",
+  accent: "'Nunito', system-ui, -apple-system, sans-serif",
   mono: "'SFMono-Regular', Menlo, Monaco, Consolas, monospace",
 } as const;
 
 /**
- * Typography tokens — drop-in style objects. Headings use Space Grotesk,
- * body uses Nunito. Sizes and weights mirror the mobile Typography
- * tokens but scaled up slightly for desktop reading.
+ * Typography tokens — drop-in style objects. Headings use a heavier
+ * Nunito weight (800) and body uses regular/medium. Sizes and weights
+ * mirror the mobile Typography tokens but scaled up slightly for
+ * desktop reading.
  */
 export const typography = {
   // Marketing-hero title — used on HomePage and big public landing pages.

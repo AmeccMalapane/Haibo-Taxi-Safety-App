@@ -262,11 +262,11 @@ export const BorderRadius = {
   full: 9999,
 };
 
-// Android's default `includeFontPadding: true` combined with Space Grotesk's
-// ascender-heavy metrics causes top-clipping on heading text — observed on
-// Profile, City Explorer, Emergency, and Dashboard hero titles. Turning the
-// font padding off and bumping line heights a few pixels gives headings
-// enough headroom to render without the tops of capitals getting clipped.
+// Android's default `includeFontPadding: true` combined with Nunito's
+// generous x-height + ascenders causes top-clipping on bold heading
+// weights — same pattern that bit us on Space Grotesk before the
+// Nunito migration. Turning the font padding off and bumping line
+// heights keeps headings from losing the tops of capitals.
 const headingAndroidFix =
   Platform.OS === "android" ? { includeFontPadding: false } : {};
 
@@ -275,80 +275,80 @@ export const Typography = {
     fontSize: 30,
     lineHeight: 42,
     fontWeight: "700" as const,
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     ...headingAndroidFix,
   },
   h2: {
     fontSize: 26,
     lineHeight: 38,
     fontWeight: "700" as const,
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     ...headingAndroidFix,
   },
   h3: {
     fontSize: 22,
     lineHeight: 32,
     fontWeight: "600" as const,
-    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontFamily: "Nunito_700Bold",
     ...headingAndroidFix,
   },
   h4: {
     fontSize: 18,
     lineHeight: 28,
     fontWeight: "600" as const,
-    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontFamily: "Nunito_700Bold",
     ...headingAndroidFix,
   },
   body: {
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "400" as const,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Nunito_400Regular",
   },
   small: {
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "400" as const,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Nunito_400Regular",
   },
   link: {
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "500" as const,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Nunito_500Medium",
   },
   label: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: "600" as const,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Nunito_600SemiBold",
   },
 };
 
 export const FontFamily = {
-  heading: "SpaceGrotesk_700Bold",
-  headingSemiBold: "SpaceGrotesk_600SemiBold",
-  headingMedium: "SpaceGrotesk_500Medium",
-  regular: "Inter_400Regular",
-  medium: "Inter_500Medium",
-  semiBold: "Inter_600SemiBold",
-  bold: "Inter_700Bold",
+  heading: "Nunito_800ExtraBold",
+  headingSemiBold: "Nunito_700Bold",
+  headingMedium: "Nunito_600SemiBold",
+  regular: "Nunito_400Regular",
+  medium: "Nunito_500Medium",
+  semiBold: "Nunito_600SemiBold",
+  bold: "Nunito_700Bold",
 };
 
 export const Fonts = Platform.select({
   ios: {
-    sans: "Inter_400Regular",
-    heading: "SpaceGrotesk_700Bold",
+    sans: "Nunito_400Regular",
+    heading: "Nunito_800ExtraBold",
     mono: "ui-monospace",
   },
   default: {
-    sans: "Inter_400Regular",
-    heading: "SpaceGrotesk_700Bold",
+    sans: "Nunito_400Regular",
+    heading: "Nunito_800ExtraBold",
     mono: "monospace",
   },
   web: {
-    sans: "'Inter', system-ui, -apple-system, sans-serif",
-    heading: "'Space Grotesk', 'Inter', system-ui, sans-serif",
+    sans: "'Nunito', system-ui, -apple-system, sans-serif",
+    heading: "'Nunito', system-ui, -apple-system, sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   },
 });

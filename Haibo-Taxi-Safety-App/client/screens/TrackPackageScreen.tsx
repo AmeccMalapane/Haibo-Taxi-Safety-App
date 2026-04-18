@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
     height: 56,
     fontSize: 18,
     fontWeight: "700",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 1.5,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.sm,
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   trackingValue: {
     ...Typography.h4,
     fontSize: 18,
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 0.5,
   },
   statusBadge: {

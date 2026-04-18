@@ -10,17 +10,17 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import * as Linking from "expo-linking";
 import { Feather, Ionicons, MaterialIcons, FontAwesome } from "@expo/vector-icons";
+// Nunito is now the single official typeface across mobile + command-
+// center. The old Inter (body) + Space Grotesk (headings) pairing has
+// been retired — every fontFamily token the app used to reference has
+// been swapped to the corresponding Nunito weight via a bulk rename.
 import {
-  SpaceGrotesk_500Medium,
-  SpaceGrotesk_600SemiBold,
-  SpaceGrotesk_700Bold,
-} from "@expo-google-fonts/space-grotesk";
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from "@expo-google-fonts/inter";
+  Nunito_400Regular,
+  Nunito_500Medium,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+} from "@expo-google-fonts/nunito";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -209,13 +209,11 @@ function AppWithFonts() {
           ...Ionicons.font,
           ...MaterialIcons.font,
           ...FontAwesome.font,
-          SpaceGrotesk_500Medium,
-          SpaceGrotesk_600SemiBold,
-          SpaceGrotesk_700Bold,
-          Inter_400Regular,
-          Inter_500Medium,
-          Inter_600SemiBold,
-          Inter_700Bold,
+          Nunito_400Regular,
+          Nunito_500Medium,
+          Nunito_600SemiBold,
+          Nunito_700Bold,
+          Nunito_800ExtraBold,
         });
       await restoreSavedLanguage(i18n);
       } catch (e) {

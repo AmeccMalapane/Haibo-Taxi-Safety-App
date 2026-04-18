@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 40,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     fontVariant: ["tabular-nums"],
     letterSpacing: -0.5,
   },
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Nunito_400Regular",
   },
   quickAmounts: {
     flexDirection: "row",

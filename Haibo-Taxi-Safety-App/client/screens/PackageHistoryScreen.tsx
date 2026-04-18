@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   trackingNumber: {
     ...Typography.body,
     fontWeight: "800",
-    fontFamily: "SpaceGrotesk_700Bold",
+    fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 0.5,
   },
   date: {

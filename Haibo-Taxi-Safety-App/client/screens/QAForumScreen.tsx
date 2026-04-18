@@ -191,7 +191,7 @@ function Monogram({
         style={{
           color: "#FFFFFF",
           fontSize: size * 0.4,
-          fontFamily: "SpaceGrotesk_700Bold",
+          fontFamily: "Nunito_800ExtraBold",
           fontWeight: "800",
         }}
       >
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontSize: 14,
     fontWeight: "700",
-    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontFamily: "Nunito_700Bold",
   },
   verifiedBadge: {
     flexDirection: "row",
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: BrandColors.primary.gradientStart,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Nunito_600SemiBold",
     letterSpacing: 0.2,
   },
   timestamp: {
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: BrandColors.primary.gradientStart,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Nunito_600SemiBold",
   },
   emptyState: {
     alignItems: "center",

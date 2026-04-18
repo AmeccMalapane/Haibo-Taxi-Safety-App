@@ -740,7 +740,7 @@ const qrCardStyles = StyleSheet.create({
   plate: {
     ...Typography.small,
     letterSpacing: 1,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Nunito_600SemiBold",
     marginTop: 2,
     marginBottom: Spacing.lg,
   },
