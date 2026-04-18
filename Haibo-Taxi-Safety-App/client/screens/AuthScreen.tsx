@@ -27,6 +27,7 @@ import {
 } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
+import { HaiboLogo } from "@/components/HaiboLogo";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -190,11 +191,7 @@ export default function AuthScreen() {
       >
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(400)} style={styles.badgeWrap}>
           <View style={styles.badge}>
-            <Feather
-              name="shield"
-              size={44}
-              color={BrandColors.primary.gradientStart}
-            />
+            <HaiboLogo size={64} />
           </View>
         </Animated.View>
 

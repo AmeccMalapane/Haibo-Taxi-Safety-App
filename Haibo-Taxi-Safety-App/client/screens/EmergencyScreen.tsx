@@ -25,6 +25,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
+import { HaiboLogo } from "@/components/HaiboLogo";
 import { SkeletonBlock } from "@/components/Skeleton";
 import { getEmergencyContacts } from "@/lib/storage";
 import { EmergencyContact } from "@/lib/types";
@@ -231,7 +232,11 @@ export default function EmergencyScreen() {
         >
           <Animated.View style={[styles.pulseCircle, animatedPulseStyle]} />
           <View style={styles.sosCircle}>
-            <Feather name="alert-triangle" size={56} color="#FFFFFF" />
+            {/* Haibo shield at the heart of the pulse so the SOS reads as
+                "Haibo has you" rather than a generic alert glyph. The
+                HaiboLogo PNG is square-padded so it centres cleanly in
+                the 140px circle. */}
+            <HaiboLogo size={96} />
           </View>
         </Animated.View>
 

@@ -219,7 +219,7 @@ export default function TrackPackageScreen() {
       return {
         status: statusLabels[status] || status,
         location:
-          historyEntry?.location || (status === "registered" ? "Haibo App" : ""),
+          historyEntry?.location || (status === "registered" ? "Haibo!" : ""),
         time,
         completed: isCompleted,
         current: isCurrent,

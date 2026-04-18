@@ -39,7 +39,7 @@ const ISSUE_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   overcrowding: "users",
   rude_driver: "user-x",
   vehicle_condition: "tool",
-  overcharging: "dollar-sign",
+  overcharging: "tag",
   harassment: "shield-off",
   accident: "alert-octagon",
   theft: "slash",

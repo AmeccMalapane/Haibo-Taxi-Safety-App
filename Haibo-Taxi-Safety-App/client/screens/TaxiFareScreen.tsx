@@ -156,7 +156,7 @@ export default function TaxiFareScreen() {
           >
             <View style={styles.heroBadge}>
               <Feather
-                name="dollar-sign"
+                name="tag"
                 size={32}
                 color={BrandColors.primary.gradientStart}
               />

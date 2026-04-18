@@ -293,7 +293,7 @@ export default function CommunityTray({ visible, onClose }: CommunityTrayProps) 
                         onShare={async () => {
                           try {
                             await Share.share({
-                              message: `${post.title}\n\n${post.content}\n\nShared via Haibo App`,
+                              message: `${post.title}\n\n${post.content}\n\nShared via Haibo!`,
                             });
                           } catch {}
                         }}

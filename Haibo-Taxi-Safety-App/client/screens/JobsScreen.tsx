@@ -508,7 +508,7 @@ export default function JobsScreen() {
                           {item.salary ? (
                             <View style={styles.metaItem}>
                               <Feather
-                                name="dollar-sign"
+                                name="tag"
                                 size={12}
                                 color={BrandColors.status.success}
                               />

@@ -115,7 +115,7 @@ const TAB_CONFIG: Record<RoleRole, RoleTabConfig> = {
   commuter: {
     leftTabs: [
       { name: "HomeTab", component: HomeStackNavigator, icon: "map", label: "Home and map" },
-      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Taxi fares" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "tag", label: "Taxi fares" },
     ],
     rightTabs: [
       { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
@@ -126,7 +126,7 @@ const TAB_CONFIG: Record<RoleRole, RoleTabConfig> = {
   driver: {
     leftTabs: [
       { name: "DashboardTab", component: DriverDashboardScreen, icon: "bar-chart-2", label: "Driver dashboard" },
-      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Fare reference" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "tag", label: "Fare reference" },
     ],
     rightTabs: [
       { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },
@@ -164,7 +164,7 @@ const TAB_CONFIG: Record<RoleRole, RoleTabConfig> = {
   admin: {
     leftTabs: [
       { name: "HomeTab", component: HomeStackNavigator, icon: "map", label: "Home and map" },
-      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "dollar-sign", label: "Taxi fares" },
+      { name: "TaxiFareTab", component: TaxiFareScreen, icon: "tag", label: "Taxi fares" },
     ],
     rightTabs: [
       { name: "CommunityTab", component: CommunityScreen, icon: "users", label: "Community hub" },

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, MapPin, Shield, Camera, TrendingUp, DollarSign, Clock, CheckCircle2 } from "lucide-react";
+import { Package, MapPin, Shield, Camera, TrendingUp, Tag, Clock, CheckCircle2 } from "lucide-react";
 import { admin } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Table, TH, TD } from "../components/Table";
@@ -353,7 +353,7 @@ function HubSummaryStrip({ summary }: { summary: HubSummary }) {
         tint={colors.accentTeal}
       />
       <SummaryTile
-        icon={<DollarSign size={16} />}
+        icon={<Tag size={16} />}
         label="Platform fee · 7d"
         value={formatRands(summary.last7d.platformFee)}
         sub={`${summary.last7d.deliveries} deliveries`}

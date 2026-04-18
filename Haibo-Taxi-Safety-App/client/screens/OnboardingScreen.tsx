@@ -22,6 +22,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Spacing, BrandColors, BorderRadius, Typography } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { GradientButton } from "@/components/GradientButton";
+import { HaiboLogo } from "@/components/HaiboLogo";
 
 const PRIVACY_URL = "https://app.haibo.africa/privacy";
 const TERMS_URL = "https://app.haibo.africa/terms";
@@ -194,7 +195,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           ]}
         >
           <View style={styles.consentIconWrap}>
-            <Feather name="shield" size={56} color="#FFFFFF" />
+            <HaiboLogo size={74} />
           </View>
           <ThemedText style={styles.consentEyebrow}>{t("onboarding.oneQuickThing")}</ThemedText>
         </Animated.View>

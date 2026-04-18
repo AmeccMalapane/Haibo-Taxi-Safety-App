@@ -63,7 +63,7 @@ export function RouteDetailOverlay({ route, onClose }: RouteDetailOverlayProps) 
       {/* Fare Calculator */}
       <View style={styles.fareSection}>
         <View style={[styles.fareCard, { backgroundColor: `${route.color}10` }]}>
-          <Feather name="dollar-sign" size={20} color={route.color} />
+          <Feather name="tag" size={20} color={route.color} />
           <View>
             <ThemedText type="label" style={{ color: theme.textSecondary }}>
               FARE

@@ -116,7 +116,7 @@ export const ContentCard = memo(({
   const handleShare = async () => {
     try {
       const result = await Share.share({
-        message: `${post.title}\n\n${post.content}\n\nShared via Haibo App`,
+        message: `${post.title}\n\n${post.content}\n\nShared via Haibo!`,
         title: post.title,
       });
       if (result.action === Share.sharedAction) {

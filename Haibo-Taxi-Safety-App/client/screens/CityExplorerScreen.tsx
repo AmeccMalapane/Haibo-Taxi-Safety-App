@@ -65,7 +65,7 @@ const BADGE_INFO: Record<
   { icon: keyof typeof Feather.glyphMap; label: string; color: string }
 > = {
   "fare-detective": {
-    icon: "dollar-sign",
+    icon: "tag",
     label: "Fare Detective",
     color: BrandColors.status.success,
   },
