@@ -25,7 +25,16 @@ import { Spacing, BrandColors, BorderRadius } from "@/constants/theme";
 import highlightsData from "@/data/community_highlights.json";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = SCREEN_WIDTH - Spacing.md * 2;
+
+// The carousel is rendered inside CommunityScreen's scrollContent which
+// has `paddingHorizontal: Spacing.lg`. To reach the screen edge (so the
+// last card's right edge doesn't clip against the parent padding), the
+// container uses `marginHorizontal: -Spacing.lg` — so effectively the
+// carousel has a full screen width to work with. CARD_WIDTH then peels
+// off a standard Spacing.lg gutter on each side so the card aligns
+// visually with the surrounding content (header text, tile grid).
+const PARENT_PAD = Spacing.lg;
+const CARD_WIDTH = SCREEN_WIDTH - PARENT_PAD * 2;
 const CARD_MARGIN = Spacing.sm;
 
 interface Highlight {
@@ -309,12 +318,20 @@ export default function HighlightsCarousel() {
 const styles = StyleSheet.create({
   container: {
     marginBottom: Spacing.lg,
+    // Break out of parent's horizontal padding so the FlatList has the
+    // full screen width to render cards. Without this, cards calibrated
+    // to SCREEN_WIDTH overflow the parent by ~Spacing.lg on the right
+    // (visible as the dots pagination + card trailing edge clipping).
+    marginHorizontal: -Spacing.lg,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
+    // Re-apply the parent's horizontal padding so the title + dots
+    // align with the surrounding content instead of sitting flush
+    // against the screen edge from the negative container margin.
+    paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
   },
   sectionTitleRow: {
@@ -341,7 +358,11 @@ const styles = StyleSheet.create({
     width: 16,
   },
   listContent: {
-    paddingHorizontal: Spacing.md - CARD_MARGIN,
+    // First/last card align with the parent's Spacing.lg gutter — the
+    // inner listContent pad (PARENT_PAD - CARD_MARGIN) plus the card's
+    // own marginHorizontal (CARD_MARGIN) sums to exactly PARENT_PAD so
+    // the card left edge lines up with the "Highlights" title above.
+    paddingHorizontal: PARENT_PAD - CARD_MARGIN,
   },
   cardWrapper: {
     width: CARD_WIDTH,

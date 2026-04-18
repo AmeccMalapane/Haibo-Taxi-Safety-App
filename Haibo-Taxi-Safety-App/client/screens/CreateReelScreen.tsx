@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hero: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing["3xl"],
     borderBottomLeftRadius: BorderRadius["2xl"],
     borderBottomRightRadius: BorderRadius["2xl"],
@@ -487,8 +487,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
+    // 2xl paddingTop compensates for the -2xl marginTop so the first
+    // tile ("Camera / Photo / Video") clears the hero subtitle instead
+    // of clipping into the rose gradient. Horizontal padding matches
+    // the hero so the media-picker row aligns with the hero title.
+    paddingHorizontal: Spacing.xl,
     marginTop: -Spacing["2xl"],
+    paddingTop: Spacing["2xl"],
   },
   mediaCard: {
     backgroundColor: "#FFFFFF",

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -13,9 +13,12 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // FloatingHeader — overlays the top of the Home screen with three pills:
 //   • Left:   menu (services hub)
-//   • Center: search input (flex-grow) — tap opens the search flow.
-//             Replaced the old "Haibo!" brand pill that was wide enough
-//             to obscure the map control FABs beneath it.
+//   • Center: either a caller-supplied pill (e.g. Home's map-mode
+//             segmented control) or, by default, a search input that
+//             opens the nearby-ranks search flow. HomeScreen passes the
+//             Routes/Pasop/All pill so there is only one top-bar row
+//             rather than a search bar plus a second floating pill
+//             below it.
 //   • Right:  profile avatar (monogram for signed-in users, user icon
 //             otherwise)
 //
@@ -29,9 +32,15 @@ export interface FloatingHeaderProps {
   showLogo?: boolean;
   onSearchPress?: () => void;
   searchPlaceholder?: string;
+  /**
+   * When provided, replaces the default search pill in the center slot.
+   * Used by HomeScreen to dock the Routes/Pasop/All mode control in
+   * place of a duplicate search — the bottom sheet already has one.
+   */
+  center?: ReactNode;
 }
 
-export function FloatingHeader({ onSearchPress, searchPlaceholder }: FloatingHeaderProps) {
+export function FloatingHeader({ onSearchPress, searchPlaceholder, center }: FloatingHeaderProps) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
@@ -59,21 +68,27 @@ export function FloatingHeader({ onSearchPress, searchPlaceholder }: FloatingHea
           <Feather name="menu" size={20} color={theme.text} />
         </Pressable>
 
-        {/* Search pill (center, flex-grow) */}
-        <Pressable
-          onPress={onSearchPress}
-          style={[styles.searchPill, { backgroundColor: pillBg }]}
-          accessibilityRole="search"
-          accessibilityLabel="Search ranks, routes and fares"
-        >
-          <Feather name="search" size={16} color={theme.textSecondary} />
-          <ThemedText
-            style={[styles.searchPlaceholder, { color: theme.textSecondary }]}
-            numberOfLines={1}
+        {/* Center slot — caller-supplied pill if present, else search pill */}
+        {center ? (
+          <View style={[styles.centerSlot, { backgroundColor: pillBg }]}>
+            {center}
+          </View>
+        ) : (
+          <Pressable
+            onPress={onSearchPress}
+            style={[styles.searchPill, { backgroundColor: pillBg }]}
+            accessibilityRole="search"
+            accessibilityLabel="Search ranks, routes and fares"
           >
-            {searchPlaceholder || "Search ranks, routes, fares…"}
-          </ThemedText>
-        </Pressable>
+            <Feather name="search" size={16} color={theme.textSecondary} />
+            <ThemedText
+              style={[styles.searchPlaceholder, { color: theme.textSecondary }]}
+              numberOfLines={1}
+            >
+              {searchPlaceholder || "Search ranks, routes, fares…"}
+            </ThemedText>
+          </Pressable>
+        )}
 
         {/* Profile avatar (right) */}
         <Pressable
@@ -162,6 +177,19 @@ const styles = StyleSheet.create({
     borderRadius: PILL_HEIGHT / 2,
     paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  centerSlot: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    height: PILL_HEIGHT,
+    borderRadius: PILL_HEIGHT / 2,
+    paddingHorizontal: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,

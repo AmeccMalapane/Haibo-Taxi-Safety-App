@@ -322,8 +322,64 @@ export default function EmergencyScreen() {
                 </ThemedText>
               </Pressable>
             ))}
+            {/* Manage-contacts pill — always trails the share chips so
+                the user can add/edit people mid-SOS without leaving the
+                red screen to hunt through Settings. */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.contactChip,
+                styles.manageContactsChip,
+                pressed && styles.contactChipPressed,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                navigation.navigate("EmergencyContacts");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Manage emergency contacts"
+            >
+              <Feather name="users" size={14} color="#FFFFFF" />
+              <ThemedText style={styles.contactChipText} numberOfLines={1}>
+                Manage
+              </ThemedText>
+            </Pressable>
           </Animated.View>
-        ) : null}
+        ) : (
+          // No contacts yet — surface a dedicated quicklink to set them
+          // up so the user isn't dead-ended after Call 10111. Deliberately
+          // prominent (full width, chevron) because the absence of
+          // pre-configured contacts on a safety app is a real gap the
+          // user should be nudged to close.
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(550)}
+          >
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                navigation.navigate("EmergencyContacts");
+              }}
+              style={({ pressed }) => [
+                styles.addContactsCta,
+                pressed && styles.contactChipPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Add emergency contacts"
+            >
+              <View style={styles.addContactsIcon}>
+                <Feather name="user-plus" size={16} color="#FFFFFF" />
+              </View>
+              <View style={styles.addContactsTextWrap}>
+                <ThemedText style={styles.addContactsTitle}>
+                  Add emergency contacts
+                </ThemedText>
+                <ThemedText style={styles.addContactsSubtitle}>
+                  So Haibo can share your live location in one tap.
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color="#FFFFFF" />
+            </Pressable>
+          </Animated.View>
+        )}
 
         <Animated.View
           entering={reducedMotion ? undefined : FadeInDown.duration(500).delay(650)}
@@ -509,6 +565,44 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     maxWidth: 120,
+  },
+  manageContactsChip: {
+    // Slightly dimmer than the name chips so the share-with-person
+    // action stays the visual primary of this row.
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderStyle: "dashed",
+  },
+  addContactsCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: "rgba(0,0,0,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+  },
+  addContactsIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  addContactsTextWrap: {
+    flex: 1,
+  },
+  addContactsTitle: {
+    ...Typography.body,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  addContactsSubtitle: {
+    ...Typography.small,
+    color: "rgba(255,255,255,0.82)",
+    marginTop: 1,
   },
   cancelWrap: {
     marginTop: Spacing.sm,

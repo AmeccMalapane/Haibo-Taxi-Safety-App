@@ -335,7 +335,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hero: {
-    paddingHorizontal: Spacing.lg,
+    // xl horizontal padding so hero copy isn't crammed against the
+    // screen edge. Matches the canonical community-hero spacing used on
+    // PasopFeed and the other rose-gradient screens.
+    paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing["3xl"],
     borderBottomLeftRadius: BorderRadius["2xl"],
     borderBottomRightRadius: BorderRadius["2xl"],
@@ -384,8 +387,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
+    // -2xl margin + matching 2xl paddingTop is the "card rises onto the
+    // hero" pattern: content floats over the hero's bottom-radius curve
+    // without the first child clipping behind the hero subtitle. Dropped
+    // the old lg horizontal padding for xl — matches the hero so the
+    // left edge of the info card aligns with the hero title.
+    paddingHorizontal: Spacing.xl,
     marginTop: -Spacing["2xl"],
+    paddingTop: Spacing["2xl"],
   },
   infoCard: {
     flexDirection: "row",

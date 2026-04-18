@@ -18,6 +18,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  interpolate,
+  Extrapolation,
   FadeIn,
   FadeInDown,
 } from "react-native-reanimated";
@@ -456,6 +458,36 @@ export default function HomeScreen() {
     height: sheetHeight.value,
   }));
 
+  // Map FAB stack (recenter + Pasop "+ Report") lives above the nearby-
+  // ranks tray. The tray animates between 220 (collapsed) and 70% of the
+  // screen (expanded), so a static `bottom: tabBarHeight + 220` leaves
+  // the FABs floating over the tray's scrollable list as soon as the
+  // user expands it. Drive the FAB position from `sheetHeight.value`
+  // directly so the buttons ride the top of the sheet, and fade them
+  // out once the sheet crosses ~320 — by then the user is reading the
+  // list and the map controls are no longer primary. Extra 60 of lift
+  // when the Pasop "+ Report" FAB is on so the two FABs don't overlap.
+  const fabStackOffset = mapShowPasopPins ? 60 : 0;
+  const recenterFabStyle = useAnimatedStyle(() => ({
+    bottom:
+      tabBarHeight + sheetHeight.value + Spacing.md + fabStackOffset,
+    opacity: interpolate(
+      sheetHeight.value,
+      [260, 340],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const pasopFabStyle = useAnimatedStyle(() => ({
+    bottom: tabBarHeight + sheetHeight.value + Spacing.md,
+    opacity: interpolate(
+      sheetHeight.value,
+      [260, 340],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
   const toggleSheet = (forceExpand = false) => {
     if (selectedRank || selectedRoute) return;
     const shouldExpand = forceExpand || !isSheetExpanded;
@@ -536,6 +568,29 @@ export default function HomeScreen() {
           handleSearchFocus();
           toggleSheet(true);
         }}
+        center={
+          <>
+            <ModePillButton
+              label="Routes"
+              icon="map"
+              active={routesMode}
+              onPress={() => handleModeChange("routes")}
+            />
+            <ModePillButton
+              label="Pasop"
+              icon="alert-triangle"
+              active={pasopMode}
+              onPress={() => handleModeChange("pasop")}
+              badgeCount={pasopReports.filter((r) => r.status === "active").length}
+            />
+            <ModePillButton
+              label="All"
+              icon="layers"
+              active={allMode}
+              onPress={() => handleModeChange("all")}
+            />
+          </>
+        }
       />
 
       <View style={styles.mapContainer}>
@@ -624,40 +679,11 @@ export default function HomeScreen() {
           topOffset={insets.top + 68}
         />
 
-        {/* Map mode pill — flips between Routes / Pasop / All.
-            Positioned below the FloatingHeader (ends at insets.top + 46)
-            with a 26px breathing gap so the pill doesn't feel jammed
-            against the search bar. */}
-        <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(400)}
-          style={[
-            styles.modePill,
-            {
-              top: insets.top + 72,
-              backgroundColor: theme.surface,
-            },
-          ]}
-        >
-          <ModePillButton
-            label="Routes"
-            icon="map"
-            active={routesMode}
-            onPress={() => handleModeChange("routes")}
-          />
-          <ModePillButton
-            label="Pasop"
-            icon="alert-triangle"
-            active={pasopMode}
-            onPress={() => handleModeChange("pasop")}
-            badgeCount={pasopReports.filter((r) => r.status === "active").length}
-          />
-          <ModePillButton
-            label="All"
-            icon="layers"
-            active={allMode}
-            onPress={() => handleModeChange("all")}
-          />
-        </Animated.View>
+        {/* Map mode pill previously lived here as a second floating row
+            below the FloatingHeader. It's now docked into the header's
+            center slot so the top of the screen holds exactly one row
+            (menu · mode-pill · avatar) and the map-control FABs below
+            have uncluttered space. */}
 
         {showTransitRoutes && !selectedRank && !selectedRoute && routesMode && (
           <TransitRouteLegend
@@ -676,14 +702,10 @@ export default function HomeScreen() {
             style={[
               styles.recenterFab,
               {
-                bottom:
-                  tabBarHeight +
-                  220 +
-                  Spacing.md +
-                  (mapShowPasopPins ? 60 : 0),
                 backgroundColor: theme.surface,
                 borderColor: theme.border,
               },
+              recenterFabStyle,
             ]}
           >
             <Pressable
@@ -706,10 +728,7 @@ export default function HomeScreen() {
         {mapShowPasopPins ? (
           <Animated.View
             entering={reducedMotion ? undefined : FadeInDown.duration(300)}
-            style={[
-              styles.pasopFab,
-              { bottom: tabBarHeight + 220 + Spacing.md },
-            ]}
+            style={[styles.pasopFab, pasopFabStyle]}
           >
             <Pressable
               onPress={handleOpenPasopReport}
@@ -1031,20 +1050,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   mapContainer: { flex: 1, position: "relative" },
 
-  modePill: {
-    position: "absolute",
-    alignSelf: "center",
-    flexDirection: "row",
-    padding: 4,
-    borderRadius: BorderRadius.full,
-    gap: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-    zIndex: 10,
-  },
   pasopFab: {
     position: "absolute",
     right: Spacing.lg,
