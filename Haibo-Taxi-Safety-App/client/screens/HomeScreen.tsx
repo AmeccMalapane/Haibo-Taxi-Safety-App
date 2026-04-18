@@ -307,6 +307,15 @@ export default function HomeScreen() {
   // Refresh Pasop reports and the user's own petitions every time HomeScreen
   // is focused — covers coming back from PasopFeed/PasopReport so newly
   // filed hazards appear immediately.
+  //
+  // Also re-centres the map on the user's location when the screen
+  // regains focus after a ≥30s absence — long enough that the user
+  // has genuinely been somewhere else (another tab, a detail screen)
+  // rather than briefly panned the map, so the fly-to feels helpful
+  // rather than fighting. Short re-focuses (sub-30s) leave the camera
+  // where it is so panning stays sticky.
+  const lastBlurAtRef = useRef<number | null>(null);
+  const RE_CENTRE_AFTER_MS = 30_000;
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -317,7 +326,29 @@ export default function HomeScreen() {
         setPasopReports(reports);
         setPasopPetitions(petitions);
       })();
-    }, [])
+
+      // Re-centre only if we have a fix, the map is mounted, and the
+      // screen was out of focus long enough that a yank-back makes
+      // sense. `hasZoomedToUserRef` keeps the very first entry alone
+      // — the existing first-fix effect handles that and we don't
+      // want two competing flyTos racing on boot.
+      if (
+        hasZoomedToUserRef.current &&
+        userLocation &&
+        mapRef.current &&
+        lastBlurAtRef.current !== null &&
+        Date.now() - lastBlurAtRef.current >= RE_CENTRE_AFTER_MS
+      ) {
+        mapRef.current.flyTo?.(
+          [userLocation.coords.longitude, userLocation.coords.latitude],
+          15,
+        );
+      }
+
+      return () => {
+        lastBlurAtRef.current = Date.now();
+      };
+    }, [userLocation])
   );
 
   const triggerHaptic = (style: "light" | "medium" = "light") => {
