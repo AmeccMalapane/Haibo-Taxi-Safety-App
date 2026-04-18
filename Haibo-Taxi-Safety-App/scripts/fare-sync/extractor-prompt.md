@@ -1,6 +1,6 @@
 # Fare-imports extractor prompt
 
-**Version:** `v0.2.0-qa-facebook-2026-04-17`
+**Version:** `v0.2.1-qa-facebook-2026-04-18`
 **Target model:** `claude-haiku-4-5` (fallback: `claude-sonnet-4-6` if precision below target)
 **Input unit:** one `{post, comments[]}` tuple from the public SA taxi Facebook group
 "Where can I get a taxi to ?" (group id `1034488700317989`).
@@ -52,8 +52,64 @@ COMMENTS (answers), in order received:
 [{comment_id}] ({author} @ {date}): {comment_text}
 {end for}
 
-Emit a single JSON object with the shape below. Do NOT include any text
-outside the JSON.
+Emit a single JSON object with EXACTLY this shape. Both top-level keys are
+required arrays (possibly empty). Do NOT include any text outside the JSON.
+Do NOT wrap the JSON in Markdown code fences.
+
+{
+  "fare_imports": [
+    {
+      "source_comment_id": "string | null",
+      "origin_raw": "string | null",
+      "destination_raw": "string",
+      "fare_zar": 17.0,
+      "metro_hint": "JHB | PTA | CPT | DBN | PE | other | null",
+      "confidence": "high | medium | low",
+      "evidence_quote": "literal substring from the comment or post",
+      "extraction_notes": "short free text",
+      "status_hint": "pending_canonicalization | rejected",
+      "rejection_reason": "multi_leg_route | no_fare | ambiguous_origin | price_range_only | not_a_fare_answer | sarcasm | null"
+    }
+  ],
+  "route_demand_signals": [
+    {
+      "origin_raw": "string | null",
+      "destination_raw": "string",
+      "metro_hint": "JHB | PTA | CPT | DBN | PE | other | null",
+      "confidence": "high | medium | low",
+      "evidence_quote": "literal substring from the post",
+      "extraction_notes": "short free text"
+    }
+  ]
+}
+
+Worked example — POST "How much does it cost for a taxi from Pretoria to
+Hammanskraal?" with comments [c1] "R38 from Bloed Mall" and [c2]
+"Hammanskraal is in Pretoria Soo wat do u mean 🤔" emits:
+
+{
+  "fare_imports": [
+    {"source_comment_id":"c1","origin_raw":"Bloed Mall","destination_raw":"Hammanskraal","fare_zar":38.0,"metro_hint":"PTA","confidence":"high","evidence_quote":"R38 from Bloed Mall","extraction_notes":"Destination from post; origin+fare from comment.","status_hint":"pending_canonicalization","rejection_reason":null}
+  ],
+  "route_demand_signals": [
+    {"origin_raw":"Pretoria","destination_raw":"Hammanskraal","metro_hint":"PTA","confidence":"high","evidence_quote":"How much does it cost for a taxi from Pretoria to Hammanskraal?","extraction_notes":""}
+  ]
+}
+
+Rules:
+- Each fare-bearing comment → one entry in fare_imports. Two commenters quoting
+  different rank+price for the same destination → two separate records.
+- At most ONE demand signal per post (captures the asker's route intent).
+  Omit if the post is not a route question (event flyer, marketplace, rant).
+- Reject multi-leg answers with status_hint:"rejected", rejection_reason:"multi_leg_route".
+- Reject price ranges ("R20-R30") with rejection_reason:"price_range_only".
+- Never fabricate origins. If the comment only names a price and the post
+  names no specific rank, emit rejected+ambiguous_origin.
+- Redact SA phone numbers and emails inside evidence_quote to [REDACTED_PHONE]
+  / [REDACTED_EMAIL] before emitting.
+- Rank→metro mapping: Bree/Bara/Park Station/Faraday/MTN/Noord → JHB.
+  Bosman/Bloed/Belle Ombre → PTA. Wynberg/Bellville → CPT. Warwick/Berea → DBN.
+- If neither post nor comments pin a metro, emit metro_hint:null — do not guess.
 ```
 
 ## Output schema
@@ -394,6 +450,12 @@ signals.
 
 ## Changelog
 
+- `v0.2.1-qa-facebook-2026-04-18` — inlined the output schema and a worked
+  example into the user-message template. Previously the template ended
+  with "shape below" but `loadPromptSpec` only pulled the fenced block,
+  never concatenating the separate `## Output schema` section — model
+  improvised a flat fare object and all extractions returned empty. Fix
+  is purely in the MD; no code change required.
 - `v0.2.0-qa-facebook-2026-04-17` — added `route_demand_signals` output
   array. Prompt now emits both fare records (per fare-bearing comment)
   and demand signals (per route-asking post) in a single JSON object.
