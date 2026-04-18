@@ -238,37 +238,48 @@ export function MapViewComponent({
   const cameraRef = useRef<Camera>(null);
   const mapViewRef = useRef<MapView>(null);
 
-  // Expose camera methods via mapRef for backward compatibility
+  // Expose camera methods via mapRef for backward compatibility.
+  //
+  // The previous version guarded with `if (cameraRef.current)` and
+  // depended only on `[mapRef]` — a stable ref identity that never
+  // changes. If the effect ran before <Camera ref={cameraRef} /> had
+  // attached (a race common on cold-start Android), the methods were
+  // never installed and `mapRef.current?.animateToRegion?.()` silently
+  // no-op'd for the lifetime of the screen. That's why the top-right
+  // crosshair button read as "dead" while the bottom-right recenter
+  // FAB worked — they shared the exact same mechanism but the crosshair
+  // happened to lose the race. Install the methods unconditionally;
+  // each one already reads cameraRef.current at call time so a still-
+  // mounting camera just no-ops that single tap instead of every tap.
   useEffect(() => {
-    if (mapRef && cameraRef.current) {
-      mapRef.current = {
-        animateToRegion: (region: any) => {
-          cameraRef.current?.setCamera({
-            centerCoordinate: [region.longitude, region.latitude],
-            zoomLevel: ZOOM_LEVELS.rank,
-            animationDuration: 1500,
-          });
-        },
-        flyTo: (center: [number, number], zoom?: number) => {
-          cameraRef.current?.setCamera({
-            centerCoordinate: center,
-            zoomLevel: zoom || ZOOM_LEVELS.rank,
-            pitch: 45,
-            heading: Math.random() * 40 - 20,
-            animationDuration: 2000,
-          });
-        },
-        resetView: () => {
-          cameraRef.current?.setCamera({
-            centerCoordinate: DEFAULT_CAMERA.centerCoordinate,
-            zoomLevel: DEFAULT_CAMERA.zoomLevel,
-            pitch: DEFAULT_CAMERA.pitch,
-            heading: DEFAULT_CAMERA.heading,
-            animationDuration: 1500,
-          });
-        },
-      };
-    }
+    if (!mapRef) return;
+    mapRef.current = {
+      animateToRegion: (region: any) => {
+        cameraRef.current?.setCamera({
+          centerCoordinate: [region.longitude, region.latitude],
+          zoomLevel: ZOOM_LEVELS.rank,
+          animationDuration: 1500,
+        });
+      },
+      flyTo: (center: [number, number], zoom?: number) => {
+        cameraRef.current?.setCamera({
+          centerCoordinate: center,
+          zoomLevel: zoom || ZOOM_LEVELS.rank,
+          pitch: 45,
+          heading: Math.random() * 40 - 20,
+          animationDuration: 2000,
+        });
+      },
+      resetView: () => {
+        cameraRef.current?.setCamera({
+          centerCoordinate: DEFAULT_CAMERA.centerCoordinate,
+          zoomLevel: DEFAULT_CAMERA.zoomLevel,
+          pitch: DEFAULT_CAMERA.pitch,
+          heading: DEFAULT_CAMERA.heading,
+          animationDuration: 1500,
+        });
+      },
+    };
   }, [mapRef]);
 
   // GeoJSON data

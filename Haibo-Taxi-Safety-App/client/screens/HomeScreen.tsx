@@ -458,26 +458,12 @@ export default function HomeScreen() {
     height: sheetHeight.value,
   }));
 
-  // Map FAB stack (recenter + Pasop "+ Report") lives above the nearby-
-  // ranks tray. The tray animates between 220 (collapsed) and 70% of the
-  // screen (expanded), so a static `bottom: tabBarHeight + 220` leaves
-  // the FABs floating over the tray's scrollable list as soon as the
-  // user expands it. Drive the FAB position from `sheetHeight.value`
-  // directly so the buttons ride the top of the sheet, and fade them
-  // out once the sheet crosses ~320 — by then the user is reading the
-  // list and the map controls are no longer primary. Extra 60 of lift
-  // when the Pasop "+ Report" FAB is on so the two FABs don't overlap.
-  const fabStackOffset = mapShowPasopPins ? 60 : 0;
-  const recenterFabStyle = useAnimatedStyle(() => ({
-    bottom:
-      tabBarHeight + sheetHeight.value + Spacing.md + fabStackOffset,
-    opacity: interpolate(
-      sheetHeight.value,
-      [260, 340],
-      [1, 0],
-      Extrapolation.CLAMP,
-    ),
-  }));
+  // Pasop "+ Report" FAB rides the top of the nearby-ranks tray. The
+  // tray animates between 220 (collapsed) and 70% of the screen
+  // (expanded), so the FAB's bottom tracks sheetHeight so the button
+  // doesn't get buried in the middle of the scrollable list when
+  // expanded. Fades out between 260 → 340 so the map control is out of
+  // the way once the user has shifted focus to the list.
   const pasopFabStyle = useAnimatedStyle(() => ({
     bottom: tabBarHeight + sheetHeight.value + Spacing.md,
     opacity: interpolate(
@@ -516,18 +502,6 @@ export default function HomeScreen() {
         : undefined
     );
     setPinnedLocation(null);
-  };
-
-  // Flies the map camera back to the user's current GPS fix. If we don't
-  // have a location fix (permission denied, still acquiring), the button
-  // is hidden entirely so it never becomes a dead tap.
-  const handleRecenterMap = () => {
-    if (!userLocation) return;
-    triggerHaptic("light");
-    mapRef.current?.flyTo?.(
-      [userLocation.coords.longitude, userLocation.coords.latitude],
-      15,
-    );
   };
 
   const handleMapLongPress = (event: { coordinate: { latitude: number; longitude: number } }) => {
@@ -692,37 +666,14 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Recenter-to-current-location floating button. Right-edge, sits
-            above the collapsed nearby-ranks tray. Hidden while a rank or
-            route detail overlay is up so it doesn't fight for attention,
-            and hidden until we have a GPS fix so it can't be a dead tap. */}
-        {userLocation && !selectedRank && !selectedRoute ? (
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
-            style={[
-              styles.recenterFab,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.border,
-              },
-              recenterFabStyle,
-            ]}
-          >
-            <Pressable
-              onPress={handleRecenterMap}
-              accessibilityRole="button"
-              accessibilityLabel="Recenter map on my location"
-              style={styles.recenterFabInner}
-              hitSlop={8}
-            >
-              <Feather
-                name="navigation"
-                size={20}
-                color={BrandColors.primary.gradientStart}
-              />
-            </Pressable>
-          </Animated.View>
-        ) : null}
+        {/* The bottom-right recenter-to-me FAB used to live here as a
+            thumb-reachable shortcut — but it duplicated the crosshair
+            in MapControlButtons, and the two stacked FABs plus the
+            Pasop "+ Report" made the right edge feel cramped and
+            inconsistent. The crosshair is now the canonical recenter
+            affordance (now that its attach-race bug is fixed — see
+            MapViewComponent.native useEffect), and this column only
+            renders Pasop + Report when the hazard layer is on. */}
 
         {/* Floating "+ Report" FAB — only visible when the Pasop layer is on */}
         {mapShowPasopPins ? (
@@ -1061,25 +1012,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
     zIndex: 5,
-  },
-  recenterFab: {
-    position: "absolute",
-    right: Spacing.lg,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-    zIndex: 5,
-  },
-  recenterFabInner: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   sheetHeaderActions: {
     flexDirection: "row",
