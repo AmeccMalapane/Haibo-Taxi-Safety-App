@@ -8,7 +8,10 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -18,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useTaxiHero } from "@/hooks/useTaxiHero";
 import {
   Spacing,
   BrandColors,
@@ -28,6 +32,9 @@ import { ThemedText } from "@/components/ThemedText";
 import { getTaxiRoutes } from "@/lib/localData";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import type { TaxiRoute } from "@/lib/types";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // typeui-clean Taxi Fare lookup — reads the existing taxi_routes_fares.json
 // data via getTaxiRoutes() (~190 SA routes with origin, destination, fare,
@@ -49,6 +56,17 @@ export default function TaxiFareScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { t } = useLanguage();
+  const navigation = useNavigation<NavigationProp>();
+  const heroImage = useTaxiHero();
+
+  const handleContribute = (route?: TaxiRoute) => {
+    if (Platform.OS !== "web") Haptics.selectionAsync();
+    // CityExplorer hosts the fare-survey flow that POSTs to
+    // /api/explorer/fare-survey. Navigating there from a missing-fare
+    // row gives users a direct path to close the gap instead of
+    // leaving them staring at "Price TBD".
+    navigation.navigate("CityExplorer");
+  };
 
   const [originQuery, setOriginQuery] = useState("");
   const [destinationQuery, setDestinationQuery] = useState("");
@@ -150,17 +168,24 @@ export default function TaxiFareScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + Spacing.xl }]}
         >
+          {/* Rank-on-rose hero banner. Rotates through the bundled SA
+              minibus taxi photos (see assets/images/heroes) so the fares
+              screen reads as "this is what you'll be in" instead of a
+              generic calculator-icon screen. Dark gradient overlay keeps
+              the title legible over any photo's mid-tone range. */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(400)}
-            style={styles.heroBadgeWrap}
+            style={styles.heroImageWrap}
           >
-            <View style={styles.heroBadge}>
-              <Feather
-                name="tag"
-                size={32}
-                color={BrandColors.primary.gradientStart}
-              />
-            </View>
+            <Image
+              source={heroImage}
+              style={styles.heroImage}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.45)"]}
+              style={styles.heroImageOverlay}
+            />
           </Animated.View>
 
           <Animated.View
@@ -390,33 +415,46 @@ export default function TaxiFareScreen() {
                           {route.destination}
                         </ThemedText>
                       </View>
-                      <View
-                        style={[
-                          styles.farePill,
-                          {
-                            backgroundColor:
-                              route.fare && route.fare > 0
-                                ? BrandColors.primary.gradientStart + "12"
-                                : theme.backgroundSecondary,
-                          },
-                        ]}
-                      >
-                        <ThemedText
+                      {route.fare && route.fare > 0 ? (
+                        <View
                           style={[
-                            styles.fareText,
+                            styles.farePill,
                             {
-                              color:
-                                route.fare && route.fare > 0
-                                  ? BrandColors.primary.gradientStart
-                                  : theme.textSecondary,
+                              backgroundColor:
+                                BrandColors.primary.gradientStart + "12",
                             },
                           ]}
                         >
-                          {route.fare && route.fare > 0
-                            ? `R${route.fare.toFixed(0)}`
-                            : t("fares.priceTbd")}
-                        </ThemedText>
-                      </View>
+                          <ThemedText
+                            style={[
+                              styles.fareText,
+                              { color: BrandColors.primary.gradientStart },
+                            ]}
+                          >
+                            R{route.fare.toFixed(0)}
+                          </ThemedText>
+                        </View>
+                      ) : (
+                        // Missing fare = direct path to contribute one.
+                        // Previously rendered a disabled "Price TBD" chip
+                        // that dead-ended the user with no way to help
+                        // close the gap — bad on a crowdsourced fare app.
+                        <Pressable
+                          onPress={() => handleContribute(route)}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Contribute fare for ${route.origin} to ${route.destination}`}
+                          style={({ pressed }) => [
+                            styles.contributePill,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <Feather name="plus" size={12} color="#FFFFFF" />
+                          <ThemedText style={styles.contributePillText}>
+                            Contribute
+                          </ThemedText>
+                        </Pressable>
+                      )}
                     </View>
 
                     <View
@@ -522,22 +560,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing["2xl"],
   },
-  heroBadgeWrap: {
-    alignItems: "center",
+  heroImageWrap: {
+    height: 160,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
     marginBottom: Spacing.lg,
-  },
-  heroBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.22,
     shadowRadius: 16,
     elevation: 8,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroImageOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "65%",
   },
   heroText: {
     alignItems: "center",
@@ -700,6 +743,26 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
+  },
+  contributePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.primary.gradientStart,
+    shadowColor: BrandColors.primary.gradientStart,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  contributePillText: {
+    ...Typography.small,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
   routeMeta: {
     flexDirection: "row",

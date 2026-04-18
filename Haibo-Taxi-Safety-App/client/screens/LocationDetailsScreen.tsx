@@ -27,9 +27,7 @@ import type { TaxiLocation, LocationType, TaxiRoute } from "@/lib/types";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { uploadFromUri } from "@/lib/uploads";
 import { apiRequest } from "@/lib/query-client";
-
-const FALLBACK_HERO =
-  "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1000";
+import { useTaxiHero } from "@/hooks/useTaxiHero";
 
 type LocationImageRow = {
   id: string;
@@ -72,7 +70,17 @@ export default function LocationDetailsScreen() {
     return raw as LocationImageRow[];
   }, [apiLocation]);
 
-  const heroUrl = contributedImages[0]?.url || FALLBACK_HERO;
+  // Hero source: prefer a community-contributed image if one exists,
+  // otherwise fall back to a bundled SA minibus taxi photo picked
+  // deterministically from the location's id — so the same rank always
+  // gets the same fallback van rather than re-shuffling on every
+  // focus, and two ranks visible in the same session get different
+  // vans. Old fallback was an Unsplash cyclist photo that had nothing
+  // to do with minibus taxis.
+  const fallbackHero = useTaxiHero(locationId);
+  const heroSource = contributedImages[0]?.url
+    ? { uri: contributedImages[0].url }
+    : fallbackHero;
 
   useEffect(() => {
     // Use API data if available, fall back to local
@@ -190,7 +198,7 @@ export default function LocationDetailsScreen() {
         {/* Header with Map/Image */}
         <View style={styles.headerContainer}>
           <Image
-            source={{ uri: heroUrl }}
+            source={heroSource}
             style={styles.headerImage}
             contentFit="cover"
           />
